@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+﻿import { useQuery } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency, formatNumber } from '../../lib/format'
 import {
@@ -228,7 +228,7 @@ export default function DashboardPage() {
                     <td className="py-2 text-gray-400">{i + 1}</td>
                     <td className="py-2 font-medium text-gray-900">{p.name}</td>
                     <td className="py-2 text-right text-gray-600">{formatNumber(p.total_qty)}</td>
-                    <td className="py-2 text-right font-semibold text-blue-600">{formatCurrency(p.total_revenue)}</td>
+                    <td className="py-2 text-right font-semibold text-primary">{formatCurrency(p.total_revenue)}</td>
                   </tr>
                 ))}
               </tbody>

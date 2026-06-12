@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { useAuthStore } from '../store/auth.store'
 import api from '../lib/api'
 import toast from 'react-hot-toast'
-import { ShoppingBag, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { ShoppingCart, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 const schema = z.object({
   email: z.string().email('Email invalide'),
@@ -41,15 +41,22 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-brand flex items-center justify-center p-4">
+      {/* Déco background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-32 -right-32 w-96 h-96 bg-primary opacity-10 rounded-full" />
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-primary opacity-10 rounded-full" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-700 opacity-30 rounded-full" />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-xl">
-            <ShoppingBag className="text-white" size={32} />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-xl">
+            <ShoppingCart className="text-white" size={32} />
           </div>
           <h1 className="text-3xl font-bold text-white">SmartCommerce</h1>
-          <p className="text-blue-300 text-sm mt-1">Suite de gestion commerciale</p>
+          <p className="text-brand-300 text-sm mt-1">Suite de gestion commerciale</p>
         </div>
 
         {/* Card */}
@@ -93,16 +100,16 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-primary hover:bg-primary-600 disabled:bg-primary-300 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               {loading ? <><Loader2 size={16} className="animate-spin" /> Connexion...</> : 'Se connecter'}
             </button>
           </form>
 
           {/* Demo credentials */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-xs font-semibold text-blue-700 mb-2">Comptes de démonstration :</p>
-            <div className="space-y-1 text-xs text-blue-600">
+          <div className="mt-6 p-4 bg-primary-50 rounded-lg border border-primary-100">
+            <p className="text-xs font-semibold text-brand mb-2">Comptes de démonstration :</p>
+            <div className="space-y-1 text-xs text-brand-600">
               <p><span className="font-medium">Admin :</span> admin@smartcommerce.sn / Admin@2026!</p>
               <p><span className="font-medium">Gérant :</span> gerant@smartcommerce.sn / Gerant@2026!</p>
               <p><span className="font-medium">Caissier :</span> caissier@smartcommerce.sn / Caissier@2026!</p>
@@ -110,7 +117,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-blue-300 text-xs mt-6">
+        <p className="text-center text-brand-300 text-xs mt-6">
           SmartCommerce Suite · Dakar, Sénégal · Juin 2026
         </p>
       </div>

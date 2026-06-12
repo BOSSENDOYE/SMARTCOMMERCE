@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency } from '../../lib/format'
@@ -53,7 +53,7 @@ interface Paginated<T> { data: T[]; total: number; current_page: number; last_pa
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const TYPE_CFG: Record<PromoType, { label: string; icon: React.ReactNode; desc: string; color: string }> = {
-  percentage:    { label: 'Pourcentage',     icon: <Percent size={14} />,  desc: 'Remise en % sur le prix', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  percentage:    { label: 'Pourcentage',     icon: <Percent size={14} />,  desc: 'Remise en % sur le prix', color: 'bg-primary-50 text-primary-600 border-primary-200' },
   fixed_amount:  { label: 'Montant fixe',    icon: <Tag size={14} />,      desc: 'Remise d\'un montant fixe', color: 'bg-purple-50 text-purple-700 border-purple-200' },
   special_price: { label: 'Prix spécial',    icon: <Star size={14} />,     desc: 'Prix de vente forcé', color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
   buy_x_get_y:   { label: 'X acheté Y offert', icon: <Gift size={14} />,   desc: 'Achetez X, recevez Y gratuit', color: 'bg-green-50 text-green-700 border-green-200' },
@@ -63,7 +63,7 @@ const TYPE_CFG: Record<PromoType, { label: string; icon: React.ReactNode; desc: 
 
 const STATUS_CFG: Record<string, { label: string; dotCls: string; bgCls: string; textCls: string }> = {
   active:   { label: 'Active',    dotCls: 'bg-green-400',  bgCls: 'bg-green-50',  textCls: 'text-green-700' },
-  upcoming: { label: 'À venir',   dotCls: 'bg-blue-400',   bgCls: 'bg-blue-50',   textCls: 'text-blue-700' },
+  upcoming: { label: 'À venir',   dotCls: 'bg-primary-400',   bgCls: 'bg-primary-50',   textCls: 'text-primary-600' },
   expired:  { label: 'Expirée',   dotCls: 'bg-gray-400',   bgCls: 'bg-gray-100',  textCls: 'text-gray-500' },
   inactive: { label: 'Inactive',  dotCls: 'bg-red-400',    bgCls: 'bg-red-50',    textCls: 'text-red-600' },
 }
@@ -240,7 +240,7 @@ function PromotionFormModal({ promo, onClose }: { promo?: Promotion; onClose: ()
         {/* Header */}
         <div className="p-6 border-b flex items-center justify-between flex-shrink-0">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <Percent size={20} className="text-blue-600" />
+            <Percent size={20} className="text-primary" />
             {promo ? 'Modifier la promotion' : 'Nouvelle promotion'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -265,8 +265,8 @@ function PromotionFormModal({ promo, onClose }: { promo?: Promotion; onClose: ()
                 return (
                   <button key={t} type="button"
                     onClick={() => setForm(f => ({ ...f, type: t }))}
-                    className={`p-3 rounded-xl border text-left transition-all ${active ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <div className={`flex items-center gap-1 text-xs font-semibold mb-0.5 ${active ? 'text-blue-600' : 'text-gray-700'}`}>
+                    className={`p-3 rounded-xl border text-left transition-all ${active ? 'border-primary bg-primary-50 ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <div className={`flex items-center gap-1 text-xs font-semibold mb-0.5 ${active ? 'text-primary' : 'text-gray-700'}`}>
                       {cfg.icon} {cfg.label}
                     </div>
                     <p className="text-xs text-gray-400 leading-tight">{cfg.desc}</p>
@@ -323,7 +323,7 @@ function PromotionFormModal({ promo, onClose }: { promo?: Promotion; onClose: ()
               <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-gray-700">Paliers de remise</label>
                 <button type="button" onClick={() => setTiers(t => [...t, { min_qty: (t[t.length - 1]?.min_qty ?? 1) + 1, discount_pct: 10 }])}
-                  className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                  className="text-xs text-primary hover:underline flex items-center gap-1">
                   <Plus size={12} /> Ajouter un palier
                 </button>
               </div>
@@ -366,7 +366,7 @@ function PromotionFormModal({ promo, onClose }: { promo?: Promotion; onClose: ()
               {([['all', 'Tous les produits', Package], ['products', 'Produits spécifiques', Tag], ['categories', 'Catégories', Layers]] as const).map(([k, label, Icon]) => (
                 <button key={k} type="button" onClick={() => setAppliesTo(k)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-                    appliesTo === k ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                    appliesTo === k ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
                   }`}>
                   <Icon size={13} /> {label}
                 </button>
@@ -384,7 +384,7 @@ function PromotionFormModal({ promo, onClose }: { promo?: Promotion; onClose: ()
                   <div className="border rounded-xl divide-y max-h-40 overflow-y-auto bg-white shadow-sm">
                     {productResults.map((p: LinkedProduct) => (
                       <button key={p.id} type="button" onClick={() => addProduct(p)}
-                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-blue-50 text-left text-sm">
+                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-primary-50 text-left text-sm">
                         <span>{p.name}</span>
                         <span className="text-xs text-gray-400 font-mono">{p.internal_code}</span>
                       </button>
@@ -394,7 +394,7 @@ function PromotionFormModal({ promo, onClose }: { promo?: Promotion; onClose: ()
                 {selectedProducts.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {selectedProducts.map(p => (
-                      <span key={p.id} className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200">
+                      <span key={p.id} className="flex items-center gap-1 px-2.5 py-1 bg-primary-50 text-primary-600 text-xs rounded-full border border-primary-200">
                         {p.name}
                         <button type="button" onClick={() => setSelectedProducts(arr => arr.filter(a => a.id !== p.id))}
                           className="hover:text-red-500"><X size={10} /></button>
@@ -412,7 +412,7 @@ function PromotionFormModal({ promo, onClose }: { promo?: Promotion; onClose: ()
                   return (
                     <button key={c.id} type="button"
                       onClick={() => setSelectedCategoryIds(arr => selected ? arr.filter(id => id !== c.id) : [...arr, c.id])}
-                      className={`px-3 py-1 rounded-full text-sm border transition-colors ${selected ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-300'}`}>
+                      className={`px-3 py-1 rounded-full text-sm border transition-colors ${selected ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
                       {c.name}
                     </button>
                   )
@@ -549,7 +549,7 @@ function PromotionDetail({ promo, onClose, onEdit }: {
               <h3 className="text-sm font-semibold text-gray-700 mb-2">Produits concernés ({p.products!.length})</h3>
               <div className="flex flex-wrap gap-1.5">
                 {p.products!.map(prod => (
-                  <span key={prod.id} className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200">
+                  <span key={prod.id} className="px-2.5 py-1 bg-primary-50 text-primary-600 text-xs rounded-full border border-primary-200">
                     {prod.name}
                   </span>
                 ))}
@@ -657,7 +657,7 @@ export default function PromotionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Percent size={24} className="text-blue-600" /> Promotions
+            <Percent size={24} className="text-primary" /> Promotions
           </h1>
           <p className="text-gray-500 text-sm">{data?.total ?? 0} promotion{(data?.total ?? 0) > 1 ? 's' : ''}</p>
         </div>
@@ -669,7 +669,7 @@ export default function PromotionsPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4">
-        <KpiCard icon={<Percent size={20} className="text-white" />} label="Total promotions"    value={stats?.total ?? 0}         color="bg-blue-500" />
+        <KpiCard icon={<Percent size={20} className="text-white" />} label="Total promotions"    value={stats?.total ?? 0}         color="bg-primary" />
         <KpiCard icon={<Zap size={20} className="text-white" />}     label="Actives en ce moment" value={stats?.active ?? 0}       color="bg-green-500" />
         <KpiCard icon={<AlertTriangle size={20} className="text-white" />} label="Expirent dans 7 jours" value={stats?.expiring_soon ?? 0} color="bg-amber-500" />
         <KpiCard icon={<Clock size={20} className="text-white" />}   label="Expirées"             value={stats?.expired ?? 0}       color="bg-gray-400" />
@@ -696,12 +696,12 @@ export default function PromotionsPage() {
             {showTypeMenu && (
               <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-10 py-1">
                 <button onClick={() => { setTypeFilter('all'); setPage(1); setShowTypeMenu(false) }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${typeFilter === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}>
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${typeFilter === 'all' ? 'text-primary font-medium' : 'text-gray-700'}`}>
                   Tous les types
                 </button>
                 {(Object.keys(TYPE_CFG) as PromoType[]).map(t => (
                   <button key={t} onClick={() => { setTypeFilter(t); setPage(1); setShowTypeMenu(false) }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${typeFilter === t ? 'text-blue-600 font-medium' : 'text-gray-700'}`}>
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${typeFilter === t ? 'text-primary font-medium' : 'text-gray-700'}`}>
                     {TYPE_CFG[t].label}
                   </button>
                 ))}
@@ -722,7 +722,7 @@ export default function PromotionsPage() {
           {STATUS_PILLS.map(({ key, label }) => (
             <button key={key} onClick={() => { setStatus(key); setPage(1) }}
               className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                statusFilter === key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                statusFilter === key ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
               }`}>
               {label}
             </button>
@@ -738,7 +738,7 @@ export default function PromotionsPage() {
           <div className="p-12 text-center text-gray-400">
             <Percent size={40} className="mx-auto mb-3 opacity-30" />
             <p className="font-medium">Aucune promotion trouvée</p>
-            {hasFilters && <button onClick={() => { setSearch(''); setStatus('all'); setTypeFilter('all') }} className="mt-2 text-blue-500 text-sm hover:underline">Réinitialiser</button>}
+            {hasFilters && <button onClick={() => { setSearch(''); setStatus('all'); setTypeFilter('all') }} className="mt-2 text-primary text-sm hover:underline">Réinitialiser</button>}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -766,7 +766,7 @@ export default function PromotionsPage() {
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors group">
                     <td className="px-4 py-3">
-                      <button onClick={() => setViewPromo(p)} className="text-left hover:text-blue-600 transition-colors">
+                      <button onClick={() => setViewPromo(p)} className="text-left hover:text-primary transition-colors">
                         <p className="font-medium text-gray-900">{p.name}</p>
                         {(p.stackable || p.loyalty_only) && (
                           <div className="flex gap-1 mt-0.5">
@@ -793,8 +793,8 @@ export default function PromotionsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => setViewPromo(p)} title="Voir" className="text-gray-400 hover:text-blue-600"><Eye size={15} /></button>
-                        <button onClick={() => { setEditPromo(p); setShowForm(true) }} title="Modifier" className="text-gray-400 hover:text-blue-600"><Edit2 size={15} /></button>
+                        <button onClick={() => setViewPromo(p)} title="Voir" className="text-gray-400 hover:text-primary"><Eye size={15} /></button>
+                        <button onClick={() => { setEditPromo(p); setShowForm(true) }} title="Modifier" className="text-gray-400 hover:text-primary"><Edit2 size={15} /></button>
                         <button
                           onClick={() => { if (confirm(`Supprimer "${p.name}" ?`)) deletePromo.mutate(p.id) }}
                           title="Supprimer" className="text-gray-400 hover:text-red-500">

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency, formatNumber } from '../../lib/format'
@@ -192,7 +192,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
       <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[92vh] flex flex-col">
         <div className="p-6 border-b flex items-center justify-between flex-shrink-0">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <Package size={20} className="text-blue-600" />
+            <Package size={20} className="text-primary" />
             {product ? 'Modifier le produit' : 'Nouvel article'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -301,7 +301,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Barcode size={14} /> Codes-barres</h3>
               <button type="button"
                 onClick={() => setBarcodes(b => [...b, { barcode: '', type: 'ean13' }])}
-                className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                className="text-xs text-primary hover:underline flex items-center gap-1">
                 <Plus size={12} /> Ajouter
               </button>
             </div>
@@ -319,7 +319,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
                   <option value="ean8">EAN-8</option>
                   <option value="internal">Interne</option>
                 </select>
-                {i === 0 && <span className="text-xs text-blue-500 w-16 text-center">Principal</span>}
+                {i === 0 && <span className="text-xs text-primary w-16 text-center">Principal</span>}
                 {i > 0 && (
                   <button type="button" onClick={() => setBarcodes(arr => arr.filter((_, j) => j !== i))}
                     className="text-gray-400 hover:text-red-500 w-16 flex justify-center">
@@ -369,7 +369,7 @@ function ProductDetailModal({ product, onClose, onEdit }: {
           </div>
           <div className="flex gap-2">
             <button onClick={onEdit}
-              className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm hover:bg-blue-100">
+              className="flex items-center gap-1 px-3 py-1.5 bg-primary-50 text-primary rounded-lg text-sm hover:bg-primary-100">
               <Edit2 size={14} /> Modifier
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -382,7 +382,7 @@ function ProductDetailModal({ product, onClose, onEdit }: {
             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
               <p className="font-semibold text-gray-700">Tarification</p>
               <div className="flex justify-between"><span className="text-gray-500">Prix achat HT</span><span className="font-medium">{formatCurrency(p.purchase_price_ht)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Prix vente TTC</span><span className="font-bold text-blue-600">{formatCurrency(p.sale_price_ttc)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Prix vente TTC</span><span className="font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">TVA</span><span>{p.vat_rate}%</span></div>
             </div>
             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
@@ -403,7 +403,7 @@ function ProductDetailModal({ product, onClose, onEdit }: {
               <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><Barcode size={14} /> Codes-barres</h3>
               <div className="flex flex-wrap gap-2">
                 {p.barcodes!.map((b, i) => (
-                  <span key={i} className={`px-3 py-1 rounded-lg text-sm font-mono border ${b.is_primary ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                  <span key={i} className={`px-3 py-1 rounded-lg text-sm font-mono border ${b.is_primary ? 'bg-primary-50 border-primary-200 text-primary-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
                     {b.barcode} {b.is_primary && <span className="text-xs">(principal)</span>}
                   </span>
                 ))}
@@ -529,7 +529,7 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Package size={24} className="text-blue-600" /> Catalogue Articles
+            <Package size={24} className="text-primary" /> Catalogue Articles
           </h1>
           <p className="text-gray-500 text-sm">{data?.total ?? 0} articles correspondants</p>
         </div>
@@ -541,7 +541,7 @@ export default function ProductsPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4">
-        <KpiCard icon={<Package size={20} className="text-white" />} label="Total articles" value={stats?.total ?? 0} color="bg-blue-500" />
+        <KpiCard icon={<Package size={20} className="text-white" />} label="Total articles" value={stats?.total ?? 0} color="bg-primary" />
         <KpiCard icon={<Check size={20} className="text-white" />} label="Articles actifs" value={stats?.active ?? 0} color="bg-green-500" />
         <KpiCard icon={<AlertTriangle size={20} className="text-white" />} label="Stock faible" value={stats?.low_stock ?? 0} color="bg-amber-500" />
         <KpiCard icon={<X size={20} className="text-white" />} label="En rupture" value={stats?.out_of_stock ?? 0} color="bg-red-500" />
@@ -576,7 +576,7 @@ export default function ProductsPage() {
                 {(Object.keys(STATUS_LABELS) as StatusFilter[]).map(k => (
                   <button key={k}
                     onClick={() => { setStatusFilter(k); setPage(1); setShowStatusMenu(false) }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === k ? 'text-blue-600 font-medium' : 'text-gray-700'}`}>
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === k ? 'text-primary font-medium' : 'text-gray-700'}`}>
                     {STATUS_LABELS[k]}
                   </button>
                 ))}
@@ -597,13 +597,13 @@ export default function ProductsPage() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => { setSelectedCategoryId(''); setPage(1) }}
-              className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedCategoryId === '' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}>
+              className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedCategoryId === '' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}>
               Toutes
             </button>
             {flatCats.map(c => (
               <button key={c.id}
                 onClick={() => { setSelectedCategoryId(c.id); setPage(1) }}
-                className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedCategoryId === c.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}>
+                className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedCategoryId === c.id ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}>
                 {c.name}
               </button>
             ))}
@@ -619,7 +619,7 @@ export default function ProductsPage() {
           <div className="p-12 text-center text-gray-400">
             <Package size={40} className="mx-auto mb-3 opacity-30" />
             <p className="font-medium">Aucun article trouvé</p>
-            {hasFilters && <button onClick={resetFilters} className="mt-2 text-blue-500 text-sm hover:underline">Réinitialiser les filtres</button>}
+            {hasFilters && <button onClick={resetFilters} className="mt-2 text-primary text-sm hover:underline">Réinitialiser les filtres</button>}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -651,7 +651,7 @@ export default function ProductsPage() {
                     <td className="px-4 py-3">
                       <button
                         onClick={() => setViewProduct(p)}
-                        className="text-left hover:text-blue-600 transition-colors">
+                        className="text-left hover:text-primary transition-colors">
                         <p className="font-medium text-gray-900">{p.name}</p>
                         {p.barcodes?.find(b => b.is_primary) && (
                           <p className="text-xs text-gray-400 font-mono">{p.barcodes.find(b => b.is_primary)?.barcode}</p>
@@ -679,7 +679,7 @@ export default function ProductsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.vat_rate > 0 ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.vat_rate > 0 ? 'bg-primary-50 text-primary-600' : 'bg-gray-100 text-gray-500'}`}>
                         {p.vat_rate}%
                       </span>
                     </td>
@@ -693,11 +693,11 @@ export default function ProductsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => setViewProduct(p)} title="Voir le détail"
-                          className="text-gray-400 hover:text-blue-600 transition-colors">
+                          className="text-gray-400 hover:text-primary transition-colors">
                           <Eye size={15} />
                         </button>
                         <button onClick={() => { setEditProduct(p); setShowForm(true) }} title="Modifier"
-                          className="text-gray-400 hover:text-blue-600 transition-colors">
+                          className="text-gray-400 hover:text-primary transition-colors">
                           <Edit2 size={15} />
                         </button>
                       </div>
@@ -724,7 +724,7 @@ export default function ProductsPage() {
                 const p = i + 1
                 return (
                   <button key={p} onClick={() => setPage(p)}
-                    className={`px-3 py-1 rounded border text-sm ${page === p ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 hover:bg-gray-100'}`}>
+                    className={`px-3 py-1 rounded border text-sm ${page === p ? 'bg-primary text-white border-primary' : 'border-gray-200 hover:bg-gray-100'}`}>
                     {p}
                   </button>
                 )

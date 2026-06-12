@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency } from '../../lib/format'
@@ -81,7 +81,7 @@ interface OrderFormItem {
 
 const STATUS_CFG: Record<PurchaseStatus, { label: string; cls: string; dotCls: string }> = {
   draft:     { label: 'Brouillon',  cls: 'bg-gray-100 text-gray-700',    dotCls: 'bg-gray-400' },
-  sent:      { label: 'Envoyée',    cls: 'bg-blue-100 text-blue-700',    dotCls: 'bg-blue-500' },
+  sent:      { label: 'Envoyée',    cls: 'bg-primary-100 text-primary-600',    dotCls: 'bg-primary' },
   partial:   { label: 'Partielle',  cls: 'bg-yellow-100 text-yellow-700', dotCls: 'bg-yellow-500' },
   received:  { label: 'Reçue',      cls: 'bg-green-100 text-green-700',   dotCls: 'bg-green-500' },
   cancelled: { label: 'Annulée',    cls: 'bg-red-100 text-red-700',       dotCls: 'bg-red-400' },
@@ -100,7 +100,7 @@ function KpiCard({ icon, label, value, sub, color = 'blue' }: {
   icon: React.ReactNode; label: string; value: string | number; sub?: string; color?: string
 }) {
   const colors: Record<string, string> = {
-    blue:   'bg-blue-50 text-blue-600',
+    blue:   'bg-primary-50 text-primary',
     green:  'bg-green-50 text-green-600',
     orange: 'bg-orange-50 text-orange-600',
     purple: 'bg-purple-50 text-purple-600',
@@ -157,7 +157,7 @@ function ProductSearch({ onSelect }: { onSelect: (p: ProductResult) => void }) {
               key={p.id}
               type="button"
               onMouseDown={() => { onSelect(p); setQ(''); setOpen(false) }}
-              className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center justify-between text-sm border-b last:border-0"
+              className="w-full px-3 py-2 text-left hover:bg-primary-50 flex items-center justify-between text-sm border-b last:border-0"
             >
               <span className="font-medium">{p.name}</span>
               <span className="text-gray-400 text-xs">{p.internal_code ?? ''}</span>
@@ -508,7 +508,7 @@ function ReceptionModal({ order, onClose }: { order: PurchaseOrder; onClose: () 
                             type="checkbox"
                             checked={row.checked}
                             onChange={e => updateRow(idx, 'checked', e.target.checked)}
-                            className="w-4 h-4 accent-blue-600"
+                            className="w-4 h-4 accent-primary"
                           />
                         </td>
                         <td className="px-3 py-2 font-medium text-gray-800">{row.product_name}</td>
@@ -611,13 +611,13 @@ function StatusFlow({ status }: { status: PurchaseStatus }) {
             <div className="flex flex-col items-center">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
                 done   ? 'bg-green-500 border-green-500 text-white' :
-                active ? 'bg-blue-600 border-blue-600 text-white' :
+                active ? 'bg-primary border-primary text-white' :
                          'bg-white border-gray-300 text-gray-400'
               }`}>
                 {done ? <CheckCircle size={16} /> : <span className="text-xs font-bold">{i + 1}</span>}
               </div>
               <span className={`text-xs mt-1 whitespace-nowrap font-medium ${
-                active ? 'text-blue-600' : done ? 'text-green-600' : 'text-gray-400'
+                active ? 'text-primary' : done ? 'text-green-600' : 'text-gray-400'
               }`}>{step.label}</span>
             </div>
             {i < steps.length - 1 && (
@@ -750,7 +750,7 @@ function OrderDetail({ orderId, onBack }: { orderId: number; onBack: () => void 
           </div>
           <div>
             <p className="text-gray-400 text-xs">Total TTC</p>
-            <p className="font-bold text-blue-700 text-lg">{formatCurrency(order.total_ttc)}</p>
+            <p className="font-bold text-primary-600 text-lg">{formatCurrency(order.total_ttc)}</p>
           </div>
         </div>
       </div>
@@ -766,7 +766,7 @@ function OrderDetail({ orderId, onBack }: { orderId: number; onBack: () => void 
               key={t.id}
               onClick={() => setTab(t.id as 'items' | 'receptions')}
               className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors ${
-                tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900'
+                tab === t.id ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-900'
               }`}
             >
               {t.label}
@@ -843,7 +843,7 @@ function OrderDetail({ orderId, onBack }: { orderId: number; onBack: () => void 
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-semibold text-blue-700">{rec.reference}</span>
+                          <span className="font-mono font-semibold text-primary-600">{rec.reference}</span>
                           {rec.supplier_delivery_ref && (
                             <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">BL: {rec.supplier_delivery_ref}</span>
                           )}
@@ -989,7 +989,7 @@ export default function PurchasesPage() {
               onClick={() => setStatusFilter(f.key)}
               className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
                 statusFilter === f.key
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -1028,9 +1028,9 @@ export default function PurchasesPage() {
                 <tr
                   key={o.id}
                   onClick={() => setSelectedId(o.id)}
-                  className="hover:bg-blue-50 cursor-pointer transition-colors"
+                  className="hover:bg-primary-50 cursor-pointer transition-colors"
                 >
-                  <td className="px-4 py-3 font-mono font-semibold text-blue-700">{o.reference}</td>
+                  <td className="px-4 py-3 font-mono font-semibold text-primary-600">{o.reference}</td>
                   <td className="px-4 py-3 text-gray-800">{o.supplier?.company_name}</td>
                   <td className="px-4 py-3 text-gray-500">{o.items_count ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-700">{formatCurrency(o.total_ht)}</td>

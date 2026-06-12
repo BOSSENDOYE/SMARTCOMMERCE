@@ -1,8 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@layer base {
+  :root {
+    --color-primary:     #ff7631;
+    --color-primary-600: #e65c18;
+    --color-primary-100: #ffe6d9;
+    --color-primary-50:  #fff4ef;
+    --color-brand:       #002f59;
+    --color-brand-600:   #003d80;
+    --color-brand-700:   #002244;
+    --color-brand-300:   #6690c3;
+  }
+}
 
 * {
   box-sizing: border-box;
@@ -41,8 +54,13 @@ body {
 
 @layer components {
   .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors;
+    @apply text-white font-medium px-4 py-2 rounded-lg transition-colors;
+    background-color: var(--color-primary);
   }
+  .btn-primary:hover {
+    background-color: var(--color-primary-600);
+  }
+
   .btn-secondary {
     @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg transition-colors;
   }
@@ -56,11 +74,15 @@ body {
     @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
   }
   .input {
-    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-transparent;
   }
+  .input:focus {
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
+
   .badge-success { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800; }
   .badge-warning { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800; }
-  .badge-danger { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800; }
-  .badge-info { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800; }
-  .badge-gray { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800; }
+  .badge-danger  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800; }
+  .badge-info    { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; background-color: var(--color-primary-50); color: var(--color-brand); }
+  .badge-gray    { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800; }
 }

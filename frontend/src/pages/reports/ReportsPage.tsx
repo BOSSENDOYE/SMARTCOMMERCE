@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency, formatDate, formatNumber } from '../../lib/format'
@@ -58,7 +58,7 @@ export default function ReportsPage() {
           { id: 'payment-methods', label: 'Modes de paiement' },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id as ReportTab)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {t.label}
           </button>
         ))}
@@ -80,7 +80,7 @@ export default function ReportsPage() {
                   <td className="px-4 py-3 font-medium text-gray-900">{r.product_name}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{formatNumber(r.total_qty, 2)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(r.total_ht)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-blue-600">{formatCurrency(r.total_ttc)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(r.total_ttc)}</td>
                   <td className="px-4 py-3 text-right text-gray-500">{r.sale_count}</td>
                 </tr>
               ))}
@@ -104,7 +104,7 @@ export default function ReportsPage() {
                 <tr key={i} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-900">{r.user_name}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{r.count}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-blue-600">{formatCurrency(r.total_ttc)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(r.total_ttc)}</td>
                   <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(r.avg_basket)}</td>
                 </tr>
               ))}
@@ -141,7 +141,7 @@ export default function ReportsPage() {
                   <tr key={i} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900 capitalize">{r.method}</td>
                     <td className="px-4 py-3 text-right text-gray-500">{r.count}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-blue-600">{formatCurrency(r.total)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(r.total)}</td>
                   </tr>
                 ))}
               </tbody>

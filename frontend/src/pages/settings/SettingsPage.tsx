@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+﻿import { useQuery } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { useAuthStore } from '../../store/auth.store'
 import { Settings, Store, Users, Shield, Printer } from 'lucide-react'
@@ -13,8 +13,8 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="card hover:shadow-md transition-shadow cursor-pointer">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Store size={20} className="text-blue-600" />
+            <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center">
+              <Store size={20} className="text-primary" />
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">Magasin</h3>

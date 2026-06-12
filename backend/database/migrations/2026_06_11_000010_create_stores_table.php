@@ -30,7 +30,7 @@ return new class extends Migration
 
         Schema::table('users', function (Blueprint $table) {
             $table->foreignId('store_id')->nullable()->constrained('stores')->nullOnDelete();
-            $table->string('pin', 6)->nullable();
+            $table->string('pin', 255)->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamp('last_login_at')->nullable();
         });

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency } from '../../lib/format'
@@ -89,7 +89,7 @@ const PAYMENT_TERMS: Record<string, string> = {
 
 const PO_STATUS: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Brouillon',  cls: 'bg-gray-100 text-gray-700' },
-  sent:      { label: 'Envoyée',    cls: 'bg-blue-100 text-blue-700' },
+  sent:      { label: 'Envoyée',    cls: 'bg-primary-100 text-primary-600' },
   partial:   { label: 'Partielle',  cls: 'bg-yellow-100 text-yellow-700' },
   received:  { label: 'Reçue',      cls: 'bg-green-100 text-green-700' },
   cancelled: { label: 'Annulée',    cls: 'bg-red-100 text-red-700' },
@@ -115,7 +115,7 @@ function KpiCard({ icon, label, value, sub, color = 'blue' }: {
   icon: React.ReactNode; label: string; value: string | number; sub?: string; color?: string
 }) {
   const colors: Record<string, string> = {
-    blue:   'bg-blue-50 text-blue-600',
+    blue:   'bg-primary-50 text-primary',
     green:  'bg-green-50 text-green-600',
     red:    'bg-red-50 text-red-600',
     orange: 'bg-orange-50 text-orange-600',
@@ -215,7 +215,7 @@ function SupplierFormModal({ supplier, onClose }: { supplier?: Supplier; onClose
           </div>
           {supplier && (
             <div className="flex items-center gap-2">
-              <input type="checkbox" id="is_active" {...register('is_active')} className="w-4 h-4 accent-blue-600" />
+              <input type="checkbox" id="is_active" {...register('is_active')} className="w-4 h-4 accent-primary" />
               <label htmlFor="is_active" className="text-sm font-medium text-gray-700">Fournisseur actif</label>
             </div>
           )}
@@ -289,9 +289,9 @@ function AddInvoiceModal({ supplierId, onClose }: { supplierId: number; onClose:
               <input type="date" {...register('due_date')} className="input" />
             </div>
           </div>
-          <div className="bg-blue-50 rounded-xl p-3 text-sm">
+          <div className="bg-primary-50 rounded-xl p-3 text-sm">
             <span className="text-gray-600">Montant TTC : </span>
-            <span className="font-bold text-blue-700">{formatCurrency(Number(computed))}</span>
+            <span className="font-bold text-primary-600">{formatCurrency(Number(computed))}</span>
           </div>
           <div className="flex gap-3 pt-2 border-t">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Annuler</button>
@@ -409,9 +409,9 @@ function LinkProductModal({ supplierId, onClose }: { supplierId: number; onClose
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Produit *</label>
             {selectedProduct ? (
-              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
+              <div className="flex items-center gap-2 p-2 bg-primary-50 rounded-lg">
                 <span className="flex-1 text-sm font-medium text-blue-900">{selectedProduct.name}</span>
-                <button type="button" onClick={() => setSelectedProduct(null)} className="text-blue-400 hover:text-blue-600"><X size={14} /></button>
+                <button type="button" onClick={() => setSelectedProduct(null)} className="text-primary-400 hover:text-primary"><X size={14} /></button>
               </div>
             ) : (
               <>
@@ -431,7 +431,7 @@ function LinkProductModal({ supplierId, onClose }: { supplierId: number; onClose
                         key={p.id}
                         type="button"
                         onClick={() => { setSelectedProduct(p); setSearch('') }}
-                        className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center justify-between text-sm"
+                        className="w-full px-3 py-2 text-left hover:bg-primary-50 flex items-center justify-between text-sm"
                       >
                         <span>{p.name}</span>
                         {p.internal_code && <span className="text-gray-400 text-xs">{p.internal_code}</span>}
@@ -453,7 +453,7 @@ function LinkProductModal({ supplierId, onClose }: { supplierId: number; onClose
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <input type="checkbox" id="is_preferred" {...register('is_preferred')} className="w-4 h-4 accent-blue-600" />
+            <input type="checkbox" id="is_preferred" {...register('is_preferred')} className="w-4 h-4 accent-primary" />
             <label htmlFor="is_preferred" className="text-sm font-medium text-gray-700">Fournisseur préférentiel pour ce produit</label>
           </div>
           <div className="flex gap-3 pt-2 border-t">
@@ -504,7 +504,7 @@ function OrdersTab({ supplier }: { supplier: Supplier }) {
             const st = PO_STATUS[o.status] ?? { label: o.status, cls: 'bg-gray-100 text-gray-700' }
             return (
               <tr key={o.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-mono font-medium text-blue-700">{o.reference}</td>
+                <td className="px-4 py-3 font-mono font-medium text-primary-600">{o.reference}</td>
                 <td className="px-4 py-3 text-gray-500">{fmtDate(o.created_at)}</td>
                 <td className="px-4 py-3 text-gray-500">{fmtDate(o.expected_date)}</td>
                 <td className="px-4 py-3 text-gray-500">{o.items_count ?? '—'}</td>
@@ -727,8 +727,8 @@ function SupplierDetail({ supplierId, onBack }: { supplierId: number; onBack: ()
       <div className="card p-5">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center">
-              <Truck size={28} className="text-blue-600" />
+            <div className="w-14 h-14 rounded-2xl bg-primary-100 flex items-center justify-center">
+              <Truck size={28} className="text-primary" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -802,7 +802,7 @@ function SupplierDetail({ supplierId, onBack }: { supplierId: number; onBack: ()
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 transition-colors ${
                 tab === t.id
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-primary text-primary'
                   : 'border-transparent text-gray-500 hover:text-gray-900'
               }`}
             >
@@ -902,7 +902,7 @@ export default function SuppliersPage() {
               key={f}
               onClick={() => setFilter(f)}
               className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                filter === f ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {f === 'all' ? 'Tous' : f === 'active' ? 'Actifs' : 'Inactifs'}
@@ -938,7 +938,7 @@ export default function SuppliersPage() {
               <tr
                 key={s.id}
                 onClick={() => setSelectedId(s.id)}
-                className="hover:bg-blue-50 cursor-pointer transition-colors"
+                className="hover:bg-primary-50 cursor-pointer transition-colors"
               >
                 <td className="px-4 py-3">
                   <div className="font-semibold text-gray-900">{s.company_name}</div>
@@ -947,7 +947,7 @@ export default function SuppliersPage() {
                 <td className="px-4 py-3 text-gray-500">{s.contact_name ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-500">{s.phone ?? '—'}</td>
                 <td className="px-4 py-3">
-                  <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                  <span className="bg-primary-50 text-primary-600 px-2 py-0.5 rounded-full text-xs font-medium">
                     {PAYMENT_TERMS[s.payment_terms] ?? s.payment_terms}
                   </span>
                 </td>

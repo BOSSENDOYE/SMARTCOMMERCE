@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency } from '../../lib/format'
@@ -12,7 +12,7 @@ interface Table {
 const TABLE_STATUS_STYLES: Record<string, string> = {
   free: 'bg-green-100 border-green-300 text-green-800',
   occupied: 'bg-orange-100 border-orange-300 text-orange-800',
-  ordered: 'bg-blue-100 border-blue-300 text-blue-800',
+  ordered: 'bg-primary-100 border-primary-300 text-primary-700',
   served: 'bg-purple-100 border-purple-300 text-purple-800',
   bill_requested: 'bg-red-100 border-red-300 text-red-800',
   cleaning: 'bg-gray-100 border-gray-300 text-gray-600',

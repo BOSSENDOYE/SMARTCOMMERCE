@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
 import api from '../../lib/api'
@@ -63,8 +63,8 @@ function OpenSessionModal({ onOpened }: { onOpened: (session: CashSession) => vo
     <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
         <div className="p-8 text-center space-y-6">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
-            <Lock size={28} className="text-blue-600" />
+          <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto">
+            <Lock size={28} className="text-primary" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Ouvrir la caisse</h2>
@@ -85,7 +85,7 @@ function OpenSessionModal({ onOpened }: { onOpened: (session: CashSession) => vo
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-lg transition-colors flex items-center justify-center gap-2">
+            className="w-full py-4 bg-primary hover:bg-primary-600 text-white font-bold rounded-xl text-lg transition-colors flex items-center justify-center gap-2">
             <Unlock size={20} />
             {mutation.isPending ? 'Ouverture...' : 'Ouvrir la caisse'}
           </button>
@@ -232,7 +232,7 @@ function ClientSearchModal({ onSelect, onClose }: {
           )}
           {results.map(c => (
             <button key={c.id} onClick={() => onSelect(c)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-blue-50 text-left">
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-primary-50 text-left">
               <div>
                 <p className="text-sm font-medium text-gray-900">{c.name}</p>
                 {c.phone && <p className="text-xs text-gray-400">{c.phone}</p>}
@@ -274,14 +274,14 @@ function HoldCartsModal({ carts, onRecall, onClose }: {
             const heldAt = new Date(c.held_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
             return (
               <button key={c.id} onClick={() => { onRecall(c.id); onClose() }}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-blue-50 text-left">
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-primary-50 text-left">
                 <div>
                   <p className="text-sm font-mono font-bold text-gray-700"># {c.id}</p>
                   <p className="text-xs text-gray-400">{c.items.length} article{c.items.length > 1 ? 's' : ''} · Mis en attente à {heldAt}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-blue-600">{formatCurrency(total)}</p>
-                  <div className="flex items-center gap-1 text-xs text-blue-500 justify-end">
+                  <p className="font-bold text-primary">{formatCurrency(total)}</p>
+                  <div className="flex items-center gap-1 text-xs text-primary justify-end">
                     <PlayCircle size={12} /> Reprendre
                   </div>
                 </div>
@@ -323,7 +323,7 @@ function PaymentModal({ total, onClose, onConfirm, processing }: {
         <div className="p-6 border-b flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold">Encaissement</h2>
-            <p className="text-3xl font-bold text-blue-600 mt-1">{formatCurrency(total)}</p>
+            <p className="text-3xl font-bold text-primary mt-1">{formatCurrency(total)}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
@@ -334,7 +334,7 @@ function PaymentModal({ total, onClose, onConfirm, processing }: {
               <button key={m.key} onClick={() => addMethod(m.key)}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm border transition-colors ${
                   payments.find(p => p.method === m.key)
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-primary text-white border-primary'
                     : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                 }`}>
                 {m.icon} {m.label}
@@ -451,7 +451,7 @@ function CartItemRow({ item, onQtyChange, onDiscountChange, onRemove }: {
           type="number"
           value={item.qty}
           onChange={e => onQtyChange(item.product_id, parseFloat(e.target.value) || 0)}
-          className="w-14 text-center text-sm border rounded px-1 py-0.5 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          className="w-14 text-center text-sm border rounded px-1 py-0.5 focus:ring-1 focus:ring-primary focus:outline-none"
           min={0}
           step={item.is_weight_based ? '0.001' : '1'}
         />
@@ -760,12 +760,12 @@ export default function PosPage() {
           {/* Client button */}
           <button
             onClick={() => setShowClientSearch(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors ${client_name ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors ${client_name ? 'bg-primary-50 text-primary-600 border-primary-200' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
             <UserPlus size={15} />
             {client_name ? client_name : 'Client'}
             {client_name && (
               <button onClick={(e) => { e.stopPropagation(); setClient(null, null) }}
-                className="text-blue-400 hover:text-red-500 ml-1">
+                className="text-primary-400 hover:text-red-500 ml-1">
                 <X size={12} />
               </button>
             )}
@@ -796,13 +796,13 @@ export default function PosPage() {
           <div className="bg-white border-b shadow-lg max-h-72 overflow-y-auto">
             {searchResults.map(p => (
               <button key={p.id} onClick={() => addProductToCart(p)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 text-left border-b last:border-0">
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary-50 text-left border-b last:border-0">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">{p.name}</p>
                   <p className="text-xs text-gray-400">{p.internal_code} · {p.category_name}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold text-blue-600">{formatCurrency(p.sale_price_ttc)}</p>
+                  <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
                   <p className={`text-xs ${p.stock_qty > 0 ? 'text-green-600' : 'text-red-500'}`}>
                     Stock: {formatNumber(p.stock_qty, 0)}
                   </p>
@@ -819,13 +819,13 @@ export default function PosPage() {
         <div className="bg-white border-b px-4 py-2 flex gap-2 overflow-x-auto flex-shrink-0">
           <button
             onClick={() => setSelectedCategoryId(null)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === null ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-300'}`}>
+            className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === null ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
             Tous
           </button>
           {categories.map(c => (
             <button key={c.id}
               onClick={() => setSelectedCategoryId(c.id)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === c.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-300'}`}>
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === c.id ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
               {c.name}
             </button>
           ))}
@@ -846,14 +846,14 @@ export default function PosPage() {
                 <button
                   key={p.id}
                   onClick={() => addProductToCart(p)}
-                  className={`bg-white rounded-xl border p-3 text-left hover:border-blue-400 hover:shadow-sm transition-all group ${p.stock_qty <= 0 ? 'opacity-60' : ''}`}>
-                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center mb-2 group-hover:bg-blue-100">
-                    <ShoppingBag size={16} className="text-blue-500" />
+                  className={`bg-white rounded-xl border p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all group ${p.stock_qty <= 0 ? 'opacity-60' : ''}`}>
+                  <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center mb-2 group-hover:bg-primary-100">
+                    <ShoppingBag size={16} className="text-primary" />
                   </div>
                   <p className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight mb-1">
                     {p.short_name ?? p.name}
                   </p>
-                  <p className="text-sm font-bold text-blue-600">{formatCurrency(p.sale_price_ttc)}</p>
+                  <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
                   <p className={`text-xs mt-0.5 ${p.stock_qty <= 0 ? 'text-red-500' : p.stock_qty <= 5 ? 'text-amber-500' : 'text-gray-400'}`}>
                     {p.stock_qty <= 0 ? 'Rupture' : `Stock: ${formatNumber(p.stock_qty, 0)}`}
                   </p>
@@ -871,11 +871,11 @@ export default function PosPage() {
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
             <ShoppingBag size={18} /> Panier
             {items.length > 0 && (
-              <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">{items.length}</span>
+              <span className="bg-primary text-white text-xs px-2 py-0.5 rounded-full">{items.length}</span>
             )}
           </h2>
           {client_name && (
-            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">{client_name}</span>
+            <span className="text-xs bg-primary-50 text-primary px-2 py-1 rounded-lg">{client_name}</span>
           )}
         </div>
 
@@ -906,7 +906,7 @@ export default function PosPage() {
           )}
           <div className="flex justify-between items-center">
             <span className="text-lg font-bold text-gray-900">TOTAL</span>
-            <span className="text-2xl font-bold text-blue-600">{formatCurrency(totalTtc)}</span>
+            <span className="text-2xl font-bold text-primary">{formatCurrency(totalTtc)}</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -930,7 +930,7 @@ export default function PosPage() {
           <button
             onClick={() => setShowPayment(true)}
             disabled={items.length === 0 || processing}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-lg font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+            className="w-full py-4 bg-primary hover:bg-primary-600 disabled:bg-blue-300 text-white text-lg font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
             <Receipt size={22} /> Encaisser
           </button>
 

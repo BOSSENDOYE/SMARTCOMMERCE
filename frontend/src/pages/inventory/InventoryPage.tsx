@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+﻿import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency, formatNumber, formatDate } from '../../lib/format'
@@ -109,7 +109,7 @@ function StepFlow({ status }: { status: string }) {
         <div key={i} className="flex items-center gap-1">
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
             i < current ? 'bg-emerald-100 text-emerald-700' :
-            i === current ? 'bg-blue-600 text-white shadow-sm' :
+            i === current ? 'bg-primary text-white shadow-sm' :
             'bg-gray-100 text-gray-400'
           }`}>
             {i < current && <CheckCircle2 size={11} />}
@@ -142,7 +142,7 @@ function CreateSessionModal({ onClose }: { onClose: () => void }) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-            <Plus size={18} className="text-blue-600" /> Nouvel inventaire
+            <Plus size={18} className="text-primary" /> Nouvel inventaire
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
             <X size={17} />
@@ -164,8 +164,8 @@ function CreateSessionModal({ onClose }: { onClose: () => void }) {
                 { v: 'rotating', title: 'Inventaire tournant', desc: 'Vous ajoutez les articles à compter manuellement.' },
               ] as const).map(opt => (
                 <button key={opt.v} type="button" onClick={() => setType(opt.v)}
-                  className={`text-left p-4 rounded-xl border-2 transition-all ${type === opt.v ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                  <p className={`text-sm font-semibold ${type === opt.v ? 'text-blue-700' : 'text-gray-800'}`}>{opt.title}</p>
+                  className={`text-left p-4 rounded-xl border-2 transition-all ${type === opt.v ? 'border-primary bg-primary-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                  <p className={`text-sm font-semibold ${type === opt.v ? 'text-primary-600' : 'text-gray-800'}`}>{opt.title}</p>
                   <p className="text-xs text-gray-500 mt-1 leading-relaxed">{opt.desc}</p>
                 </button>
               ))}
@@ -226,7 +226,7 @@ function AddProductModal({ sessionId, storeId, onClose }: {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-            <Package size={18} className="text-blue-600" /> Saisir un comptage
+            <Package size={18} className="text-primary" /> Saisir un comptage
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={17} /></button>
         </div>
@@ -234,13 +234,13 @@ function AddProductModal({ sessionId, storeId, onClose }: {
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Produit *</label>
             {selected ? (
-              <div className="flex items-center gap-3 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+              <div className="flex items-center gap-3 px-3 py-2.5 bg-primary-50 border border-primary-200 rounded-xl">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900">{selected.name}</p>
                   <p className="text-xs text-gray-400 font-mono">{selected.internal_code}</p>
                 </div>
                 <button onClick={() => { setSelected(null); setSearch('') }}
-                  className="text-blue-400 hover:text-blue-600 p-1"><X size={13} /></button>
+                  className="text-primary-400 hover:text-primary p-1"><X size={13} /></button>
               </div>
             ) : (
               <div className="relative">
@@ -324,7 +324,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
   if (isLoading || !session) {
     return (
       <div className="flex items-center justify-center h-48">
-        <Loader2 size={24} className="animate-spin text-blue-500" />
+        <Loader2 size={24} className="animate-spin text-primary" />
       </div>
     )
   }
@@ -445,7 +445,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
         </div>
         <div className="card p-4">
           <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Écart positif</p>
-          <p className="text-2xl font-bold text-blue-600 mt-1">+{formatCurrency(positiveVariance)}</p>
+          <p className="text-2xl font-bold text-primary mt-1">+{formatCurrency(positiveVariance)}</p>
         </div>
         <div className="card p-4">
           <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Écart négatif</p>
@@ -486,7 +486,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
           <div className="flex items-center gap-1 bg-white border rounded-lg p-0.5">
             {([['', 'Tous'], ['counted', 'Comptés'], ['pending', 'À compter']] as const).map(([v, label]) => (
               <button key={v} onClick={() => setFilterCounted(v)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filterCounted === v ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filterCounted === v ? 'bg-primary text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
                 {label}
                 {v === 'pending' && pendingItems.length > 0 && (
                   <span className="ml-1 bg-amber-100 text-amber-700 rounded-full px-1.5">{pendingItems.length}</span>
@@ -514,7 +514,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
                 const v = variance(item)
                 const vv = varianceValue(item)
                 const isCounted = item.counted_qty !== null
-                const rowBg = !isCounted ? '' : v === 0 ? 'bg-emerald-50/30' : v! > 0 ? 'bg-blue-50/30' : 'bg-red-50/30'
+                const rowBg = !isCounted ? '' : v === 0 ? 'bg-emerald-50/30' : v! > 0 ? 'bg-primary-50/30' : 'bg-red-50/30'
 
                 return (
                   <tr key={item.id} className={`group hover:bg-gray-50/80 transition-colors ${rowBg}`}>
@@ -544,14 +544,14 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {v !== null ? (
-                        <span className={`font-bold ${v === 0 ? 'text-emerald-600' : v > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        <span className={`font-bold ${v === 0 ? 'text-emerald-600' : v > 0 ? 'text-primary' : 'text-red-600'}`}>
                           {v > 0 ? '+' : ''}{formatNumber(v, 3)}
                         </span>
                       ) : <span className="text-gray-300 text-xs">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {vv !== null ? (
-                        <span className={`font-semibold text-xs ${vv === 0 ? 'text-emerald-600' : vv > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        <span className={`font-semibold text-xs ${vv === 0 ? 'text-emerald-600' : vv > 0 ? 'text-primary' : 'text-red-600'}`}>
                           {vv > 0 ? '+' : ''}{formatCurrency(vv)}
                         </span>
                       ) : <span className="text-gray-300 text-xs">—</span>}
@@ -587,7 +587,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
                 <tr className="bg-gray-50 border-t text-xs font-semibold text-gray-600">
                   <td colSpan={3} className="px-4 py-2.5">Total écart (articles filtrés)</td>
                   <td className="px-4 py-2.5 text-right">—</td>
-                  <td className={`px-4 py-2.5 text-right font-bold ${totalVariance >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                  <td className={`px-4 py-2.5 text-right font-bold ${totalVariance >= 0 ? 'text-primary-600' : 'text-red-700'}`}>
                     {totalVariance > 0 ? '+' : ''}{formatCurrency(totalVariance)}
                   </td>
                   <td colSpan={canEdit ? 2 : 1} />
@@ -623,14 +623,14 @@ function InlineQtyEditor({ item, onSave }: { item: SessionItem; onSave: (qty: nu
         onChange={e => setVal(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
-        className="w-24 text-right border border-blue-400 rounded-lg px-2 py-1 text-sm font-bold bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        className="w-24 text-right border border-primary-400 rounded-lg px-2 py-1 text-sm font-bold bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         autoFocus />
     )
   }
 
   return (
     <button onClick={() => { setEditing(true) }}
-      className={`text-right w-24 px-2 py-1 rounded-lg text-sm font-semibold transition-colors hover:bg-blue-50 group/edit ${item.counted_qty !== null ? 'text-gray-900' : 'text-gray-300'}`}
+      className={`text-right w-24 px-2 py-1 rounded-lg text-sm font-semibold transition-colors hover:bg-primary-50 group/edit ${item.counted_qty !== null ? 'text-gray-900' : 'text-gray-300'}`}
       title="Cliquer pour modifier">
       {item.counted_qty !== null
         ? formatNumber(parseFloat(String(item.counted_qty)), 3)
@@ -668,7 +668,7 @@ export default function InventoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
-          <ClipboardList size={24} className="text-blue-600" /> Inventaire
+          <ClipboardList size={24} className="text-primary" /> Inventaire
         </h1>
         <button onClick={() => setShowCreate(true)}
           className="btn-primary flex items-center gap-2 text-sm">
@@ -679,7 +679,7 @@ export default function InventoryPage() {
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-primary-50 flex items-center justify-center text-primary flex-shrink-0">
             <ClipboardList size={20} />
           </div>
           <div>
@@ -697,7 +697,7 @@ export default function InventoryPage() {
           </div>
         </div>
         <div className="card p-4 flex items-center gap-4">
-          <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${(lastCompleted?.total_variance_value ?? 0) >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${(lastCompleted?.total_variance_value ?? 0) >= 0 ? 'bg-primary-50 text-primary' : 'bg-red-50 text-red-600'}`}>
             <BarChart2 size={20} />
           </div>
           <div>
@@ -713,7 +713,7 @@ export default function InventoryPage() {
       <div className="card p-0 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
-            <Loader2 size={22} className="animate-spin text-blue-500" />
+            <Loader2 size={22} className="animate-spin text-primary" />
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -732,9 +732,9 @@ export default function InventoryPage() {
             <tbody className="divide-y divide-gray-100">
               {sessions.map((s: InventorySession) => (
                 <tr key={s.id} onClick={() => setSelectedId(s.id)}
-                  className="hover:bg-blue-50/40 cursor-pointer transition-colors group">
+                  className="hover:bg-primary-50/40 cursor-pointer transition-colors group">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                    <p className="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
                       {s.name}
                     </p>
                   </td>
@@ -754,7 +754,7 @@ export default function InventoryPage() {
                   </td>
                   <td className="px-4 py-3 text-right text-xs font-semibold">
                     {s.status === 'completed' && s.total_variance_value != null ? (
-                      <span className={s.total_variance_value >= 0 ? 'text-blue-600' : 'text-red-600'}>
+                      <span className={s.total_variance_value >= 0 ? 'text-primary' : 'text-red-600'}>
                         {s.total_variance_value > 0 ? '+' : ''}{formatCurrency(s.total_variance_value)}
                       </span>
                     ) : (
@@ -765,7 +765,7 @@ export default function InventoryPage() {
                     <StatusBadge status={s.status} />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <ChevronRight size={15} className="text-gray-300 group-hover:text-blue-400 transition-colors ml-auto" />
+                    <ChevronRight size={15} className="text-gray-300 group-hover:text-primary-400 transition-colors ml-auto" />
                   </td>
                 </tr>
               ))}

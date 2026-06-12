@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+﻿import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
@@ -104,7 +104,7 @@ function Pagination({ page, lastPage, total, onPage }: {
         </button>
         {pages.map(p => (
           <button key={p} onClick={() => onPage(p)}
-            className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${p === page ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 text-gray-700'}`}>
+            className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${p === page ? 'bg-primary text-white shadow-sm' : 'hover:bg-gray-200 text-gray-700'}`}>
             {p}
           </button>
         ))}
@@ -121,7 +121,7 @@ function KpiCard({ icon, label, value, sub, color = 'blue' }: {
   icon: React.ReactNode; label: string; value: React.ReactNode; sub?: string; color?: 'blue' | 'red' | 'amber' | 'green'
 }) {
   const palette = {
-    blue:  'bg-blue-50 text-blue-600',
+    blue:  'bg-primary-50 text-primary',
     red:   'bg-red-50 text-red-600',
     amber: 'bg-amber-50 text-amber-600',
     green: 'bg-emerald-50 text-emerald-600',
@@ -182,7 +182,7 @@ function AdjustModal({ onClose, initialProduct }: {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-            <Settings2 size={18} className="text-blue-600" />
+            <Settings2 size={18} className="text-primary" />
             Ajustement de stock
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
@@ -195,16 +195,16 @@ function AdjustModal({ onClose, initialProduct }: {
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Produit *</label>
             {selected ? (
-              <div className="flex items-center gap-3 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                  <Boxes size={15} className="text-blue-600" />
+              <div className="flex items-center gap-3 px-3 py-2.5 bg-primary-50 border border-primary-200 rounded-xl">
+                <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0">
+                  <Boxes size={15} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 truncate">{selected.name}</p>
                   <p className="text-xs text-gray-400 font-mono">{selected.internal_code}</p>
                 </div>
                 <button onClick={() => { setSelected(null); setSearch('') }}
-                  className="p-1 rounded-lg hover:bg-blue-100 text-blue-400 transition-colors">
+                  className="p-1 rounded-lg hover:bg-primary-100 text-primary-400 transition-colors">
                   <X size={14} />
                 </button>
               </div>
@@ -378,7 +378,7 @@ export default function StockPage() {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
-          <Boxes size={24} className="text-blue-600" />
+          <Boxes size={24} className="text-primary" />
           Gestion des Stocks
         </h1>
         <div className="flex items-center gap-2">
@@ -415,13 +415,13 @@ export default function StockPage() {
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-5 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap -mb-px ${
               tab === t.id
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}>
             {t.icon}
             {t.label}
             {t.badge != null && t.badge > 0 && (
-              <span className={`ml-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'}`}>
+              <span className={`ml-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-primary-100 text-primary-600' : 'bg-red-100 text-red-600'}`}>
                 {t.badge}
               </span>
             )}
@@ -451,12 +451,12 @@ export default function StockPage() {
             <div className="flex items-center gap-1 bg-white border rounded-lg p-0.5">
               {(['', 'low', 'out'] as const).map((s, i) => (
                 <button key={i} onClick={() => resetStatus(s)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${statusFilter === s ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${statusFilter === s ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>
                   {s === '' ? 'Tous' : s === 'low' ? 'Alertes' : 'Ruptures'}
                 </button>
               ))}
             </div>
-            {levelsLoading && <Loader2 size={16} className="animate-spin text-blue-500 ml-auto" />}
+            {levelsLoading && <Loader2 size={16} className="animate-spin text-primary ml-auto" />}
           </div>
 
           {/* Table */}
@@ -515,7 +515,7 @@ export default function StockPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={() => openAdjust(s.product)}
-                          className="text-xs text-blue-600 font-medium px-2 py-1 rounded-lg hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap">
+                          className="text-xs text-primary font-medium px-2 py-1 rounded-lg hover:bg-primary-50 opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap">
                           Ajuster
                         </button>
                       </td>
@@ -555,7 +555,7 @@ export default function StockPage() {
         <div className="space-y-5">
           {lowLoading && (
             <div className="flex items-center justify-center h-24">
-              <Loader2 size={22} className="animate-spin text-blue-500" />
+              <Loader2 size={22} className="animate-spin text-primary" />
             </div>
           )}
 
@@ -596,7 +596,7 @@ export default function StockPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Link to="/purchases"
-                            className="flex items-center gap-1.5 text-xs text-blue-600 font-medium px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap">
+                            className="flex items-center gap-1.5 text-xs text-primary font-medium px-2.5 py-1.5 rounded-lg hover:bg-primary-50 transition-colors whitespace-nowrap">
                             <ShoppingCart size={13} /> Commander
                           </Link>
                         </td>
@@ -655,7 +655,7 @@ export default function StockPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Link to="/purchases"
-                              className="flex items-center gap-1.5 text-xs text-blue-600 font-medium px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap">
+                              className="flex items-center gap-1.5 text-xs text-primary font-medium px-2.5 py-1.5 rounded-lg hover:bg-primary-50 transition-colors whitespace-nowrap">
                               <ShoppingCart size={13} /> Commander
                             </Link>
                           </td>
@@ -693,8 +693,8 @@ export default function StockPage() {
               <button key={d} onClick={() => setExpiryDays(d)}
                 className={`px-4 py-1.5 text-xs font-semibold rounded-full border transition-all ${
                   expiryDays === d
-                    ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                    : 'border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600'
+                    ? 'bg-primary border-primary text-white shadow-sm'
+                    : 'border-gray-300 text-gray-600 hover:border-primary-400 hover:text-primary'
                 }`}>
                 {d} jours
               </button>
@@ -737,7 +737,7 @@ export default function StockPage() {
 
           {expiringLoading ? (
             <div className="flex items-center justify-center h-24">
-              <Loader2 size={22} className="animate-spin text-blue-500" />
+              <Loader2 size={22} className="animate-spin text-primary" />
             </div>
           ) : (
             <div className="card p-0 overflow-hidden">
@@ -757,7 +757,7 @@ export default function StockPage() {
                     {expiring.map(lot => {
                       const days = Math.ceil((new Date(lot.expiry_date).getTime() - Date.now()) / 86400000)
                       const urgency = days <= 7 ? 'danger' : days <= 15 ? 'warning' : 'info'
-                      const barColor = days <= 7 ? 'bg-red-500' : days <= 15 ? 'bg-amber-400' : 'bg-blue-400'
+                      const barColor = days <= 7 ? 'bg-red-500' : days <= 15 ? 'bg-amber-400' : 'bg-primary-400'
                       const barPct = Math.max(5, Math.min(100, (days / expiryDays) * 100))
                       return (
                         <tr key={lot.id}
@@ -815,8 +815,8 @@ export default function StockPage() {
                   onClick={() => applyDatePreset(preset.from(), preset.to())}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
                     movDateFrom === preset.from() && movDateTo === preset.to()
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'border-gray-300 text-gray-600 hover:border-blue-400'
+                      ? 'bg-primary border-primary text-white'
+                      : 'border-gray-300 text-gray-600 hover:border-primary-400'
                   }`}>
                   {preset.label}
                 </button>
@@ -859,7 +859,7 @@ export default function StockPage() {
                   <RefreshCw size={12} /> Tout réinitialiser
                 </button>
               )}
-              {movLoading && <Loader2 size={15} className="animate-spin text-blue-500 ml-auto" />}
+              {movLoading && <Loader2 size={15} className="animate-spin text-primary ml-auto" />}
             </div>
           </div>
 
@@ -870,7 +870,7 @@ export default function StockPage() {
             const sumIn   = entries.reduce((s, m) => s + m.qty, 0)
             const sumOut  = exits.reduce((s, m) => s + m.qty, 0)
             return (
-              <div className="flex gap-4 px-4 py-2.5 bg-blue-50/40 border-b text-xs text-gray-600">
+              <div className="flex gap-4 px-4 py-2.5 bg-primary-50/40 border-b text-xs text-gray-600">
                 <span className="text-emerald-600 font-semibold">↑ Entrées : +{formatNumber(sumIn, 2)}</span>
                 <span className="text-gray-300">|</span>
                 <span className="text-red-600 font-semibold">↓ Sorties : −{formatNumber(sumOut, 2)}</span>
@@ -883,7 +883,7 @@ export default function StockPage() {
           {/* Table */}
           {movLoading ? (
             <div className="flex items-center justify-center h-32">
-              <Loader2 size={22} className="animate-spin text-blue-500" />
+              <Loader2 size={22} className="animate-spin text-primary" />
             </div>
           ) : (
             <>

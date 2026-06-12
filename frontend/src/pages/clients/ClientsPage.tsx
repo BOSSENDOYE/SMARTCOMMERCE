@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency, formatNumber } from '../../lib/format'
@@ -86,7 +86,7 @@ const TYPE_LABEL: Record<string, string> = { individual: 'Particulier', company:
 const LOYALTY_TYPE_CFG: Record<string, { label: string; cls: string }> = {
   earn:   { label: 'Gagné',    cls: 'text-green-600' },
   redeem: { label: 'Utilisé',  cls: 'text-orange-600' },
-  adjust: { label: 'Ajusté',   cls: 'text-blue-600' },
+  adjust: { label: 'Ajusté',   cls: 'text-primary' },
   expire: { label: 'Expiré',   cls: 'text-gray-400' },
 }
 
@@ -154,7 +154,7 @@ function ClientFormModal({ client, onClose }: { client?: Client; onClose: () => 
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] flex flex-col">
         <div className="p-6 border-b flex items-center justify-between flex-shrink-0">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <Users size={20} className="text-blue-600" />
+            <Users size={20} className="text-primary" />
             {client ? 'Modifier le client' : 'Nouveau client'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -167,7 +167,7 @@ function ClientFormModal({ client, onClose }: { client?: Client; onClose: () => 
               <button key={t} type="button"
                 onClick={() => setForm(f => ({ ...f, type: t }))}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                  form.type === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                  form.type === t ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
                 }`}>
                 {t === 'individual' ? <User size={15} /> : <Building2 size={15} />}
                 {TYPE_LABEL[t]}
@@ -361,7 +361,7 @@ function AdjustLoyaltyModal({ client, onClose }: { client: Client; onClose: () =
             {(['add', 'redeem'] as const).map(t => (
               <button key={t} type="button" onClick={() => setType(t)}
                 className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                  type === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                  type === t ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
                 }`}>
                 {t === 'add' ? '+ Ajouter' : '− Utiliser'}
               </button>
@@ -429,13 +429,13 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
           {/* Header */}
           <div className="p-6 border-b flex items-start justify-between flex-shrink-0">
             <div className="flex items-center gap-4">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-bold ${client.type === 'company' ? 'bg-purple-500' : 'bg-blue-500'}`}>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-bold ${client.type === 'company' ? 'bg-purple-500' : 'bg-primary'}`}>
                 {client.name.charAt(0).toUpperCase()}
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{client.name}</h2>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${client.type === 'company' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${client.type === 'company' ? 'bg-purple-50 text-purple-700' : 'bg-primary-50 text-primary-600'}`}>
                     {TYPE_LABEL[client.type]}
                   </span>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${client.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -692,7 +692,7 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Users size={24} className="text-blue-600" /> Clients
+            <Users size={24} className="text-primary" /> Clients
           </h1>
           <p className="text-gray-500 text-sm">{data?.total ?? 0} clients correspondants</p>
         </div>
@@ -707,7 +707,7 @@ export default function ClientsPage() {
         <KpiCard
           icon={<Users size={20} className="text-white" />}
           label="Total clients" value={stats?.total ?? 0}
-          color="bg-blue-500" />
+          color="bg-primary" />
         <KpiCard
           icon={<Check size={20} className="text-white" />}
           label="Clients actifs" value={stats?.active ?? 0}
@@ -749,7 +749,7 @@ export default function ClientsPage() {
               <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-10 py-1">
                 {(Object.keys(STATUS_LABELS) as StatusFilter[]).map(k => (
                   <button key={k} onClick={() => { setStatusFilter(k); setPage(1); setShowStatusMenu(false) }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === k ? 'text-blue-600 font-medium' : 'text-gray-700'}`}>
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === k ? 'text-primary font-medium' : 'text-gray-700'}`}>
                     {STATUS_LABELS[k]}
                   </button>
                 ))}
@@ -770,7 +770,7 @@ export default function ClientsPage() {
           {([['all', 'Tous', undefined], ['individual', 'Particuliers', User], ['company', 'Entreprises', Building2]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => { setTypeFilter(k); setPage(1) }}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm border transition-colors ${
-                typeFilter === k ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                typeFilter === k ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
               }`}>
               {Icon && <Icon size={12} />} {label}
             </button>
@@ -788,7 +788,7 @@ export default function ClientsPage() {
             <p className="font-medium">Aucun client trouvé</p>
             {hasFilters && (
               <button onClick={() => { setSearch(''); setTypeFilter('all'); setStatusFilter('all') }}
-                className="mt-2 text-blue-500 text-sm hover:underline">
+                className="mt-2 text-primary text-sm hover:underline">
                 Réinitialiser les filtres
               </button>
             )}
@@ -811,9 +811,9 @@ export default function ClientsPage() {
               {(data?.data ?? []).map((c: Client) => (
                 <tr key={c.id} className="hover:bg-gray-50 transition-colors group">
                   <td className="px-4 py-3">
-                    <button onClick={() => setViewClient(c)} className="text-left hover:text-blue-600 transition-colors">
+                    <button onClick={() => setViewClient(c)} className="text-left hover:text-primary transition-colors">
                       <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${c.type === 'company' ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${c.type === 'company' ? 'bg-purple-500' : 'bg-primary'}`}>
                           {c.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
@@ -830,7 +830,7 @@ export default function ClientsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${c.type === 'company' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${c.type === 'company' ? 'bg-purple-50 text-purple-700' : 'bg-primary-50 text-primary-600'}`}>
                       {TYPE_LABEL[c.type]}
                     </span>
                   </td>
@@ -857,11 +857,11 @@ export default function ClientsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => setViewClient(c)} title="Voir le détail"
-                        className="text-gray-400 hover:text-blue-600">
+                        className="text-gray-400 hover:text-primary">
                         <Eye size={15} />
                       </button>
                       <button onClick={() => { setEditClient(c); setShowForm(true) }} title="Modifier"
-                        className="text-gray-400 hover:text-blue-600">
+                        className="text-gray-400 hover:text-primary">
                         <Edit2 size={15} />
                       </button>
                     </div>

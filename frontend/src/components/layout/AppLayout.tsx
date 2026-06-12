@@ -3,9 +3,9 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users, BarChart3,
-  Settings, LogOut, ChevronLeft, ChevronRight, Store, AlertTriangle,
+  Settings, LogOut, ChevronLeft, ChevronRight, AlertTriangle,
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
-  ShieldCheck, Boxes
+  Boxes
 } from 'lucide-react'
 
 interface NavItem {
@@ -51,18 +51,23 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100">
       {/* Sidebar */}
-      <aside className={`${collapsed ? 'w-16' : 'w-64'} bg-slate-900 text-white flex flex-col transition-all duration-200 ease-in-out flex-shrink-0`}>
+      <aside className={`${collapsed ? 'w-16' : 'w-64'} bg-brand text-white flex flex-col transition-all duration-200 ease-in-out flex-shrink-0`}>
         {/* Logo */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+        <div className="flex items-center justify-between p-4 border-b border-brand-700">
           {!collapsed && (
-            <div>
-              <p className="text-xs font-bold text-blue-400 tracking-wider">SMARTCOMMERCE</p>
-              <p className="text-xs text-slate-400 truncate">{user?.store?.name ?? 'Suite'}</p>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                <ShoppingCart size={14} className="text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white tracking-wider">SMARTCOMMERCE</p>
+                <p className="text-xs text-brand-300 truncate">{user?.store?.name ?? 'Suite'}</p>
+              </div>
             </div>
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="text-slate-400 hover:text-white p-1 rounded transition-colors"
+            className="text-brand-300 hover:text-white p-1 rounded transition-colors ml-auto"
           >
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
@@ -78,8 +83,8 @@ export default function AppLayout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                   isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-primary text-white'
+                    : 'text-brand-200 hover:bg-brand-700 hover:text-white'
                 }`
               }
               title={collapsed ? item.label : undefined}
@@ -91,21 +96,21 @@ export default function AppLayout() {
         </nav>
 
         {/* User info */}
-        <div className="border-t border-slate-700 p-3">
+        <div className="border-t border-brand-700 p-3">
           <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
               {user?.name?.charAt(0)?.toUpperCase()}
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-white truncate">{user?.name}</p>
-                <p className="text-xs text-slate-400 capitalize">{user?.roles?.[0]?.replace('_', ' ')}</p>
+                <p className="text-xs text-brand-300 capitalize">{user?.roles?.[0]?.replace('_', ' ')}</p>
               </div>
             )}
             {!collapsed && (
               <button
                 onClick={handleLogout}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-brand-300 hover:text-white transition-colors"
                 title="Déconnexion"
               >
                 <LogOut size={16} />
