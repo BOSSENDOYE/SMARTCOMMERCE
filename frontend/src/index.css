@@ -45,11 +45,34 @@ body {
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* Print styles */
+/* ── Print — ticket de caisse uniquement ───────────────────────────────── */
+#receipt-print-root {
+  display: none; /* caché à l'écran */
+}
+
 @media print {
-  .no-print { display: none !important; }
-  .print-only { display: block !important; }
-  body { background: white; }
+  /* Masquer toute l'application */
+  #root {
+    visibility: hidden;
+  }
+  /* Afficher uniquement le ticket */
+  #receipt-print-root {
+    display:    block !important;
+    visibility: visible;
+    position:   fixed;
+    top: 0; left: 0;
+    width: 80mm;
+    padding: 4mm 5mm;
+    background: white;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    color: #000;
+    line-height: 1.5;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 @layer components {

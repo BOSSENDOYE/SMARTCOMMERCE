@@ -8,7 +8,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Category extends Model
 {
-    protected $fillable = ['name', 'parent_id', 'description', 'store_id', 'sort_order'];
+    // Migration has no store_id — categories are global (shared across stores)
+    protected $fillable = ['name', 'parent_id', 'slug', 'type', 'color', 'icon', 'sort_order', 'is_active'];
+
+    protected $casts = ['is_active' => 'boolean'];
 
     public function parent(): BelongsTo { return $this->belongsTo(Category::class, 'parent_id'); }
     public function children(): HasMany { return $this->hasMany(Category::class, 'parent_id'); }

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DiningArea extends Model
 {
-    protected $fillable = ['store_id', 'name', 'sort_order', 'is_active'];
+    protected $fillable = ['store_id', 'name', 'type', 'color', 'sort_order', 'is_active'];
 
     protected $casts = ['is_active' => 'boolean'];
 

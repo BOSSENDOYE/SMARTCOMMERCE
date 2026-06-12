@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class TableSession extends Model
 {
     protected $fillable = [
-        'table_id', 'store_id', 'status', 'opened_by',
-        'closed_by', 'opened_at', 'closed_at', 'covers',
+        'table_id', 'opened_by', 'closed_by', 'sale_id',
+        'covers', 'opened_at', 'closed_at',
     ];
 
     protected $casts = ['opened_at' => 'datetime', 'closed_at' => 'datetime'];

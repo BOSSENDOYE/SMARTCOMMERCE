@@ -8,11 +8,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OrderItem extends Model
 {
     protected $fillable = [
-        'order_id', 'product_id', 'qty', 'unit_price_ttc',
-        'status', 'notes', 'ready_at',
+        'order_id', 'product_id', 'station_id', 'qty', 'unit_price',
+        'course', 'status', 'cover_number', 'options', 'notes',
+        'sent_at', 'prepared_at', 'served_at',
     ];
 
-    protected $casts = ['ready_at' => 'datetime'];
+    protected $casts = [
+        'options' => 'array',
+        'sent_at' => 'datetime',
+        'prepared_at' => 'datetime',
+        'served_at' => 'datetime',
+    ];
 
     public function order(): BelongsTo { return $this->belongsTo(Order::class); }
     public function product(): BelongsTo { return $this->belongsTo(Product::class); }

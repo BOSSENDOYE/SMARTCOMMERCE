@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
+import QRCode from 'react-qr-code'
 import api from '../../lib/api'
 import { usePosStore, type CartItem } from '../../store/pos.store'
 import { useAuthStore } from '../../store/auth.store'
@@ -11,7 +12,7 @@ import {
   Search, Scan, Trash2, Plus, Minus, Percent, CreditCard, Banknote,
   Smartphone, ShoppingBag, PauseCircle, PlayCircle, UserPlus, X, Check,
   Wifi, WifiOff, Receipt, ChevronRight, Lock, Unlock, ArrowLeft,
-  DollarSign, Tag, Users,
+  DollarSign, Tag, Users, Printer,
 } from 'lucide-react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -46,6 +47,34 @@ interface Category {
   id: number
   name: string
   type?: string
+}
+
+// ─── Receipt types ────────────────────────────────────────────────────────────
+
+interface SaleStore {
+  name: string; address?: string; phone?: string; ninea?: string; receipt_footer?: string
+}
+interface SaleUser   { id: number; name: string }
+interface SaleClientDetail { id: number; name: string; phone?: string }
+interface SaleItemDetail {
+  product: { name: string; short_name?: string }
+  qty: number; unit_price_ttc: number; discount_pct: number
+  discount_amount: number; total_ttc: number; total_ht: number
+}
+interface SalePaymentDetail  { payment_method: string; amount: number }
+interface SaleTicketDetail   { number: string; qr_code: string }
+
+interface SaleReceipt {
+  id: number; reference: string
+  total_ttc: number; subtotal_ht: number; vat_amount: number
+  discount_amount: number; paid_amount: number; change_amount: number
+  loyalty_points_earned: number; created_at: string
+  items: SaleItemDetail[]
+  payments: SalePaymentDetail[]
+  ticket?: SaleTicketDetail
+  client?: SaleClientDetail
+  user?: SaleUser
+  store?: SaleStore
 }
 
 // ─── Open Session Modal ───────────────────────────────────────────────────────
@@ -406,6 +435,190 @@ function PaymentModal({ total, onClose, onConfirm, processing }: {
   )
 }
 
+// ─── Receipt Modal ────────────────────────────────────────────────────────────
+
+const PAY_LABELS: Record<string, string> = {
+  cash: 'Espèces', wave: 'Wave', orange_money: 'Orange Money',
+  free_money: 'Free Money', card: 'Carte', credit: 'Crédit client',
+  voucher: 'Bon', loyalty_points: 'Points fidélité',
+}
+
+function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () => void }) {
+  const dt      = new Date(sale.created_at)
+  const dateStr = dt.toLocaleDateString('fr-SN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const timeStr = dt.toLocaleTimeString('fr-SN', { hour: '2-digit', minute: '2-digit' })
+  const qrValue = sale.ticket ? `SC:${sale.reference}:${sale.ticket.qr_code}` : sale.reference
+
+  const handlePrint = () => window.print()
+
+  const sep = <div style={{ borderTop: '1px dashed #666', margin: '7px 0' }} />
+
+  // Receipt body — shared by screen preview and print div
+  const receiptBody = (
+    <div style={{ fontFamily: "'Courier New', Courier, monospace", fontSize: 11, lineHeight: 1.5, color: '#000' }}>
+      {/* Store header */}
+      <div style={{ textAlign: 'center', marginBottom: 6 }}>
+        <div style={{ fontWeight: 'bold', fontSize: 14, letterSpacing: 1 }}>
+          {sale.store?.name?.toUpperCase() ?? 'SMARTCOMMERCE'}
+        </div>
+        {sale.store?.address && <div style={{ fontSize: 10 }}>{sale.store.address}</div>}
+        {sale.store?.phone   && <div style={{ fontSize: 10 }}>Tél: {sale.store.phone}</div>}
+        {sale.store?.ninea   && <div style={{ fontSize: 10 }}>NINEA: {sale.store.ninea}</div>}
+      </div>
+      {sep}
+
+      {/* Sale meta */}
+      <div>
+        {([
+          ['N° Ticket',  sale.ticket?.number ?? '—'],
+          ['Référence',  sale.reference],
+          ['Date',       `${dateStr}  ${timeStr}`],
+          sale.user?.name   ? ['Caissier', sale.user.name]   : null,
+          sale.client?.name ? ['Client',   sale.client.name]  : null,
+        ] as ([string, string] | null)[]).filter(Boolean).map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 4 }}>
+            <span style={{ color: '#555' }}>{k}</span>
+            <span style={{ fontWeight: 'bold', textAlign: 'right' }}>{v}</span>
+          </div>
+        ))}
+      </div>
+      {sep}
+
+      {/* Items */}
+      <div>
+        {sale.items.map((item, i) => (
+          <div key={i} style={{ marginBottom: 5 }}>
+            <div style={{ fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {item.product.short_name ?? item.product.name}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#444' }}>
+                {formatNumber(item.qty, item.qty % 1 === 0 ? 0 : 3)} × {formatCurrency(item.unit_price_ttc)}
+                {item.discount_pct > 0 ? ` (-${item.discount_pct}%)` : ''}
+              </span>
+              <span style={{ fontWeight: 'bold' }}>{formatCurrency(item.total_ttc)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {sep}
+
+      {/* Totals */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>Sous-total HT</span><span>{formatCurrency(sale.subtotal_ht)}</span>
+        </div>
+        {sale.vat_amount > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>TVA</span><span>{formatCurrency(sale.vat_amount)}</span>
+          </div>
+        )}
+        {sale.discount_amount > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+            <span>Remise totale</span><span>-{formatCurrency(sale.discount_amount)}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 14, borderTop: '1px solid #333', marginTop: 4, paddingTop: 4 }}>
+          <span>TOTAL TTC</span><span>{formatCurrency(sale.total_ttc)}</span>
+        </div>
+      </div>
+      {sep}
+
+      {/* Payments */}
+      <div>
+        {sale.payments.map((p, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>{PAY_LABELS[p.payment_method] ?? p.payment_method}</span>
+            <span>{formatCurrency(p.amount)}</span>
+          </div>
+        ))}
+        {(sale.change_amount ?? 0) > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+            <span>RENDU MONNAIE</span><span>{formatCurrency(sale.change_amount)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Loyalty */}
+      {(sale.loyalty_points_earned ?? 0) > 0 && (
+        <>
+          {sep}
+          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 10 }}>
+            ★  {sale.loyalty_points_earned} points de fidélité gagnés
+          </div>
+        </>
+      )}
+
+      {/* QR Code */}
+      <div style={{ textAlign: 'center', margin: '12px 0 8px' }}>
+        <div style={{ display: 'inline-block', background: 'white', padding: 4, border: '1px solid #eee' }}>
+          <QRCode value={qrValue} size={96} level="M" />
+        </div>
+        <div style={{ fontSize: 9, marginTop: 4, color: '#666' }}>
+          {sale.ticket?.number ?? sale.reference}
+        </div>
+      </div>
+      {sep}
+
+      {/* Footer */}
+      <div style={{ textAlign: 'center', fontSize: 10, whiteSpace: 'pre-line' }}>
+        {sale.store?.receipt_footer ?? 'Merci de votre confiance !'}
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      {/* ── Screen modal ───────────────────────────────────── */}
+      <div className="fixed inset-0 bg-black/60 z-50 flex flex-col items-center justify-start overflow-y-auto py-6">
+        {/* Green success header */}
+        <div className="w-full max-w-sm bg-green-500 text-white rounded-t-2xl px-5 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <Check size={22} />
+            </div>
+            <div>
+              <p className="font-bold text-lg">Vente confirmée !</p>
+              <p className="text-sm text-green-100">{formatCurrency(sale.total_ttc)}</p>
+            </div>
+          </div>
+          <div className="text-right text-xs text-green-100 font-mono">
+            <p className="font-semibold">{sale.reference}</p>
+            <p>{timeStr}</p>
+          </div>
+        </div>
+
+        {/* Receipt preview */}
+        <div className="w-full max-w-sm bg-white shadow-2xl px-5 py-4 overflow-y-auto">
+          {receiptBody}
+        </div>
+
+        {/* Action buttons */}
+        <div className="w-full max-w-sm bg-white rounded-b-2xl border-t px-4 pb-5 pt-3 flex gap-3 flex-shrink-0 shadow-2xl">
+          <button
+            onClick={handlePrint}
+            className="flex-1 flex items-center justify-center gap-2 py-3 border-2 text-sm font-semibold rounded-xl transition-colors"
+            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+          >
+            <Printer size={17} /> Imprimer
+          </button>
+          <button
+            onClick={onNewSale}
+            className="flex-1 py-3 btn-primary text-sm font-semibold rounded-xl flex items-center justify-center gap-2"
+          >
+            <Receipt size={17} /> Nouvelle vente
+          </button>
+        </div>
+      </div>
+
+      {/* ── Print-only receipt (hidden on screen, shown on print via CSS) ── */}
+      <div id="receipt-print-root">
+        {receiptBody}
+      </div>
+    </>
+  )
+}
+
 // ─── Cart Item Row ────────────────────────────────────────────────────────────
 
 function CartItemRow({ item, onQtyChange, onDiscountChange, onRemove }: {
@@ -510,6 +723,7 @@ export default function PosPage() {
   const [showHoldCarts, setShowHoldCarts] = useState(false)
   const [session, setSession] = useState<CashSession | null>(null)
   const [sessionLoading, setSessionLoading] = useState(true)
+  const [saleReceipt, setSaleReceipt] = useState<SaleReceipt | null>(null)
 
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -695,10 +909,10 @@ export default function PosPage() {
     }
 
     try {
-      await api.post('/sales', salePayload)
-      toast.success('Vente enregistrée !')
+      const res = await api.post('/sales', salePayload)
       clearCart()
       setShowPayment(false)
+      setSaleReceipt(res.data)
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Erreur lors de l\'enregistrement'
       toast.error(message)
@@ -969,6 +1183,12 @@ export default function PosPage() {
         <CloseSessionModal
           session={session}
           onClose={() => { setShowCloseSession(false); if (!cash_session_id) setSession(null) }}
+        />
+      )}
+      {saleReceipt && (
+        <ReceiptModal
+          sale={saleReceipt}
+          onNewSale={() => setSaleReceipt(null)}
         />
       )}
     </div>

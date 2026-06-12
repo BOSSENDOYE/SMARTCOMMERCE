@@ -70,6 +70,13 @@ class SaleController extends Controller
 
         AuditService::log('sale_created', 'sales', $sale->id, ['total' => $sale->total_ttc]);
 
+        // Load relations needed for the receipt
+        $sale->loadMissing([
+            'items.product:id,name,short_name',
+            'user:id,name',
+            'store:id,name,address,phone,ninea,receipt_footer',
+        ]);
+
         return response()->json($sale, 201);
     }
 

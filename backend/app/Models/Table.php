@@ -12,13 +12,13 @@ class Table extends Model
     protected $table = 'tables';
 
     protected $fillable = [
-        'dining_area_id', 'store_id', 'label', 'capacity',
-        'pos_x', 'pos_y', 'status', 'is_active',
+        'area_id', 'number', 'seats', 'status',
+        'pos_x', 'pos_y', 'shape', 'is_active',
     ];
 
     protected $casts = ['is_active' => 'boolean'];
 
-    public function diningArea(): BelongsTo { return $this->belongsTo(DiningArea::class); }
+    public function area(): BelongsTo { return $this->belongsTo(DiningArea::class, 'area_id'); }
     public function sessions(): HasMany { return $this->hasMany(TableSession::class); }
-    public function activeSession(): HasOne { return $this->hasOne(TableSession::class)->where('status', 'open'); }
+    public function activeSession(): HasOne { return $this->hasOne(TableSession::class)->whereNull('closed_at'); }
 }

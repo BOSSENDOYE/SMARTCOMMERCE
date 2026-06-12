@@ -126,6 +126,9 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('/promotions', \App\Http\Controllers\Api\PromotionController::class);
 
         // Losses
+        Route::get('/losses/stats', [\App\Http\Controllers\Api\LossController::class, 'stats']);
+        Route::post('/losses/{loss}/validate', [\App\Http\Controllers\Api\LossController::class, 'validate']);
+        Route::post('/losses/{loss}/reject', [\App\Http\Controllers\Api\LossController::class, 'reject']);
         Route::apiResource('/losses', \App\Http\Controllers\Api\LossController::class);
 
         // Reports
@@ -141,13 +144,19 @@ Route::prefix('v1')->group(function () {
 
         // Restaurant
         Route::prefix('/restaurant')->group(function () {
+            Route::get('/stats', [\App\Http\Controllers\Api\RestaurantController::class, 'stats']);
             Route::get('/floor-plan', [\App\Http\Controllers\Api\RestaurantController::class, 'floorPlan']);
+            Route::post('/tables/{table}/open', [\App\Http\Controllers\Api\RestaurantController::class, 'openTable']);
+            Route::post('/tables/{table}/close', [\App\Http\Controllers\Api\RestaurantController::class, 'closeTable']);
+            Route::get('/sessions/{session}/orders', [\App\Http\Controllers\Api\RestaurantController::class, 'tableOrders']);
+            Route::get('/kds', [\App\Http\Controllers\Api\RestaurantController::class, 'kdsView']);
             Route::post('/orders', [\App\Http\Controllers\Api\RestaurantController::class, 'createOrder']);
             Route::put('/orders/{order}', [\App\Http\Controllers\Api\RestaurantController::class, 'updateOrder']);
-            Route::post('/orders/{order}/items/{item}/ready', [\App\Http\Controllers\Api\RestaurantController::class, 'markItemReady']);
-            Route::get('/kds', [\App\Http\Controllers\Api\RestaurantController::class, 'kdsView']);
+            Route::post('/orders/{order}/send-to-kitchen', [\App\Http\Controllers\Api\RestaurantController::class, 'sendToKitchen']);
+            Route::post('/orders/{order}/items/{orderItem}/ready', [\App\Http\Controllers\Api\RestaurantController::class, 'markItemReady']);
             Route::get('/reservations', [\App\Http\Controllers\Api\RestaurantController::class, 'reservations']);
             Route::post('/reservations', [\App\Http\Controllers\Api\RestaurantController::class, 'createReservation']);
+            Route::put('/reservations/{reservation}', [\App\Http\Controllers\Api\RestaurantController::class, 'updateReservation']);
         });
 
         // Stores & Users (admin)
