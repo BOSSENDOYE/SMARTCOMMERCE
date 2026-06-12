@@ -1,0 +1,23 @@
+# Claude session files
+.claude/
+
+# Laravel backend
+backend/.env
+backend/.env.backup
+backend/vendor/
+backend/storage/logs/*.log
+backend/storage/framework/cache/
+backend/storage/framework/sessions/
+backend/storage/framework/views/
+backend/bootstrap/cache/*.php
+
+# Frontend
+frontend/.env
+frontend/.env.local
+frontend/node_modules/
+frontend/dist/
+
+# System
+.DS_Store
+Thumbs.db
+*.swp
