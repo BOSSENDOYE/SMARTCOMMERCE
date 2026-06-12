@@ -48,12 +48,17 @@ Route::prefix('v1')->group(function () {
         Route::delete('/suppliers/{supplier}/products/{product}', [\App\Http\Controllers\Api\SupplierController::class, 'unlinkProduct']);
 
         // Clients
+        Route::get('/clients/stats', [\App\Http\Controllers\Api\ClientController::class, 'stats']);
         Route::get('/clients/search', fn(\Illuminate\Http\Request $r) => response()->json(
             \App\Models\Client::where('store_id', $r->user()->store_id)
                 ->where(fn($q) => $q->where('phone', 'like', "%{$r->q}%")->orWhere('name', 'like', "%{$r->q}%"))
                 ->limit(10)->get()
         ));
         Route::apiResource('/clients', \App\Http\Controllers\Api\ClientController::class);
+        Route::get('/clients/{client}/sales', [\App\Http\Controllers\Api\ClientController::class, 'sales']);
+        Route::get('/clients/{client}/loyalty-transactions', [\App\Http\Controllers\Api\ClientController::class, 'loyaltyTransactions']);
+        Route::post('/clients/{client}/adjust-credit', [\App\Http\Controllers\Api\ClientController::class, 'adjustCredit']);
+        Route::post('/clients/{client}/adjust-loyalty', [\App\Http\Controllers\Api\ClientController::class, 'adjustLoyalty']);
 
         // Purchase Orders
         Route::get('/purchase-orders/stats', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'stats']);
@@ -117,12 +122,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/cash-sessions/{session}/movements', [CashSessionController::class, 'addMovement']);
 
         // Promotions
-        Route::get('/promotions', fn(\Illuminate\Http\Request $r) => response()->json(
-            \App\Models\Promotion::where('is_active', true)
-                ->where(fn($q) => $q->whereNull('store_id')->orWhere('store_id', $r->user()->store_id))
-                ->with(['products', 'categories'])
-                ->get()
-        ));
+        Route::get('/promotions/stats', [\App\Http\Controllers\Api\PromotionController::class, 'stats']);
         Route::apiResource('/promotions', \App\Http\Controllers\Api\PromotionController::class);
 
         // Losses

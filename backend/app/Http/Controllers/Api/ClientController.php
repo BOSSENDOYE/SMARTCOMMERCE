@@ -4,18 +4,38 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\LoyaltyTransaction;
 use Illuminate\Http\Request;
 
 class ClientController extends Controller
 {
+    public function stats(Request $request)
+    {
+        $storeId = $request->user()->store_id;
+        $base = Client::where('store_id', $storeId);
+
+        return response()->json([
+            'total'          => (clone $base)->count(),
+            'active'         => (clone $base)->where('is_active', true)->count(),
+            'with_credit'    => (clone $base)->where('credit_balance', '>', 0)->count(),
+            'total_credit'   => (clone $base)->sum('credit_balance'),
+            'total_loyalty'  => (clone $base)->sum('loyalty_points'),
+        ]);
+    }
+
     public function index(Request $request)
     {
         return response()->json(
             Client::where('store_id', $request->user()->store_id)
-                ->when($request->search, fn($q) => $q->where(function ($q) use ($request) {
-                    $q->where('name', 'like', "%{$request->search}%")
-                      ->orWhere('phone', 'like', "%{$request->search}%");
-                }))
+                ->when($request->search, fn($q) => $q->where(fn($q2) =>
+                    $q2->where('name', 'like', "%{$request->search}%")
+                       ->orWhere('phone', 'like', "%{$request->search}%")
+                       ->orWhere('email', 'like', "%{$request->search}%")
+                ))
+                ->when($request->type, fn($q) => $q->where('type', $request->type))
+                ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
+                ->when($request->has_credit, fn($q) => $q->where('credit_balance', '>', 0))
+                ->withCount('sales')
                 ->orderBy('name')
                 ->paginate($request->per_page ?? 30)
         );
@@ -24,28 +44,126 @@ class ClientController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => 'required|string|max:100',
-            'phone' => 'nullable|string|max:30',
-            'email' => 'nullable|email',
-            'address' => 'nullable|string',
+            'name'         => 'required|string|max:100',
+            'phone'        => 'nullable|string|max:30',
+            'email'        => 'nullable|email',
+            'address'      => 'nullable|string',
+            'type'         => 'nullable|in:individual,company',
+            'ninea'        => 'nullable|string|max:30',
+            'notes'        => 'nullable|string',
             'credit_limit' => 'nullable|numeric|min:0',
         ]);
-        $client = Client::create(array_merge($data, ['store_id' => $request->user()->store_id]));
+
+        $client = Client::create(array_merge($data, [
+            'store_id'  => $request->user()->store_id,
+            'is_active' => true,
+        ]));
+
         return response()->json($client, 201);
     }
 
-    public function show(Client $client) { return response()->json($client); }
+    public function show(Client $client)
+    {
+        return response()->json($client->loadCount('sales'));
+    }
 
     public function update(Request $request, Client $client)
     {
-        $client->update($request->validate([
-            'name' => 'sometimes|string',
-            'phone' => 'nullable|string',
-            'email' => 'nullable|email',
+        $data = $request->validate([
+            'name'         => 'sometimes|string|max:100',
+            'phone'        => 'nullable|string|max:30',
+            'email'        => 'nullable|email',
+            'address'      => 'nullable|string',
+            'type'         => 'nullable|in:individual,company',
+            'ninea'        => 'nullable|string|max:30',
+            'notes'        => 'nullable|string',
             'credit_limit' => 'nullable|numeric|min:0',
-        ]));
+            'is_active'    => 'sometimes|boolean',
+        ]);
+
+        $client->update($data);
         return response()->json($client);
     }
 
-    public function destroy(Client $client) { $client->delete(); return response()->json(null, 204); }
+    public function destroy(Client $client)
+    {
+        if ($client->credit_balance > 0) {
+            return response()->json(['message' => 'Ce client a un solde crédit en cours. Soldez le compte avant suppression.'], 422);
+        }
+        $client->delete();
+        return response()->json(null, 204);
+    }
+
+    public function sales(Request $request, Client $client)
+    {
+        return response()->json(
+            $client->sales()
+                ->with(['payments'])
+                ->orderByDesc('created_at')
+                ->paginate($request->per_page ?? 15)
+        );
+    }
+
+    public function loyaltyTransactions(Request $request, Client $client)
+    {
+        return response()->json(
+            $client->loyaltyTransactions()
+                ->orderByDesc('created_at')
+                ->paginate($request->per_page ?? 20)
+        );
+    }
+
+    public function adjustCredit(Request $request, Client $client)
+    {
+        $data = $request->validate([
+            'amount'  => 'required|numeric',
+            'type'    => 'required|in:add,deduct',
+            'reason'  => 'required|string|max:200',
+        ]);
+
+        $delta = $data['type'] === 'add' ? abs($data['amount']) : -abs($data['amount']);
+        $newBalance = $client->credit_balance + $delta;
+
+        if ($newBalance < 0) {
+            return response()->json(['message' => 'Solde insuffisant pour ce débit.'], 422);
+        }
+
+        $client->update(['credit_balance' => $newBalance]);
+
+        return response()->json([
+            'credit_balance' => $client->fresh()->credit_balance,
+            'delta'          => $delta,
+        ]);
+    }
+
+    public function adjustLoyalty(Request $request, Client $client)
+    {
+        $data = $request->validate([
+            'points' => 'required|numeric',
+            'type'   => 'required|in:add,redeem',
+            'notes'  => 'nullable|string|max:200',
+        ]);
+
+        $delta = $data['type'] === 'add' ? abs($data['points']) : -abs($data['points']);
+        $newBalance = $client->loyalty_points + $delta;
+
+        if ($newBalance < 0) {
+            return response()->json(['message' => 'Points insuffisants.'], 422);
+        }
+
+        $client->update(['loyalty_points' => $newBalance]);
+
+        LoyaltyTransaction::create([
+            'client_id'     => $client->id,
+            'type'          => $data['type'] === 'add' ? 'adjust' : 'redeem',
+            'points'        => abs($delta),
+            'balance_after' => $newBalance,
+            'notes'         => $data['notes'] ?? null,
+        ]);
+
+        return response()->json([
+            'loyalty_points' => $client->fresh()->loyalty_points,
+            'delta'          => $delta,
+        ]);
+    }
 }

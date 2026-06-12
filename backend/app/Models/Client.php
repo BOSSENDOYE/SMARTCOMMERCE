@@ -12,6 +12,7 @@ class Client extends Model
 
     protected $fillable = [
         'store_id', 'name', 'phone', 'email', 'address',
+        'type', 'ninea', 'notes', 'is_active',
         'loyalty_points', 'credit_balance', 'credit_limit',
     ];
 
