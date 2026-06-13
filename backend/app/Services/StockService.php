@@ -133,7 +133,6 @@ class StockService
                 'reason'         => null,
                 'notes'          => null,
                 'created_at'     => $now,
-                'updated_at'     => $now,
             ];
         }
 

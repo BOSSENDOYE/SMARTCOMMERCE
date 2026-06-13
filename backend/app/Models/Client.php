@@ -13,16 +13,18 @@ class Client extends Model
     protected $fillable = [
         'store_id', 'name', 'phone', 'email', 'address',
         'type', 'ninea', 'notes', 'is_active',
-        'loyalty_points', 'credit_balance', 'credit_limit',
+        'loyalty_points', 'credit_balance', 'credit_limit', 'account_balance',
     ];
 
     protected $casts = [
-        'loyalty_points' => 'integer',
-        'credit_balance' => 'decimal:0',
-        'credit_limit' => 'decimal:0',
+        'loyalty_points'  => 'integer',
+        'credit_balance'  => 'decimal:0',
+        'credit_limit'    => 'decimal:0',
+        'account_balance' => 'decimal:2',
     ];
 
     public function sales(): HasMany { return $this->hasMany(Sale::class); }
     public function loyaltyTransactions(): HasMany { return $this->hasMany(LoyaltyTransaction::class); }
+    public function accountTransactions(): HasMany { return $this->hasMany(ClientAccountTransaction::class); }
     public function reservations(): HasMany { return $this->hasMany(Reservation::class); }
 }

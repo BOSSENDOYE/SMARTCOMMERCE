@@ -10,6 +10,7 @@ export interface AuthUser {
     id: number
     name: string
     currency: string
+    business_type: 'grande_surface' | 'restaurant' | 'depot' | 'mixte'
     license_grande_surface: boolean
     license_restaurant: boolean
   }

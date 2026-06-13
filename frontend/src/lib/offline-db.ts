@@ -51,13 +51,13 @@ export interface AppSettings {
   value: unknown
 }
 
-class SmartCommerceDB extends Dexie {
+class BaobabDB extends Dexie {
   offlineSales!: Table<OfflineSale>
   cachedProducts!: Table<CachedProduct>
   settings!: Table<AppSettings>
 
   constructor() {
-    super('SmartCommerceDB')
+    super('BaobabDB')
     this.version(1).stores({
       offlineSales: '++id, offline_id, status, created_at',
       cachedProducts: 'id, internal_code, *barcodes, category_id',
@@ -66,7 +66,7 @@ class SmartCommerceDB extends Dexie {
   }
 }
 
-export const db = new SmartCommerceDB()
+export const db = new BaobabDB()
 
 export async function findProductByBarcode(barcode: string): Promise<CachedProduct | undefined> {
   return db.cachedProducts.where('barcodes').equals(barcode).first()

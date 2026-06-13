@@ -115,6 +115,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/clients/{client}/loyalty-transactions', [\App\Http\Controllers\Api\ClientController::class, 'loyaltyTransactions']);
         Route::post('/clients/{client}/adjust-credit', [\App\Http\Controllers\Api\ClientController::class, 'adjustCredit']);
         Route::post('/clients/{client}/adjust-loyalty', [\App\Http\Controllers\Api\ClientController::class, 'adjustLoyalty']);
+        // Client account (wallet/avoir/dette)
+        Route::get('/clients/{client}/account-transactions', [\App\Http\Controllers\Api\ClientController::class, 'accountTransactions']);
+        Route::post('/clients/{client}/deposit', [\App\Http\Controllers\Api\ClientController::class, 'deposit']);
+        Route::post('/clients/{client}/withdraw', [\App\Http\Controllers\Api\ClientController::class, 'withdraw']);
 
         // Purchase Orders
         Route::get('/purchase-orders/stats', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'stats']);
@@ -215,6 +219,20 @@ Route::prefix('v1')->group(function () {
             Route::put('/reservations/{reservation}', [\App\Http\Controllers\Api\RestaurantController::class, 'updateReservation']);
         });
 
+        // Menu Restaurant (catalogue articles)
+        Route::prefix('/restaurant-items')->group(function () {
+            Route::get('/stats',                                  [\App\Http\Controllers\Api\RestaurantItemController::class, 'stats']);
+            Route::get('/stations',                               [\App\Http\Controllers\Api\RestaurantItemController::class, 'stations']);
+            Route::get('/',                                       [\App\Http\Controllers\Api\RestaurantItemController::class, 'index']);
+            Route::post('/',                                      [\App\Http\Controllers\Api\RestaurantItemController::class, 'store']);
+            Route::get('/{restaurantItem}',                       [\App\Http\Controllers\Api\RestaurantItemController::class, 'show']);
+            Route::put('/{restaurantItem}',                       [\App\Http\Controllers\Api\RestaurantItemController::class, 'update']);
+            Route::delete('/{restaurantItem}',                    [\App\Http\Controllers\Api\RestaurantItemController::class, 'destroy']);
+            Route::post('/{restaurantItem}/toggle-availability',  [\App\Http\Controllers\Api\RestaurantItemController::class, 'toggleAvailability']);
+            Route::post('/{restaurantItem}/image',                [\App\Http\Controllers\Api\RestaurantItemController::class, 'uploadImage']);
+            Route::post('/{restaurantItem}/recipe',               [\App\Http\Controllers\Api\RestaurantItemController::class, 'syncRecipe']);
+        });
+
         // Comptabilité
         Route::prefix('/accounting')->group(function () {
             Route::post('/accounts/init',             [\App\Http\Controllers\Api\AccountingController::class, 'initAccounts']);
@@ -230,11 +248,49 @@ Route::prefix('v1')->group(function () {
             Route::get('/income-statement',           [\App\Http\Controllers\Api\AccountingController::class, 'incomeStatement']);
             Route::post('/generate/sales',            [\App\Http\Controllers\Api\AccountingController::class, 'generateFromSales']);
             Route::post('/generate/purchases',        [\App\Http\Controllers\Api\AccountingController::class, 'generateFromPurchases']);
+            Route::post('/generate/expenses',         [\App\Http\Controllers\Api\AccountingController::class, 'generateFromExpenses']);
         });
 
-        // Stores & Users (admin)
+        // Dépenses
+        Route::prefix('/expenses')->group(function () {
+            Route::get('/stats',                                        [\App\Http\Controllers\Api\ExpenseController::class, 'stats']);
+            Route::get('/',                                             [\App\Http\Controllers\Api\ExpenseController::class, 'index']);
+            Route::post('/',                                            [\App\Http\Controllers\Api\ExpenseController::class, 'store']);
+            Route::get('/{expense}',                                    [\App\Http\Controllers\Api\ExpenseController::class, 'show']);
+            Route::put('/{expense}',                                    [\App\Http\Controllers\Api\ExpenseController::class, 'update']);
+            Route::post('/{expense}/validate',                          [\App\Http\Controllers\Api\ExpenseController::class, 'validate']);
+            Route::post('/{expense}/cancel',                            [\App\Http\Controllers\Api\ExpenseController::class, 'cancel']);
+        });
+
+        // Catégories de dépenses
+        Route::prefix('/expense-categories')->group(function () {
+            Route::post('/init',                                        [\App\Http\Controllers\Api\ExpenseController::class, 'initCategories']);
+            Route::get('/',                                             [\App\Http\Controllers\Api\ExpenseController::class, 'categories']);
+            Route::post('/',                                            [\App\Http\Controllers\Api\ExpenseController::class, 'storeCategory']);
+            Route::put('/{category}',                                   [\App\Http\Controllers\Api\ExpenseController::class, 'updateCategory']);
+            Route::delete('/{category}',                                [\App\Http\Controllers\Api\ExpenseController::class, 'destroyCategory']);
+        });
+
+        // Print Templates
+        Route::get('/print-templates/default/{type}', [\App\Http\Controllers\Api\PrintTemplateController::class, 'defaultForType']);
+        Route::apiResource('/print-templates', \App\Http\Controllers\Api\PrintTemplateController::class);
+
+        // Organizations, Stores & Users (admin)
+        Route::apiResource('/organizations', \App\Http\Controllers\Api\OrganizationController::class);
+        Route::post('/organizations/{organization}/logo', [\App\Http\Controllers\Api\OrganizationController::class, 'uploadLogo']);
         Route::apiResource('/stores', \App\Http\Controllers\Api\StoreController::class);
+        Route::post('/stores/{store}/logo', [\App\Http\Controllers\Api\StoreController::class, 'uploadLogo']);
         Route::apiResource('/users', \App\Http\Controllers\Api\UserController::class);
+
+        // Store Transfers (inter-magasins)
+        Route::get('/store-transfers', [\App\Http\Controllers\Api\StoreTransferController::class, 'index']);
+        Route::post('/store-transfers', [\App\Http\Controllers\Api\StoreTransferController::class, 'store']);
+        Route::get('/store-transfers/{storeTransfer}', [\App\Http\Controllers\Api\StoreTransferController::class, 'show']);
+        Route::post('/store-transfers/{storeTransfer}/approve', [\App\Http\Controllers\Api\StoreTransferController::class, 'approve']);
+        Route::post('/store-transfers/{storeTransfer}/reject', [\App\Http\Controllers\Api\StoreTransferController::class, 'reject']);
+        Route::post('/store-transfers/{storeTransfer}/ship', [\App\Http\Controllers\Api\StoreTransferController::class, 'ship']);
+        Route::post('/store-transfers/{storeTransfer}/receive', [\App\Http\Controllers\Api\StoreTransferController::class, 'receive']);
+        Route::post('/store-transfers/{storeTransfer}/cancel', [\App\Http\Controllers\Api\StoreTransferController::class, 'cancel']);
         Route::get('/audit-logs', fn(\Illuminate\Http\Request $r) => response()->json(
             \App\Models\AuditLog::where('store_id', $r->user()->store_id)
                 ->with('user')

@@ -7,6 +7,7 @@ use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\SaleTicket;
 use App\Models\Client;
+use App\Models\ClientAccountTransaction;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -28,12 +29,18 @@ class SaleService
 
             $sale = Sale::create($data);
 
-            // Pre-load ALL products + stock levels in ONE query (eliminates N+1)
-            $productIds = array_column($items, 'product_id');
-            $products = Product::with(['stockLevel' => fn($q) => $q->where('store_id', $data['store_id'])])
-                ->whereIn('id', $productIds)
-                ->get()
-                ->keyBy('id');
+            // Pre-load products (only those with product_id)
+            $productIds = array_values(array_filter(array_column($items, 'product_id')));
+            $products = !empty($productIds)
+                ? Product::with(['stockLevel' => fn($q) => $q->where('store_id', $data['store_id'])])
+                    ->whereIn('id', $productIds)->get()->keyBy('id')
+                : collect();
+
+            // Pre-load restaurant items (only those with restaurant_item_id)
+            $restaurantItemIds = array_values(array_filter(array_column($items, 'restaurant_item_id')));
+            $restaurantItems = !empty($restaurantItemIds)
+                ? \App\Models\RestaurantItem::whereIn('id', $restaurantItemIds)->get()->keyBy('id')
+                : collect();
 
             $subtotalHt   = 0;
             $vatAmount    = 0;
@@ -43,40 +50,73 @@ class SaleService
             $stockMoveItems  = [];
 
             foreach ($items as $itemData) {
-                $product = $products[$itemData['product_id']];
+                if (!empty($itemData['restaurant_item_id'])) {
+                    // ── Restaurant item (no stock deduction) ──────────────────
+                    $rItem        = $restaurantItems[$itemData['restaurant_item_id']];
+                    $qty          = $itemData['qty'];
+                    $unitPriceTtc = $itemData['unit_price_ttc'] ?? $rItem->price_ttc;
+                    $vatRate      = $rItem->vat_rate;
+                    $discountPct  = $itemData['discount_pct'] ?? 0;
+                    $discountAmt  = round($unitPriceTtc * $qty * $discountPct / 100, 2);
+                    $totalTtc     = round($unitPriceTtc * $qty - $discountAmt, 2);
+                    $unitPriceHt  = round($unitPriceTtc / (1 + $vatRate / 100), 4);
+                    $totalHt      = round($totalTtc / (1 + $vatRate / 100), 2);
 
-                $qty          = $itemData['qty'];
-                $unitPriceTtc = $itemData['unit_price_ttc'] ?? $product->sale_price_ttc;
-                $vatRate      = $product->vat_rate;
-                $discountPct  = $itemData['discount_pct'] ?? 0;
-                $discountAmt  = round($unitPriceTtc * $qty * $discountPct / 100, 2);
-                $totalTtc     = round($unitPriceTtc * $qty - $discountAmt, 2);
-                $unitPriceHt  = round($unitPriceTtc / (1 + $vatRate / 100), 4);
-                $totalHt      = round($totalTtc / (1 + $vatRate / 100), 2);
+                    $saleItemsInsert[] = [
+                        'sale_id'              => $sale->id,
+                        'product_id'           => null,
+                        'restaurant_item_id'   => $rItem->id,
+                        'lot_id'               => null,
+                        'qty'                  => $qty,
+                        'unit_price_ttc'       => $unitPriceTtc,
+                        'unit_price_ht'        => $unitPriceHt,
+                        'vat_rate'             => $vatRate,
+                        'discount_pct'         => $discountPct,
+                        'discount_amount'      => $discountAmt,
+                        'total_ht'             => $totalHt,
+                        'total_ttc'            => $totalTtc,
+                        'cost_price'           => $rItem->cost_price ?? 0,
+                        'promotion_applied'    => null,
+                        'created_at'           => $now,
+                        'updated_at'           => $now,
+                    ];
+                } else {
+                    // ── Standard product (with stock deduction) ───────────────
+                    $product      = $products[$itemData['product_id']];
+                    $qty          = $itemData['qty'];
+                    $unitPriceTtc = $itemData['unit_price_ttc'] ?? $product->sale_price_ttc;
+                    $vatRate      = $product->vat_rate;
+                    $discountPct  = $itemData['discount_pct'] ?? 0;
+                    $discountAmt  = round($unitPriceTtc * $qty * $discountPct / 100, 2);
+                    $totalTtc     = round($unitPriceTtc * $qty - $discountAmt, 2);
+                    $unitPriceHt  = round($unitPriceTtc / (1 + $vatRate / 100), 4);
+                    $totalHt      = round($totalTtc / (1 + $vatRate / 100), 2);
 
-                $saleItemsInsert[] = [
-                    'sale_id'           => $sale->id,
-                    'product_id'        => $product->id,
-                    'lot_id'            => $itemData['lot_id'] ?? null,
-                    'qty'               => $qty,
-                    'unit_price_ttc'    => $unitPriceTtc,
-                    'unit_price_ht'     => $unitPriceHt,
-                    'vat_rate'          => $vatRate,
-                    'discount_pct'      => $discountPct,
-                    'discount_amount'   => $discountAmt,
-                    'total_ht'          => $totalHt,
-                    'total_ttc'         => $totalTtc,
-                    'cost_price'        => $product->stockLevel?->avg_cost ?? 0,
-                    'promotion_applied' => $itemData['promotion_applied'] ?? null,
-                    'created_at'        => $now,
-                    'updated_at'        => $now,
-                ];
+                    $saleItemsInsert[] = [
+                        'sale_id'           => $sale->id,
+                        'product_id'        => $product->id,
+                        'restaurant_item_id'=> null,
+                        'lot_id'            => $itemData['lot_id'] ?? null,
+                        'qty'               => $qty,
+                        'unit_price_ttc'    => $unitPriceTtc,
+                        'unit_price_ht'     => $unitPriceHt,
+                        'vat_rate'          => $vatRate,
+                        'discount_pct'      => $discountPct,
+                        'discount_amount'   => $discountAmt,
+                        'total_ht'          => $totalHt,
+                        'total_ttc'         => $totalTtc,
+                        'cost_price'        => $product->stockLevel?->avg_cost ?? 0,
+                        'promotion_applied' => $itemData['promotion_applied'] ?? null,
+                        'created_at'        => $now,
+                        'updated_at'        => $now,
+                    ];
 
-                $stockMoveItems[] = [
-                    'product_id' => $product->id,
-                    'qty'        => $qty,
-                    'lot_id'     => $itemData['lot_id'] ?? null,
-                ];
+                    $stockMoveItems[] = [
+                        'product_id' => $product->id,
+                        'qty'        => $qty,
+                        'lot_id'     => $itemData['lot_id'] ?? null,
+                    ];
+                }
 
                 $subtotalHt     += $totalHt;
                 $vatAmount      += $totalTtc - $totalHt;
@@ -86,8 +126,10 @@ class SaleService
             // ONE INSERT for all sale items instead of N individual INSERTs
             SaleItem::insert($saleItemsInsert);
 
-            // Batch destock: 1 SELECT + N UPDATEs + 1 INSERT (instead of N×(SELECT+UPDATE+INSERT))
-            $this->stockService->batchSaleOut($sale->store_id, $stockMoveItems, $sale->user_id, $sale->id);
+            // Batch destock only for product items
+            if (!empty($stockMoveItems)) {
+                $this->stockService->batchSaleOut($sale->store_id, $stockMoveItems, $sale->user_id, $sale->id);
+            }
 
             $totalTtc   = $subtotalHt + $vatAmount - $discountAmount;
             $paidAmount = collect($payments)->sum('amount');
@@ -115,6 +157,7 @@ class SaleService
 
             $this->issueTicket($sale);
             $this->handleLoyalty($sale);
+            $this->handleAccountPayment($sale, $payments, $data['user_id'] ?? null);
 
             return $sale->fresh(['items', 'payments', 'ticket', 'client']);
         });
@@ -136,6 +179,34 @@ class SaleService
             'number'      => 'TKT' . $date . str_pad($seq, 6, '0', STR_PAD_LEFT),
             'qr_code'     => Str::uuid(),
             'print_count' => 1,
+        ]);
+    }
+
+    private function handleAccountPayment(Sale $sale, array $payments, ?int $userId): void
+    {
+        if (!$sale->client_id) return;
+
+        $accountAmount = collect($payments)
+            ->where('payment_method', 'account')
+            ->sum('amount');
+
+        if ($accountAmount <= 0) return;
+
+        $client = $sale->client;
+        $before = (float) $client->account_balance;
+        $after  = $before - $accountAmount;
+
+        $client->update(['account_balance' => $after]);
+
+        ClientAccountTransaction::create([
+            'client_id'      => $client->id,
+            'sale_id'        => $sale->id,
+            'created_by'     => $userId,
+            'type'           => 'sale_debit',
+            'amount'         => $accountAmount,
+            'balance_before' => $before,
+            'balance_after'  => $after,
+            'note'           => 'Paiement vente ' . $sale->reference,
         ]);
     }
 
@@ -200,6 +271,25 @@ class SaleService
                 'refund_amount'        => $hasRefund ? ($refundAmount > 0 ? $refundAmount : (float) $sale->paid_amount) : null,
                 'refunded_at'          => $hasRefund ? now() : null,
             ]);
+
+            // Refund to account if method is 'account'
+            if ($refundMethod === 'account' && $sale->client_id) {
+                $client = $sale->client;
+                $before = (float) $client->account_balance;
+                $amount = $refundAmount > 0 ? $refundAmount : (float) $sale->paid_amount;
+                $after  = $before + $amount;
+                $client->update(['account_balance' => $after]);
+                ClientAccountTransaction::create([
+                    'client_id'      => $client->id,
+                    'sale_id'        => $sale->id,
+                    'created_by'     => $supervisorId,
+                    'type'           => 'sale_refund',
+                    'amount'         => $amount,
+                    'balance_before' => $before,
+                    'balance_after'  => $after,
+                    'note'           => 'Remboursement annulation ' . $sale->reference,
+                ]);
+            }
 
             \App\Services\AuditService::log('sale_cancelled', 'sales', $sale->id, [
                 'reason'        => $reason,

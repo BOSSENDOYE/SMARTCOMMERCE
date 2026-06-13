@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AccountingAccount;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
+use App\Models\Expense;
 use App\Models\Sale;
 use App\Models\SupplierInvoice;
 use App\Models\SupplierPayment;
@@ -497,6 +498,44 @@ class AccountingController extends Controller
     }
 
     // -----------------------------------------------------------------------
+    // Génération automatique depuis les dépenses validées
+    // -----------------------------------------------------------------------
+
+    public function generateFromExpenses(Request $request)
+    {
+        $storeId = $this->storeId($request);
+        $from    = $request->input('date_from', now()->toDateString());
+        $to      = $request->input('date_to',   now()->toDateString());
+
+        // Dépenses validées sans écriture ou dont l'écriture a été supprimée
+        $expenses = Expense::where('store_id', $storeId)
+            ->where('status', 'validated')
+            ->whereNull('journal_entry_id')
+            ->whereDate('expense_date', '>=', $from)
+            ->whereDate('expense_date', '<=', $to)
+            ->with(['category', 'chargeAccount', 'treasuryAccount'])
+            ->get();
+
+        $expenseController = app(\App\Http\Controllers\Api\ExpenseController::class);
+        $created = 0;
+        foreach ($expenses as $expense) {
+            DB::transaction(function () use ($expense, $request, &$created, $expenseController) {
+                // Appel privé via réflexion — on reconstruit l'écriture
+                $method = new \ReflectionMethod($expenseController, 'createJournalEntry');
+                $method->setAccessible(true);
+                $method->invoke($expenseController, $expense, $request->user()->id);
+                $created++;
+            });
+        }
+
+        return response()->json([
+            'message' => "{$created} écriture(s) générée(s) depuis les dépenses.",
+            'count'   => $created,
+            'period'  => compact('from', 'to'),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
     // Initialisation du plan comptable SYSCOHADA (simplifié)
     // -----------------------------------------------------------------------
 
@@ -506,31 +545,38 @@ class AccountingController extends Controller
 
         $plan = [
             // Classe 1 — Ressources durables
-            ['code' => '101',   'name' => 'Capital social',             'class' => '1', 'nature' => 'passif'],
-            ['code' => '130',   'name' => 'Résultat net de l\'exercice','class' => '1', 'nature' => 'passif'],
+            ['code' => '101',   'name' => 'Capital social',                      'class' => '1', 'nature' => 'passif'],
+            ['code' => '130',   'name' => 'Résultat net de l\'exercice',         'class' => '1', 'nature' => 'passif'],
             // Classe 3 — Stocks
-            ['code' => '31',    'name' => 'Marchandises en stock',      'class' => '3', 'nature' => 'actif'],
+            ['code' => '31',    'name' => 'Marchandises en stock',               'class' => '3', 'nature' => 'actif'],
             // Classe 4 — Tiers
-            ['code' => '401',   'name' => 'Fournisseurs',               'class' => '4', 'nature' => 'passif'],
-            ['code' => '411',   'name' => 'Clients',                    'class' => '4', 'nature' => 'actif'],
-            ['code' => '421',   'name' => 'Personnel — rémunérations',  'class' => '4', 'nature' => 'passif'],
-            ['code' => '44566', 'name' => 'TVA déductible',             'class' => '4', 'nature' => 'actif'],
-            ['code' => '44571', 'name' => 'TVA collectée',              'class' => '4', 'nature' => 'passif'],
-            ['code' => '447',   'name' => 'État — impôts et taxes',     'class' => '4', 'nature' => 'passif'],
+            ['code' => '401',   'name' => 'Fournisseurs',                        'class' => '4', 'nature' => 'passif'],
+            ['code' => '411',   'name' => 'Clients',                             'class' => '4', 'nature' => 'actif'],
+            ['code' => '421',   'name' => 'Personnel — rémunérations dues',      'class' => '4', 'nature' => 'passif'],
+            ['code' => '44566', 'name' => 'TVA déductible sur achats',           'class' => '4', 'nature' => 'actif'],
+            ['code' => '44571', 'name' => 'TVA collectée sur ventes',            'class' => '4', 'nature' => 'passif'],
+            ['code' => '447',   'name' => 'État — impôts et taxes à payer',      'class' => '4', 'nature' => 'passif'],
             // Classe 5 — Trésorerie
-            ['code' => '521',   'name' => 'Banque',                     'class' => '5', 'nature' => 'tresorerie'],
-            ['code' => '571',   'name' => 'Caisse',                     'class' => '5', 'nature' => 'tresorerie'],
+            ['code' => '521',   'name' => 'Banque',                              'class' => '5', 'nature' => 'tresorerie'],
+            ['code' => '571',   'name' => 'Caisse principale',                   'class' => '5', 'nature' => 'tresorerie'],
             // Classe 6 — Charges
-            ['code' => '601',   'name' => 'Achats de marchandises',     'class' => '6', 'nature' => 'charge'],
-            ['code' => '622',   'name' => 'Locations et charges loc.',  'class' => '6', 'nature' => 'charge'],
-            ['code' => '624',   'name' => 'Entretien et réparations',   'class' => '6', 'nature' => 'charge'],
-            ['code' => '641',   'name' => 'Rémunérations du personnel', 'class' => '6', 'nature' => 'charge'],
-            ['code' => '658',   'name' => 'Pertes diverses',            'class' => '6', 'nature' => 'charge'],
-            ['code' => '695',   'name' => 'Impôt sur le résultat',      'class' => '6', 'nature' => 'charge'],
+            ['code' => '601',   'name' => 'Achats de marchandises',              'class' => '6', 'nature' => 'charge'],
+            ['code' => '606',   'name' => 'Fournitures non stockables',          'class' => '6', 'nature' => 'charge'],
+            ['code' => '622',   'name' => 'Locations et charges locatives',      'class' => '6', 'nature' => 'charge'],
+            ['code' => '624',   'name' => 'Entretien, réparations, maintenance', 'class' => '6', 'nature' => 'charge'],
+            ['code' => '625',   'name' => 'Primes d\'assurance',                 'class' => '6', 'nature' => 'charge'],
+            ['code' => '626',   'name' => 'Frais de télécommunications',         'class' => '6', 'nature' => 'charge'],
+            ['code' => '631',   'name' => 'Frais bancaires',                     'class' => '6', 'nature' => 'charge'],
+            ['code' => '632',   'name' => 'Honoraires et prestations',           'class' => '6', 'nature' => 'charge'],
+            ['code' => '641',   'name' => 'Rémunérations du personnel',          'class' => '6', 'nature' => 'charge'],
+            ['code' => '645',   'name' => 'Charges sociales et patronales',      'class' => '6', 'nature' => 'charge'],
+            ['code' => '651',   'name' => 'Impôts et taxes directs',             'class' => '6', 'nature' => 'charge'],
+            ['code' => '658',   'name' => 'Charges diverses',                    'class' => '6', 'nature' => 'charge'],
+            ['code' => '695',   'name' => 'Impôt sur le résultat',               'class' => '6', 'nature' => 'charge'],
             // Classe 7 — Produits
-            ['code' => '701',   'name' => 'Ventes de marchandises',     'class' => '7', 'nature' => 'produit'],
-            ['code' => '706',   'name' => 'Services vendus',            'class' => '7', 'nature' => 'produit'],
-            ['code' => '754',   'name' => 'Produits divers',            'class' => '7', 'nature' => 'produit'],
+            ['code' => '701',   'name' => 'Ventes de marchandises',              'class' => '7', 'nature' => 'produit'],
+            ['code' => '706',   'name' => 'Services rendus',                     'class' => '7', 'nature' => 'produit'],
+            ['code' => '754',   'name' => 'Produits divers',                     'class' => '7', 'nature' => 'produit'],
         ];
 
         $created = 0;

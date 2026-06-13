@@ -18,10 +18,11 @@ class SaleController extends Controller
 
         $sales = Sale::forStore($storeId)
             ->with(['user', 'client', 'ticket', 'payments'])
-            ->when($request->date_from, fn($q) => $q->whereDate('created_at', '>=', $request->date_from))
-            ->when($request->date_to, fn($q) => $q->whereDate('created_at', '<=', $request->date_to))
-            ->when($request->status, fn($q) => $q->where('status', $request->status))
-            ->when($request->cashier_id, fn($q) => $q->where('user_id', $request->cashier_id))
+            ->when($request->date_from,   fn($q) => $q->whereDate('created_at', '>=', $request->date_from))
+            ->when($request->date_to,     fn($q) => $q->whereDate('created_at', '<=', $request->date_to))
+            ->when($request->status,      fn($q) => $q->where('status', $request->status))
+            ->when($request->channel,     fn($q) => $q->where('channel', $request->channel))
+            ->when($request->cashier_id,  fn($q) => $q->where('user_id', $request->cashier_id))
             ->orderByDesc('created_at')
             ->paginate($request->per_page ?? 30);
 
@@ -32,7 +33,8 @@ class SaleController extends Controller
     {
         $request->validate([
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.restaurant_item_id' => 'nullable|exists:restaurant_items,id',
             'items.*.qty' => 'required|numeric|min:0.001',
             'items.*.unit_price_ttc' => 'nullable|numeric|min:0',
             'items.*.discount_pct' => 'nullable|numeric|min:0|max:100',
@@ -75,6 +77,7 @@ class SaleController extends Controller
         // Load relations needed for the receipt
         $sale->loadMissing([
             'items.product:id,name,short_name',
+            'items.restaurantItem:id,name',
             'user:id,name',
             'store:id,name,address,phone,ninea,receipt_footer',
         ]);
@@ -94,7 +97,7 @@ class SaleController extends Controller
         $request->validate([
             'reason'         => 'required|string|max:200',
             'supervisor_pin' => 'required|string',
-            'refund_method'  => 'required|in:cash,wave,orange_money,free_money,card,credit,none',
+            'refund_method'  => 'required|in:cash,wave,orange_money,free_money,card,credit,account,none',
             'refund_amount'  => 'nullable|numeric|min:0',
         ]);
 

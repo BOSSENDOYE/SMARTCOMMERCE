@@ -333,6 +333,12 @@ function Journal({
     onError:   (e: { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Erreur génération'),
   })
 
+  const genExpMut = useMutation({
+    mutationFn: () => api.post('/accounting/generate/expenses', { date_from: genDate.from, date_to: genDate.to }),
+    onSuccess: (r) => { toast.success(r.data.message); qc.invalidateQueries({ queryKey: ['journal'] }) },
+    onError:   (e: { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Erreur génération'),
+  })
+
   return (
     <div className="space-y-4">
       {/* Actions */}
@@ -347,6 +353,9 @@ function Journal({
           </button>
           <button onClick={() => genPurchMut.mutate()} disabled={genPurchMut.isPending} className="btn-secondary flex items-center gap-2 text-sm">
             <RefreshCw size={14} className={genPurchMut.isPending ? 'animate-spin' : ''} /> Achats fournisseurs
+          </button>
+          <button onClick={() => genExpMut.mutate()} disabled={genExpMut.isPending} className="btn-secondary flex items-center gap-2 text-sm">
+            <RefreshCw size={14} className={genExpMut.isPending ? 'animate-spin' : ''} /> Dépenses
           </button>
           <button onClick={() => setShowForm(!showForm)} className="btn-secondary flex items-center gap-2 text-sm ml-auto">
             <Plus size={14} /> Écriture manuelle

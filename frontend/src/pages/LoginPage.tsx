@@ -55,7 +55,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-xl">
             <ShoppingCart className="text-white" size={32} />
           </div>
-          <h1 className="text-3xl font-bold text-white">SmartCommerce</h1>
+          <h1 className="text-3xl font-bold text-white">Baobab</h1>
           <p className="text-brand-300 text-sm mt-1">Suite de gestion commerciale</p>
         </div>
 
@@ -70,7 +70,7 @@ export default function LoginPage() {
                 type="email"
                 {...register('email')}
                 className="input"
-                placeholder="vous@smartcommerce.sn"
+                placeholder="vous@baobab.sn"
                 autoComplete="email"
               />
               {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
@@ -110,15 +110,15 @@ export default function LoginPage() {
           <div className="mt-6 p-4 bg-primary-50 rounded-lg border border-primary-100">
             <p className="text-xs font-semibold text-brand mb-2">Comptes de démonstration :</p>
             <div className="space-y-1 text-xs text-brand-600">
-              <p><span className="font-medium">Admin :</span> admin@smartcommerce.sn / Admin@2026!</p>
-              <p><span className="font-medium">Gérant :</span> gerant@smartcommerce.sn / Gerant@2026!</p>
-              <p><span className="font-medium">Caissier :</span> caissier@smartcommerce.sn / Caissier@2026!</p>
+              <p><span className="font-medium">Admin :</span> admin@baobab.sn / Admin@2026!</p>
+              <p><span className="font-medium">Gérant :</span> gerant@baobab.sn / Gerant@2026!</p>
+              <p><span className="font-medium">Caissier :</span> caissier@baobab.sn / Caissier@2026!</p>
             </div>
           </div>
         </div>
 
         <p className="text-center text-brand-300 text-xs mt-6">
-          SmartCommerce Suite · Dakar, Sénégal · Juin 2026
+          Baobab Suite · Dakar, Sénégal · Juin 2026
         </p>
       </div>
     </div>

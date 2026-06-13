@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import {
   ShoppingCart, Plus, Search, ChevronRight, ArrowLeft,
   Package, Truck, CheckCircle, Clock, AlertCircle,
-  Send, X, Trash2, Edit2, RotateCcw, FileText,
+  Send, X, Trash2, Edit2, RotateCcw, FileText, Star,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -75,6 +75,18 @@ interface OrderFormItem {
   qty_ordered: number
   unit_price_ht: number
   vat_rate: number
+}
+
+interface SupplierLinkedProduct {
+  id: number
+  name: string
+  internal_code?: string
+  unit?: { abbreviation: string }
+  pivot: {
+    supplier_ref?: string
+    negotiated_price_ht?: number
+    is_preferred: boolean
+  }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -191,6 +203,12 @@ function OrderFormModal({ order, onClose }: { order?: PurchaseOrder; onClose: ()
     queryFn: () => api.get('/suppliers', { params: { filter: 'active', per_page: 100 } }).then(r => r.data),
   })
 
+  const { data: supplierProducts } = useQuery<SupplierLinkedProduct[]>({
+    queryKey: ['supplier-products', supplierId],
+    queryFn: () => api.get(`/suppliers/${supplierId}/products`).then(r => r.data),
+    enabled: !!supplierId,
+  })
+
   const mut = useMutation({
     mutationFn: (payload: object) => order
       ? api.put(`/purchase-orders/${order.id}`, payload)
@@ -205,7 +223,7 @@ function OrderFormModal({ order, onClose }: { order?: PurchaseOrder; onClose: ()
     onError: () => toast.error('Erreur lors de l\'enregistrement'),
   })
 
-  function addItem(p: ProductResult) {
+  function addItem(p: ProductResult, negotiatedPrice?: number) {
     if (items.some(i => i.product_id === p.id)) {
       toast.error('Ce produit est déjà dans la liste')
       return
@@ -214,7 +232,7 @@ function OrderFormModal({ order, onClose }: { order?: PurchaseOrder; onClose: ()
       product_id: p.id,
       product_name: p.name,
       qty_ordered: 1,
-      unit_price_ht: 0,
+      unit_price_ht: negotiatedPrice ?? 0,
       vat_rate: 18,
     }])
   }
@@ -284,10 +302,82 @@ function OrderFormModal({ order, onClose }: { order?: PurchaseOrder; onClose: ()
               </div>
             </div>
 
+            {/* Supplier products quick-add */}
+            {supplierId && (supplierProducts ?? []).length > 0 && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Produits de ce fournisseur
+                  <span className="ml-2 text-xs font-normal text-gray-400">
+                    ({(supplierProducts ?? []).length} associé{(supplierProducts ?? []).length > 1 ? 's' : ''})
+                  </span>
+                </label>
+                <div className="border rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium text-gray-600">Produit</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-600 hidden sm:table-cell">Réf. fournisseur</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600">Prix négocié HT</th>
+                        <th className="w-16 px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(supplierProducts ?? []).map(p => {
+                        const alreadyAdded = items.some(i => i.product_id === p.id)
+                        return (
+                          <tr key={p.id} className={alreadyAdded ? 'bg-green-50/60' : 'hover:bg-primary-50'}>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-1.5">
+                                {p.pivot.is_preferred && (
+                                  <Star size={12} className="fill-yellow-400 stroke-yellow-400 shrink-0" />
+                                )}
+                                <span className="font-medium text-gray-900">{p.name}</span>
+                                {p.internal_code && (
+                                  <span className="text-xs text-gray-400 font-mono hidden md:inline">{p.internal_code}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-gray-500 text-xs font-mono hidden sm:table-cell">
+                              {p.pivot.supplier_ref ?? '—'}
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-800">
+                              {p.pivot.negotiated_price_ht
+                                ? formatCurrency(p.pivot.negotiated_price_ht)
+                                : <span className="text-gray-400 font-normal text-xs">Non défini</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {alreadyAdded ? (
+                                <span className="text-green-600 text-xs font-medium">Ajouté</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => addItem({
+                                    id: p.id,
+                                    name: p.name,
+                                    internal_code: p.internal_code,
+                                    unit: p.unit,
+                                  }, p.pivot.negotiated_price_ht)}
+                                  className="flex items-center gap-1 text-xs bg-primary text-white px-2.5 py-1 rounded-lg hover:bg-primary-600 transition-colors"
+                                >
+                                  <Plus size={12} /> Ajouter
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Items */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-semibold text-gray-700">Articles *</label>
+                <label className="text-sm font-semibold text-gray-700">
+                  {supplierId && (supplierProducts ?? []).length > 0 ? 'Ou rechercher un autre produit' : 'Articles *'}
+                </label>
               </div>
               <ProductSearch onSelect={addItem} />
 

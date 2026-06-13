@@ -7,7 +7,8 @@ import {
   Users, Search, Plus, X, Check, Edit2, Eye, ChevronLeft, ChevronRight,
   Phone, Mail, MapPin, Star, CreditCard, ShoppingBag, Gift, TrendingUp,
   ArrowUpCircle, ArrowDownCircle, Building2, User, Filter, ChevronDown,
-  AlertCircle, ToggleLeft, ToggleRight,
+  AlertCircle, ToggleLeft, ToggleRight, Wallet, ArrowDownToLine, ArrowUpFromLine,
+  TrendingDown, Activity,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -31,9 +32,22 @@ interface Client {
   notes?: string
   credit_balance: number
   credit_limit: number
+  account_balance: number
   loyalty_points: number
   is_active: boolean
   sales_count?: number
+}
+
+interface AccountTx {
+  id: number
+  type: 'deposit' | 'withdrawal' | 'sale_debit' | 'change_deposit' | 'sale_refund' | 'adjustment'
+  amount: number
+  balance_before: number
+  balance_after: number
+  note?: string
+  created_at: string
+  sale?: { id: number; reference: string }
+  creator?: { id: number; name: string }
 }
 
 interface Sale {
@@ -390,14 +404,158 @@ function AdjustLoyaltyModal({ client, onClose }: { client: Client; onClose: () =
   )
 }
 
+// ─── Deposit / Withdraw Modal ─────────────────────────────────────────────────
+
+const ACCOUNT_TX_CFG: Record<string, { label: string; Icon: React.ElementType; color: string; bg: string }> = {
+  deposit:        { label: 'Dépôt',        Icon: ArrowDownToLine,   color: 'text-emerald-600', bg: 'bg-emerald-100' },
+  withdrawal:     { label: 'Retrait',       Icon: ArrowUpFromLine,   color: 'text-red-500',     bg: 'bg-red-100' },
+  sale_debit:     { label: 'Vente débitée', Icon: ShoppingBag,       color: 'text-blue-600',    bg: 'bg-blue-100' },
+  change_deposit: { label: 'Monnaie déposée', Icon: Wallet,          color: 'text-indigo-600',  bg: 'bg-indigo-100' },
+  sale_refund:    { label: 'Remboursement', Icon: TrendingDown,      color: 'text-purple-600',  bg: 'bg-purple-100' },
+  adjustment:     { label: 'Ajustement',    Icon: Activity,          color: 'text-gray-500',    bg: 'bg-gray-100' },
+}
+
+function DepositWithdrawModal({ client, mode, onClose }: {
+  client: Client
+  mode: 'deposit' | 'withdraw'
+  onClose: () => void
+}) {
+  const qc = useQueryClient()
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+
+  const isDeposit = mode === 'deposit'
+
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/${isDeposit ? 'deposit' : 'withdraw'}`, {
+      amount: Number(amount),
+      note: note || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] })
+      qc.invalidateQueries({ queryKey: ['account-tx', client.id] })
+      qc.invalidateQueries({ queryKey: ['clients'] })
+      qc.invalidateQueries({ queryKey: ['client-stats'] })
+      toast.success(isDeposit ? 'Dépôt enregistré' : 'Retrait enregistré')
+      onClose()
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Erreur'),
+  })
+
+  const bal = client.account_balance
+  const afterAmount = isDeposit ? bal + Number(amount) : bal - Number(amount)
+
+  const QUICK = [1000, 2000, 5000, 10000, 25000, 50000]
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className={`px-6 py-5 text-white ${isDeposit ? 'bg-gradient-to-br from-emerald-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-rose-600'}`}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+              {isDeposit ? <ArrowDownToLine size={20} /> : <ArrowUpFromLine size={20} />}
+            </div>
+            <div>
+              <p className="font-bold text-lg">{isDeposit ? 'Dépôt' : 'Retrait'}</p>
+              <p className="text-white/80 text-xs">{client.name}</p>
+            </div>
+            <button onClick={onClose} className="ml-auto w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors">
+              <X size={15} />
+            </button>
+          </div>
+          {/* Balance */}
+          <div className="bg-white/15 rounded-2xl px-4 py-3">
+            <p className="text-white/70 text-xs mb-0.5">Solde actuel</p>
+            <p className={`text-2xl font-bold ${bal >= 0 ? 'text-white' : 'text-red-200'}`}>
+              {bal >= 0 ? '' : '−'}{formatCurrency(Math.abs(bal))}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Amount input */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Montant (FCFA)</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              autoFocus
+              min={1}
+              className="w-full border-2 border-gray-200 rounded-2xl px-4 py-3 text-xl font-bold text-right font-mono focus:outline-none focus:border-primary/50"
+              placeholder="0"
+            />
+          </div>
+
+          {/* Quick chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK.map(q => (
+              <button key={q} type="button"
+                onClick={() => setAmount(String(q))}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${
+                  Number(amount) === q
+                    ? isDeposit ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-red-500 text-white border-red-500'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                }`}>
+                {formatCurrency(q)}
+              </button>
+            ))}
+          </div>
+
+          {/* Projected balance */}
+          {Number(amount) > 0 && (
+            <div className={`rounded-2xl p-3 text-sm flex items-center justify-between ${afterAmount >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              <span className={afterAmount >= 0 ? 'text-emerald-600' : 'text-red-600'}>Nouveau solde</span>
+              <span className={`font-bold text-base ${afterAmount >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {afterAmount >= 0 ? '' : '−'}{formatCurrency(Math.abs(afterAmount))}
+              </span>
+            </div>
+          )}
+
+          {/* Note */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Note (optionnel)</label>
+            <input
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder={isDeposit ? 'Ex: Versement espèces' : 'Ex: Remboursement'}
+            />
+          </div>
+        </div>
+
+        <div className="px-5 pb-5 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 rounded-2xl border-2 border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50">
+            Annuler
+          </button>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={!amount || Number(amount) <= 0 || mutation.isPending}
+            className={`flex-1 py-3 rounded-2xl text-white text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2 ${
+              isDeposit ? 'bg-gradient-to-r from-emerald-500 to-green-600' : 'bg-gradient-to-r from-red-500 to-rose-600'
+            }`}>
+            {isDeposit ? <ArrowDownToLine size={15} /> : <ArrowUpFromLine size={15} />}
+            {mutation.isPending ? 'Traitement...' : 'Confirmer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Client Detail ────────────────────────────────────────────────────────────
 
 function ClientDetail({ client: initialClient, onClose, onEdit }: {
   client: Client; onClose: () => void; onEdit: () => void
 }) {
-  const [tab, setTab] = useState<'sales' | 'loyalty'>('sales')
+  const [tab, setTab] = useState<'sales' | 'loyalty' | 'account'>('sales')
   const [showCreditModal, setShowCreditModal] = useState(false)
   const [showLoyaltyModal, setShowLoyaltyModal] = useState(false)
+  const [showDeposit, setShowDeposit] = useState(false)
+  const [showWithdraw, setShowWithdraw] = useState(false)
 
   const { data: clientData } = useQuery<Client>({
     queryKey: ['client', initialClient.id],
@@ -415,6 +573,12 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
     queryKey: ['loyalty-tx', client.id],
     queryFn: () => api.get(`/clients/${client.id}/loyalty-transactions`).then(r => r.data),
     enabled: tab === 'loyalty',
+  })
+
+  const { data: accountTxData } = useQuery<Paginated<AccountTx>>({
+    queryKey: ['account-tx', client.id],
+    queryFn: () => api.get(`/clients/${client.id}/account-transactions`).then(r => r.data),
+    enabled: tab === 'account',
   })
 
   const creditPct = client.credit_limit > 0
@@ -485,56 +649,86 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
               )}
             </div>
 
-            {/* Credit + Loyalty cards */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Credit */}
-              <div className="bg-orange-50 rounded-2xl p-4 space-y-3">
+            {/* Account + Credit + Loyalty cards */}
+            <div className="grid grid-cols-3 gap-3">
+
+              {/* Account balance */}
+              <div className={`rounded-2xl p-4 space-y-2 relative overflow-hidden ${
+                client.account_balance > 0 ? 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white' :
+                client.account_balance < 0 ? 'bg-gradient-to-br from-red-500 to-rose-600 text-white' :
+                'bg-gray-50 text-gray-700'
+              }`}>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                    <CreditCard size={14} className="text-orange-500" /> Crédit
+                  <p className={`text-xs font-semibold flex items-center gap-1.5 ${client.account_balance !== 0 ? 'text-white/80' : 'text-gray-500'}`}>
+                    <Wallet size={12} /> Compte
                   </p>
-                  <button onClick={() => setShowCreditModal(true)}
-                    className="text-xs text-orange-600 hover:text-orange-800 font-medium border border-orange-200 px-2 py-0.5 rounded-lg hover:bg-orange-100">
-                    Ajuster
-                  </button>
                 </div>
-                <div>
-                  <p className={`text-2xl font-bold ${client.credit_balance > 0 ? 'text-orange-600' : 'text-gray-700'}`}>
-                    {formatCurrency(client.credit_balance)}
-                  </p>
-                  {client.credit_limit > 0 && (
-                    <>
-                      <p className="text-xs text-gray-400 mt-0.5">Plafond : {formatCurrency(client.credit_limit)}</p>
-                      {creditPct !== null && (
-                        <div className="mt-2 h-1.5 bg-orange-200 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${creditPct > 80 ? 'bg-red-500' : 'bg-orange-400'}`}
-                            style={{ width: `${creditPct}%` }} />
-                        </div>
-                      )}
-                    </>
-                  )}
+                <p className={`text-xl font-bold leading-tight ${client.account_balance !== 0 ? 'text-white' : 'text-gray-500'}`}>
+                  {client.account_balance >= 0 ? '' : '−'}{formatCurrency(Math.abs(client.account_balance))}
+                </p>
+                <p className={`text-[10px] ${client.account_balance !== 0 ? 'text-white/60' : 'text-gray-400'}`}>
+                  {client.account_balance > 0 ? 'Avoir disponible' : client.account_balance < 0 ? 'Montant dû' : 'Solde nul'}
+                </p>
+                <div className="flex gap-1 mt-1">
+                  <button onClick={() => setShowDeposit(true)}
+                    className={`flex-1 py-1 rounded-xl text-[10px] font-bold transition-colors ${
+                      client.account_balance !== 0 ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                    }`}>
+                    + Dépôt
+                  </button>
+                  <button onClick={() => setShowWithdraw(true)}
+                    className={`flex-1 py-1 rounded-xl text-[10px] font-bold transition-colors ${
+                      client.account_balance !== 0 ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    }`}>
+                    − Retrait
+                  </button>
                 </div>
               </div>
 
-              {/* Loyalty */}
-              <div className="bg-yellow-50 rounded-2xl p-4 space-y-3">
+              {/* Credit */}
+              <div className="bg-orange-50 rounded-2xl p-4 space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                    <Star size={14} className="text-yellow-500" /> Fidélité
+                  <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                    <CreditCard size={12} className="text-orange-500" /> Crédit dû
                   </p>
-                  <button onClick={() => setShowLoyaltyModal(true)}
-                    className="text-xs text-yellow-600 hover:text-yellow-800 font-medium border border-yellow-200 px-2 py-0.5 rounded-lg hover:bg-yellow-100">
-                    Ajuster
+                  <button onClick={() => setShowCreditModal(true)}
+                    className="text-[10px] text-orange-600 hover:text-orange-800 font-semibold border border-orange-200 px-1.5 py-0.5 rounded-lg hover:bg-orange-100">
+                    ···
                   </button>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {formatNumber(client.loyalty_points, 0)} <span className="text-base font-normal text-gray-500">pts</span>
+                <p className={`text-xl font-bold ${client.credit_balance > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                  {formatCurrency(client.credit_balance)}
+                </p>
+                {client.credit_limit > 0 && (
+                  <>
+                    <p className="text-[10px] text-gray-400">Plafond : {formatCurrency(client.credit_limit)}</p>
+                    {creditPct !== null && (
+                      <div className="h-1.5 bg-orange-200 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${creditPct > 80 ? 'bg-red-500' : 'bg-orange-400'}`}
+                          style={{ width: `${creditPct}%` }} />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Loyalty */}
+              <div className="bg-yellow-50 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                    <Star size={12} className="text-yellow-500" /> Fidélité
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    ≈ {formatCurrency(client.loyalty_points * 100)} en valeur
-                  </p>
+                  <button onClick={() => setShowLoyaltyModal(true)}
+                    className="text-[10px] text-yellow-600 hover:text-yellow-800 font-semibold border border-yellow-200 px-1.5 py-0.5 rounded-lg hover:bg-yellow-100">
+                    ···
+                  </button>
                 </div>
+                <p className="text-xl font-bold text-yellow-600">
+                  {formatNumber(client.loyalty_points, 0)} <span className="text-sm font-normal text-gray-400">pts</span>
+                </p>
+                <p className="text-[10px] text-gray-400">
+                  ≈ {formatCurrency(client.loyalty_points * 100)}
+                </p>
               </div>
             </div>
 
@@ -549,7 +743,11 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
             {/* Tabs */}
             <div>
               <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-                {([['sales', 'Achats', ShoppingBag], ['loyalty', 'Fidélité', Gift]] as const).map(([key, label, Icon]) => (
+                {([
+                  ['sales',   'Achats',        ShoppingBag],
+                  ['account', 'Compte',         Wallet],
+                  ['loyalty', 'Fidélité',       Gift],
+                ] as const).map(([key, label, Icon]) => (
                   <button key={key} onClick={() => setTab(key)}
                     className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                       tab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
@@ -615,6 +813,62 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
                     }
                   </div>
                 )}
+
+                {tab === 'account' && (
+                  <div>
+                    {/* Quick actions */}
+                    <div className="flex gap-2 mb-4">
+                      <button
+                        onClick={() => setShowDeposit(true)}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors">
+                        <ArrowDownToLine size={15} /> Déposer
+                      </button>
+                      <button
+                        onClick={() => setShowWithdraw(true)}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition-colors">
+                        <ArrowUpFromLine size={15} /> Retirer
+                      </button>
+                    </div>
+
+                    {/* Transaction list */}
+                    <div className="space-y-1">
+                      {(accountTxData?.data ?? []).length === 0 ? (
+                        <div className="text-center py-8">
+                          <Wallet size={32} className="mx-auto mb-2 text-gray-200" />
+                          <p className="text-sm text-gray-400">Aucune transaction de compte</p>
+                        </div>
+                      ) : (accountTxData?.data ?? []).map((tx: AccountTx) => {
+                        const cfg = ACCOUNT_TX_CFG[tx.type] ?? { label: tx.type, Icon: Activity, color: 'text-gray-500', bg: 'bg-gray-100' }
+                        const isCredit = ['deposit', 'change_deposit', 'sale_refund'].includes(tx.type)
+                        return (
+                          <div key={tx.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
+                                <cfg.Icon size={14} className={cfg.color} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-800">{cfg.label}</p>
+                                <p className="text-xs text-gray-400">
+                                  {tx.sale ? `Vente ${tx.sale.reference} · ` : ''}
+                                  {new Date(tx.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                                {tx.note && <p className="text-xs text-gray-400 italic">{tx.note}</p>}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-sm font-bold ${isCredit ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {isCredit ? '+' : '−'}{formatCurrency(tx.amount)}
+                              </p>
+                              <p className={`text-[10px] font-medium ${(tx.balance_after ?? 0) >= 0 ? 'text-gray-400' : 'text-red-400'}`}>
+                                Solde: {(tx.balance_after ?? 0) >= 0 ? '' : '−'}{formatCurrency(Math.abs(tx.balance_after ?? 0))}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -623,6 +877,8 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
 
       {showCreditModal && <AdjustCreditModal client={client} onClose={() => setShowCreditModal(false)} />}
       {showLoyaltyModal && <AdjustLoyaltyModal client={client} onClose={() => setShowLoyaltyModal(false)} />}
+      {showDeposit && <DepositWithdrawModal client={client} mode="deposit" onClose={() => setShowDeposit(false)} />}
+      {showWithdraw && <DepositWithdrawModal client={client} mode="withdraw" onClose={() => setShowWithdraw(false)} />}
     </>
   )
 }

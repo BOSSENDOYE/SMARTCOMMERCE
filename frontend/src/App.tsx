@@ -21,6 +21,12 @@ const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'))
 const RestaurantPage = lazy(() => import('./pages/restaurant/RestaurantPage'))
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'))
 const AccountingPage = lazy(() => import('./pages/accounting/AccountingPage'))
+const StoresPage = lazy(() => import('./pages/settings/StoresPage'))
+const OrganizationsPage = lazy(() => import('./pages/settings/OrganizationsPage'))
+const PrintTemplatesPage = lazy(() => import('./pages/settings/PrintTemplatesPage'))
+const TransfersPage       = lazy(() => import('./pages/transfers/TransfersPage'))
+const ExpensesPage        = lazy(() => import('./pages/expenses/ExpensesPage'))
+const RestaurantMenuPage  = lazy(() => import('./pages/restaurant/RestaurantMenuPage'))
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -74,6 +80,12 @@ export default function App() {
             <Route path="restaurant/*" element={<Suspense fallback={<PageLoader />}><RestaurantPage /></Suspense>} />
             <Route path="accounting" element={<Suspense fallback={<PageLoader />}><AccountingPage /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
+            <Route path="stores" element={<Suspense fallback={<PageLoader />}><StoresPage /></Suspense>} />
+            <Route path="organizations" element={<Suspense fallback={<PageLoader />}><OrganizationsPage /></Suspense>} />
+            <Route path="print-templates" element={<Suspense fallback={<PageLoader />}><PrintTemplatesPage /></Suspense>} />
+            <Route path="transfers" element={<Suspense fallback={<PageLoader />}><TransfersPage /></Suspense>} />
+            <Route path="expenses" element={<Suspense fallback={<PageLoader />}><ExpensesPage /></Suspense>} />
+            <Route path="restaurant-menu" element={<Suspense fallback={<PageLoader />}><RestaurantMenuPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

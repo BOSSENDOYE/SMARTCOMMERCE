@@ -4,28 +4,119 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Store;
+use App\Models\StockLevel;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class StoreController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Store::all());
+        $query = Store::withCount(['users', 'clients'])
+            ->with('organization')
+            ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
+            ->when($request->organization_id, fn($q) => $q->where('organization_id', $request->organization_id));
+
+        if ($request->user()->hasRole('super_admin') === false) {
+            $query->where('id', $request->user()->store_id);
+        }
+
+        return response()->json(
+            $query->orderByDesc('is_central')->orderBy('name')->get()
+        );
     }
 
     public function show(Store $store)
     {
-        return response()->json($store);
+        $stockValue = StockLevel::where('store_id', $store->id)->sum('total_value');
+
+        return response()->json(
+            array_merge($store->loadCount(['users', 'clients', 'sales'])->toArray(), [
+                'stock_value' => (float) $stockValue,
+            ])
+        );
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'organization_id'        => 'nullable|exists:organizations,id',
+            'name'                   => 'required|string|max:100',
+            'code'                   => 'required|string|max:20|unique:stores,code|regex:/^[A-Z0-9_-]+$/',
+            'address'                => 'nullable|string|max:255',
+            'phone'                  => 'nullable|string|max:30',
+            'email'                  => 'nullable|email|max:100',
+            'ninea'                  => 'nullable|string|max:30',
+            'rc'                     => 'nullable|string|max:30',
+            'currency'               => 'nullable|string|max:10',
+            'timezone'               => 'nullable|string|max:50',
+            'business_type'          => 'nullable|in:grande_surface,restaurant,depot,mixte',
+            'license_grande_surface' => 'boolean',
+            'license_restaurant'     => 'boolean',
+            'is_central'             => 'boolean',
+            'receipt_footer'         => 'nullable|string|max:500',
+        ]);
+
+        // Dériver les licences depuis le business_type si non spécifiées
+        $bt = $data['business_type'] ?? 'grande_surface';
+        if (!isset($data['license_grande_surface'])) {
+            $data['license_grande_surface'] = in_array($bt, ['grande_surface', 'mixte', 'depot']);
+        }
+        if (!isset($data['license_restaurant'])) {
+            $data['license_restaurant'] = in_array($bt, ['restaurant', 'mixte']);
+        }
+
+        $store = Store::create(array_merge($data, ['is_active' => true]));
+
+        return response()->json($store, 201);
     }
 
     public function update(Request $request, Store $store)
     {
-        $store->update($request->validate([
-            'name' => 'sometimes|string|max:100',
-            'address' => 'nullable|string',
-            'phone' => 'nullable|string',
-            'is_active' => 'sometimes|boolean',
-        ]));
+        $data = $request->validate([
+            'organization_id'        => 'nullable|exists:organizations,id',
+            'name'                   => 'sometimes|string|max:100',
+            'address'                => 'nullable|string|max:255',
+            'phone'                  => 'nullable|string|max:30',
+            'email'                  => 'nullable|email|max:100',
+            'ninea'                  => 'nullable|string|max:30',
+            'rc'                     => 'nullable|string|max:30',
+            'currency'               => 'nullable|string|max:10',
+            'timezone'               => 'nullable|string|max:50',
+            'business_type'          => 'sometimes|in:grande_surface,restaurant,depot,mixte',
+            'license_grande_surface' => 'sometimes|boolean',
+            'license_restaurant'     => 'sometimes|boolean',
+            'is_active'              => 'sometimes|boolean',
+            'is_central'             => 'sometimes|boolean',
+            'receipt_footer'         => 'nullable|string|max:500',
+        ]);
+
+        $store->update($data);
+
         return response()->json($store);
+    }
+
+    /** POST /stores/{store}/logo */
+    public function uploadLogo(Request $request, Store $store)
+    {
+        $request->validate(['logo' => 'required|image|max:2048']);
+
+        if ($store->logo && str_starts_with($store->logo, '/storage/')) {
+            Storage::delete(str_replace('/storage/', 'public/', $store->logo));
+        }
+
+        $path = $request->file('logo')->store('logos/stores', 'public');
+        $store->update(['logo' => Storage::url($path)]);
+
+        return response()->json(['logo' => $store->logo]);
+    }
+
+    public function destroy(Store $store)
+    {
+        if ($store->is_central) {
+            return response()->json(['message' => 'Le magasin central ne peut pas être désactivé.'], 422);
+        }
+        $store->update(['is_active' => false]);
+        return response()->json(null, 204);
     }
 }

@@ -9,6 +9,7 @@ use App\Models\TableSession;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Reservation;
+use App\Models\RestaurantItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -110,7 +111,7 @@ class RestaurantController extends Controller
     public function tableOrders(Request $request, TableSession $session)
     {
         $orders = $session->orders()
-            ->with(['items.product:id,name,price_ttc'])
+            ->with(['items.restaurantItem:id,name,price_ttc,course'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -127,7 +128,7 @@ class RestaurantController extends Controller
             'covers' => 'nullable|integer|min:1',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.restaurant_item_id' => 'required|exists:restaurant_items,id',
             'items.*.qty' => 'required|numeric|min:0.5',
             'items.*.unit_price' => 'required|numeric|min:0',
             'items.*.course' => 'nullable|in:starter,main,dessert,drink,other',
@@ -159,14 +160,15 @@ class RestaurantController extends Controller
             ]);
 
             foreach ($data['items'] as $item) {
+                $ri = RestaurantItem::find($item['restaurant_item_id']);
                 OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $item['product_id'],
-                    'qty' => $item['qty'],
-                    'unit_price' => $item['unit_price'],
-                    'course' => $item['course'] ?? 'main',
-                    'status' => 'pending',
-                    'notes' => $item['notes'] ?? null,
+                    'order_id'           => $order->id,
+                    'restaurant_item_id' => $item['restaurant_item_id'],
+                    'qty'                => $item['qty'],
+                    'unit_price'         => $item['unit_price'],
+                    'course'             => $item['course'] ?? $ri?->course ?? 'main',
+                    'status'             => 'pending',
+                    'notes'              => $item['notes'] ?? null,
                 ]);
             }
 
@@ -175,7 +177,7 @@ class RestaurantController extends Controller
                 $session?->table->update(['status' => 'ordered']);
             }
 
-            return response()->json($order->load('items.product:id,name,price_ttc'), 201);
+            return response()->json($order->load('items.restaurantItem:id,name,price_ttc,course'), 201);
         });
     }
 
@@ -200,7 +202,7 @@ class RestaurantController extends Controller
             }
         }
 
-        return response()->json($order->fresh()->load('items.product:id,name'));
+        return response()->json($order->fresh()->load('items.restaurantItem:id,name,course'));
     }
 
     public function sendToKitchen(Request $request, Order $order)
@@ -213,7 +215,7 @@ class RestaurantController extends Controller
 
         $order->tableSession?->table->update(['status' => 'ordered']);
 
-        return response()->json($order->fresh()->load('items.product:id,name'));
+        return response()->json($order->fresh()->load('items.restaurantItem:id,name,course'));
     }
 
     public function markItemReady(Request $request, OrderItem $orderItem)
@@ -241,7 +243,7 @@ class RestaurantController extends Controller
             if ($stationId) {
                 $q->where('station_id', $stationId);
             }
-            $q->with('product:id,name');
+            $q->with('restaurantItem:id,name,course');
         }])
         ->where('store_id', $storeId)
         ->whereIn('status', ['pending', 'confirmed', 'preparing'])

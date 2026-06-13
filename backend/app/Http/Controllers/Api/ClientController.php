@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\ClientAccountTransaction;
 use App\Models\LoyaltyTransaction;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
@@ -15,11 +17,13 @@ class ClientController extends Controller
         $base = Client::where('store_id', $storeId);
 
         return response()->json([
-            'total'          => (clone $base)->count(),
-            'active'         => (clone $base)->where('is_active', true)->count(),
-            'with_credit'    => (clone $base)->where('credit_balance', '>', 0)->count(),
-            'total_credit'   => (clone $base)->sum('credit_balance'),
-            'total_loyalty'  => (clone $base)->sum('loyalty_points'),
+            'total'           => (clone $base)->count(),
+            'active'          => (clone $base)->where('is_active', true)->count(),
+            'with_credit'     => (clone $base)->where('credit_balance', '>', 0)->count(),
+            'total_credit'    => (clone $base)->sum('credit_balance'),
+            'total_loyalty'   => (clone $base)->sum('loyalty_points'),
+            'total_avoir'     => (clone $base)->where('account_balance', '>', 0)->sum('account_balance'),
+            'total_dette'     => (clone $base)->where('account_balance', '<', 0)->selectRaw('ABS(SUM(account_balance)) as v')->value('v') ?? 0,
         ]);
     }
 
@@ -112,6 +116,81 @@ class ClientController extends Controller
                 ->paginate($request->per_page ?? 20)
         );
     }
+
+    // ── Account (Compte client) ────────────────────────────────────────────────
+
+    public function accountTransactions(Request $request, Client $client)
+    {
+        return response()->json(
+            $client->accountTransactions()
+                ->with(['sale:id,reference', 'creator:id,name'])
+                ->orderByDesc('created_at')
+                ->paginate($request->per_page ?? 20)
+        );
+    }
+
+    public function deposit(Request $request, Client $client)
+    {
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'note'   => 'nullable|string|max:200',
+        ]);
+
+        return DB::transaction(function () use ($client, $data, $request) {
+            $before = (float) $client->account_balance;
+            $after  = $before + $data['amount'];
+
+            $client->update(['account_balance' => $after]);
+
+            $tx = ClientAccountTransaction::create([
+                'client_id'      => $client->id,
+                'created_by'     => $request->user()->id,
+                'type'           => 'deposit',
+                'amount'         => $data['amount'],
+                'balance_before' => $before,
+                'balance_after'  => $after,
+                'note'           => $data['note'] ?? 'Dépôt manuel',
+            ]);
+
+            return response()->json([
+                'account_balance' => $client->fresh()->account_balance,
+                'transaction'     => $tx,
+            ]);
+        });
+    }
+
+    public function withdraw(Request $request, Client $client)
+    {
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'note'   => 'nullable|string|max:200',
+        ]);
+
+        return DB::transaction(function () use ($client, $data, $request) {
+            $before = (float) $client->account_balance;
+            $after  = $before - $data['amount'];
+
+            // Allow negative (becomes debt)
+            $client->update(['account_balance' => $after]);
+
+            $tx = ClientAccountTransaction::create([
+                'client_id'      => $client->id,
+                'created_by'     => $request->user()->id,
+                'type'           => 'withdrawal',
+                'amount'         => $data['amount'],
+                'balance_before' => $before,
+                'balance_after'  => $after,
+                'note'           => $data['note'] ?? 'Retrait manuel',
+            ]);
+
+            return response()->json([
+                'account_balance' => $client->fresh()->account_balance,
+                'transaction'     => $tx,
+            ]);
+        });
+    }
+
+    // ── Legacy credit/debt management (kept for backward compat) ──────────────
 
     public function adjustCredit(Request $request, Client $client)
     {

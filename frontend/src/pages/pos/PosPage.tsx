@@ -12,21 +12,31 @@ import {
   Search, Scan, Trash2, Plus, Minus, Percent, CreditCard, Banknote,
   Smartphone, ShoppingBag, PauseCircle, PlayCircle, UserPlus, X, Check,
   Wifi, WifiOff, Receipt, ChevronRight, Lock, Unlock, ArrowLeft,
-  DollarSign, Tag, Users, Printer,
+  DollarSign, Tag, Users, Printer, Clock, Ban, RotateCcw, Edit2, Eye,
 } from 'lucide-react'
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const PAYMENT_METHODS = [
-  { key: 'cash', label: 'Espèces', icon: <Banknote size={18} />, color: 'green' },
-  { key: 'wave', label: 'Wave', icon: <Smartphone size={18} />, color: 'blue' },
-  { key: 'orange_money', label: 'Orange Money', icon: <Smartphone size={18} />, color: 'orange' },
-  { key: 'free_money', label: 'Free Money', icon: <Smartphone size={18} />, color: 'red' },
-  { key: 'card', label: 'Carte', icon: <CreditCard size={18} />, color: 'purple' },
-  { key: 'credit', label: 'Crédit client', icon: <ShoppingBag size={18} />, color: 'yellow' },
-]
+import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PosItem {
+  id: number
+  name: string
+  short_name?: string
+  sale_price_ttc: number
+  vat_rate: number
+  is_weight_based: boolean
+  stock_qty: number
+  category_name?: string
+  source: 'product' | 'restaurant_item'
+}
+
+const COURSES = [
+  { value: 'starter', label: 'Entrées' },
+  { value: 'main',    label: 'Plats' },
+  { value: 'dessert', label: 'Desserts' },
+  { value: 'drink',   label: 'Boissons' },
+  { value: 'other',   label: 'Autres' },
+]
 
 interface CashSession {
   id: number
@@ -41,6 +51,7 @@ interface Client {
   name: string
   phone?: string
   credit_balance?: number
+  account_balance?: number
 }
 
 interface Category {
@@ -57,7 +68,8 @@ interface SaleStore {
 interface SaleUser   { id: number; name: string }
 interface SaleClientDetail { id: number; name: string; phone?: string }
 interface SaleItemDetail {
-  product: { name: string; short_name?: string }
+  product?: { name: string; short_name?: string } | null
+  restaurantItem?: { name: string } | null
   qty: number; unit_price_ttc: number; discount_pct: number
   discount_amount: number; total_ttc: number; total_ht: number
 }
@@ -266,11 +278,18 @@ function ClientSearchModal({ onSelect, onClose }: {
                 <p className="text-sm font-medium text-gray-900">{c.name}</p>
                 {c.phone && <p className="text-xs text-gray-400">{c.phone}</p>}
               </div>
-              {c.credit_balance != null && c.credit_balance > 0 && (
-                <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                  Crédit {formatCurrency(c.credit_balance)}
-                </span>
-              )}
+              <div className="flex flex-col items-end gap-0.5">
+                {c.credit_balance != null && c.credit_balance > 0 && (
+                  <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                    Dette {formatCurrency(c.credit_balance)}
+                  </span>
+                )}
+                {c.account_balance != null && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${(c.account_balance ?? 0) >= 0 ? 'text-indigo-600 bg-indigo-50' : 'text-red-600 bg-red-50'}`}>
+                    Compte {(c.account_balance ?? 0) >= 0 ? '+' : ''}{formatCurrency(c.account_balance ?? 0)}
+                  </span>
+                )}
+              </div>
             </button>
           ))}
         </div>
@@ -325,109 +344,68 @@ function HoldCartsModal({ carts, onRecall, onClose }: {
 
 // ─── Payment Modal ────────────────────────────────────────────────────────────
 
-function PaymentModal({ total, onClose, onConfirm, processing }: {
+function PaymentModal({ total, clientAccountBalance, clientName, onClose, onConfirm, processing }: {
   total: number
+  clientAccountBalance?: number
+  clientName?: string
   onClose: () => void
   onConfirm: (payments: { payment_method: string; amount: number }[]) => void
   processing: boolean
 }) {
-  const [payments, setPayments] = useState<{ method: string; amount: number }[]>([
+  const [payments, setPayments] = useState<PaymentEntry[]>([
     { method: 'cash', amount: total }
   ])
 
   const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
-  const change = totalPaid - total
-  const ready = totalPaid >= total
-
-  const addMethod = (method: string) => {
-    if (!payments.find(p => p.method === method)) {
-      const remaining = Math.max(0, total - payments.reduce((s, p) => s + p.amount, 0))
-      setPayments([...payments, { method, amount: remaining }])
-    }
-  }
+  const hasCredit = payments.some(p => p.method === 'credit')
+  const ready = totalPaid >= total || hasCredit
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
-        <div className="p-6 border-b flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl overflow-hidden">
+
+        {/* Header with gradient */}
+        <div className="bg-gradient-to-br from-gray-900 to-gray-800 px-6 py-5 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold">Encaissement</h2>
-            <p className="text-3xl font-bold text-primary mt-1">{formatCurrency(total)}</p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
-        </div>
-        <div className="p-6 space-y-4">
-          {/* Mode picker */}
-          <div className="flex flex-wrap gap-2">
-            {PAYMENT_METHODS.map(m => (
-              <button key={m.key} onClick={() => addMethod(m.key)}
-                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm border transition-colors ${
-                  payments.find(p => p.method === m.key)
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                }`}>
-                {m.icon} {m.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Amount inputs */}
-          <div className="space-y-2">
-            {payments.map((p, i) => {
-              const method = PAYMENT_METHODS.find(m => m.key === p.method)
-              return (
-                <div key={i} className="flex items-center gap-3">
-                  <span className="text-sm font-medium w-32 flex-shrink-0 text-gray-700">{method?.label ?? p.method}</span>
-                  <input
-                    type="number"
-                    value={p.amount}
-                    onChange={e => {
-                      const updated = [...payments]
-                      updated[i] = { ...updated[i], amount: parseFloat(e.target.value) || 0 }
-                      setPayments(updated)
-                    }}
-                    className="input flex-1"
-                    min={0}
-                    step={100}
-                  />
-                  {payments.length > 1 && (
-                    <button onClick={() => setPayments(payments.filter((_, j) => j !== i))}
-                      className="text-gray-400 hover:text-red-500">
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Summary */}
-          <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Total à payer</span>
-              <span className="font-bold">{formatCurrency(total)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Reçu</span>
-              <span className={`font-bold ${totalPaid >= total ? 'text-green-600' : 'text-red-500'}`}>
-                {formatCurrency(totalPaid)}
-              </span>
-            </div>
-            {change > 0 && (
-              <div className="flex justify-between border-t pt-2">
-                <span className="font-semibold">Rendu monnaie</span>
-                <span className="font-bold text-green-600 text-lg">{formatCurrency(change)}</span>
-              </div>
+            <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-1">Encaissement</p>
+            <p className="text-white text-3xl font-bold font-mono">{formatCurrency(total)}</p>
+            {clientName && (
+              <p className="text-gray-400 text-xs mt-1">Client : {clientName}</p>
             )}
           </div>
+          <button onClick={onClose}
+            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+            <X size={18} />
+          </button>
         </div>
-        <div className="p-6 flex gap-3 border-t">
-          <button onClick={onClose} className="btn-secondary flex-1">Annuler</button>
+
+        <div className="p-5 max-h-[60vh] overflow-y-auto">
+          <PaymentPanel
+            total={total}
+            clientAccountBalance={clientAccountBalance}
+            clientName={clientName}
+            value={payments}
+            onChange={setPayments}
+            compact={false}
+          />
+        </div>
+
+        <div className="p-4 border-t bg-gray-50 flex gap-3">
+          <button onClick={onClose}
+            className="flex-1 py-3 rounded-2xl border-2 border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-100 transition-colors">
+            Annuler
+          </button>
           <button
-            onClick={() => onConfirm(payments.map(p => ({ payment_method: p.method, amount: p.amount })))}
+            onClick={() => onConfirm(payments.map(p => ({
+              payment_method: p.method,
+              amount: p.method === 'credit'
+                ? total - payments.filter(x => x.method !== 'credit').reduce((s, x) => s + x.amount, 0)
+                : p.amount,
+            })))}
             disabled={!ready || processing}
-            className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">
-            <Check size={18} /> {processing ? 'Traitement...' : 'Valider la vente'}
+            className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-primary to-blue-600 text-white text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+            <Check size={18} />
+            {processing ? 'Traitement...' : 'Valider la vente'}
           </button>
         </div>
       </div>
@@ -459,7 +437,7 @@ function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =>
       {/* Store header */}
       <div style={{ textAlign: 'center', marginBottom: 6 }}>
         <div style={{ fontWeight: 'bold', fontSize: 14, letterSpacing: 1 }}>
-          {sale.store?.name?.toUpperCase() ?? 'SMARTCOMMERCE'}
+          {sale.store?.name?.toUpperCase() ?? 'BAOBAB'}
         </div>
         {sale.store?.address && <div style={{ fontSize: 10 }}>{sale.store.address}</div>}
         {sale.store?.phone   && <div style={{ fontSize: 10 }}>Tél: {sale.store.phone}</div>}
@@ -489,7 +467,7 @@ function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =>
         {sale.items.map((item, i) => (
           <div key={i} style={{ marginBottom: 5 }}>
             <div style={{ fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {item.product.short_name ?? item.product.name}
+              {item.product?.short_name ?? item.product?.name ?? item.restaurantItem?.name ?? '—'}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#444' }}>
@@ -703,6 +681,271 @@ function CartItemRow({ item, onQtyChange, onDiscountChange, onRemove }: {
   )
 }
 
+// ─── POS : Annulation d'une vente (avec PIN superviseur) ─────────────────────
+
+function PosCancelModal({
+  sale,
+  forModify,
+  onClose,
+  onSuccess,
+}: {
+  sale: Record<string, any>
+  forModify: boolean
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const [pin, setPin] = useState('')
+  const [refundMethod, setRefundMethod] = useState('cash')
+
+  const mut = useMutation({
+    mutationFn: () => api.post(`/sales/${sale.id}/cancel`, {
+      reason,
+      supervisor_pin: pin,
+      refund_method: forModify ? 'none' : refundMethod,
+      refund_amount: forModify ? 0 : parseFloat(sale.paid_amount ?? 0),
+    }),
+    onSuccess: () => { toast.success('Vente annulée'); onSuccess() },
+    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Erreur'),
+  })
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-red-100 rounded-xl flex items-center justify-center">
+              {forModify ? <Edit2 size={15} className="text-amber-600" /> : <Ban size={15} className="text-red-600" />}
+            </div>
+            <div>
+              <p className="font-bold text-gray-800 text-sm">
+                {forModify ? 'Modifier la vente' : 'Annuler la vente'}
+              </p>
+              <p className="text-xs text-gray-400 font-mono">{sale.reference}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {forModify && (
+            <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+              La vente sera annulée et le stock restitué. Vous pourrez ensuite la corriger et la réenregistrer.
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Motif <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              rows={2}
+              placeholder={forModify ? 'Erreur de saisie, correction...' : 'Raison de l\'annulation...'}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400/30"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              PIN Superviseur <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="password"
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+              maxLength={8}
+              placeholder="● ● ● ● ● ●"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-center tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-red-400/30"
+            />
+          </div>
+
+          {!forModify && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Remboursement</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {['cash', 'wave', 'orange_money', 'none'].map(m => (
+                  <button key={m} onClick={() => setRefundMethod(m)}
+                    className={`py-1.5 px-3 rounded-lg text-xs border transition-all ${
+                      refundMethod === m ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200'
+                    }`}>
+                    {m === 'cash' ? 'Espèces' : m === 'wave' ? 'Wave' : m === 'orange_money' ? 'Orange Money' : 'Sans remboursement'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-5 pb-5">
+          <button onClick={onClose}
+            className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            Annuler
+          </button>
+          <button
+            onClick={() => mut.mutate()}
+            disabled={!reason.trim() || !pin.trim() || mut.isPending}
+            className={`flex-1 py-2 text-white rounded-lg text-sm font-semibold disabled:opacity-50 ${
+              forModify ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-600 hover:bg-red-700'
+            }`}>
+            {mut.isPending ? '…' : forModify ? 'Confirmer & Modifier' : 'Confirmer l\'annulation'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── POS : Historique des ventes du jour ──────────────────────────────────────
+
+function PosRecentSalesModal({ onClose }: { onClose: () => void }) {
+  const { clearCart, addItem } = usePosStore()
+  const qc = useQueryClient()
+  const [cancelTarget, setCancelTarget] = useState<{ sale: Record<string, any>; modify: boolean } | null>(null)
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['pos-recent-sales'],
+    queryFn: () => api.get('/sales', {
+      params: { per_page: 50, date_from: new Date().toISOString().slice(0, 10) }
+    }).then(r => r.data.data as Record<string, any>[]),
+    staleTime: 0,
+  })
+
+  const sales = data ?? []
+
+  const loadSaleToCart = async (saleId: number) => {
+    try {
+      const res = await api.get(`/sales/${saleId}`)
+      const sale = res.data
+      clearCart()
+      if (sale.client) {
+        // can't set name without store re-fetch, just set client_id via store
+      }
+      for (const item of sale.items ?? []) {
+        addItem({
+          product_id:    item.product_id,
+          product_name:  item.product?.name ?? '',
+          qty:           parseFloat(item.qty),
+          unit_price_ttc: parseFloat(item.unit_price_ttc),
+          vat_rate:      parseFloat(item.vat_rate ?? 18),
+          is_weight_based: false,
+          discount_pct:  parseFloat(item.discount_pct ?? 0),
+        })
+      }
+      toast.success('Articles rechargés dans le panier')
+      onClose()
+    } catch {
+      toast.error('Impossible de charger les articles')
+    }
+  }
+
+  const handleCancelSuccess = async (sale: Record<string, any>, modify: boolean) => {
+    setCancelTarget(null)
+    qc.invalidateQueries({ queryKey: ['pos-recent-sales'] })
+    refetch()
+    if (modify) {
+      await loadSaleToCart(sale.id)
+    }
+  }
+
+  const statusCls = (s: string) =>
+    s === 'completed' ? 'bg-green-100 text-green-700' :
+    s === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+  const statusLabel = (s: string) =>
+    s === 'completed' ? 'Confirmée' : s === 'cancelled' ? 'Annulée' : 'Brouillon'
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+        <div className="bg-white w-full sm:rounded-2xl sm:max-w-2xl sm:max-h-[85vh] flex flex-col shadow-2xl max-h-[90vh]">
+
+          <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Clock size={18} className="text-primary" />
+              <h2 className="font-bold text-gray-800">Ventes du jour</h2>
+              <span className="text-xs text-gray-400">({sales.length} ventes)</span>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {isLoading && (
+              <div className="flex justify-center py-10">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            {!isLoading && sales.length === 0 && (
+              <p className="text-center text-gray-400 py-10 text-sm">Aucune vente aujourd'hui</p>
+            )}
+            {sales.map(s => (
+              <div key={s.id} className={`flex items-center gap-3 px-5 py-3 border-b border-gray-100 hover:bg-gray-50 ${
+                s.status === 'cancelled' ? 'opacity-60' : ''
+              }`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-gray-700">{s.reference}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${statusCls(s.status)}`}>
+                      {statusLabel(s.status)}
+                    </span>
+                    {s.channel === 'pos' && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">POS</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    {s.client && ` — ${s.client.name}`}
+                    {s.user && ` — ${s.user.name}`}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className={`text-sm font-bold ${s.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-primary'}`}>
+                    {Number(s.total_ttc).toLocaleString('fr-FR')} F
+                  </p>
+                </div>
+                {s.status === 'completed' && (
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => setCancelTarget({ sale: s, modify: true })}
+                      title="Modifier (annuler et recharger)"
+                      className="flex items-center gap-1 px-2 py-1.5 text-xs bg-amber-50 text-amber-600 border border-amber-200 rounded-lg hover:bg-amber-100"
+                    >
+                      <Edit2 size={12} /> Modifier
+                    </button>
+                    <button
+                      onClick={() => setCancelTarget({ sale: s, modify: false })}
+                      title="Annuler la vente"
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-gray-200"
+                    >
+                      <Ban size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="px-5 py-3 border-t flex-shrink-0">
+            <button onClick={onClose}
+              className="w-full py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {cancelTarget && (
+        <PosCancelModal
+          sale={cancelTarget.sale}
+          forModify={cancelTarget.modify}
+          onClose={() => setCancelTarget(null)}
+          onSuccess={() => handleCancelSuccess(cancelTarget.sale, cancelTarget.modify)}
+        />
+      )}
+    </>
+  )
+}
+
 // ─── Main POS Page ────────────────────────────────────────────────────────────
 
 export default function PosPage() {
@@ -710,18 +953,23 @@ export default function PosPage() {
   const queryClient = useQueryClient()
   const {
     items, addItem, updateQty, updateDiscount, removeItem, clearCart,
-    client_id, client_name, setClient, cash_session_id, setCashSession,
+    client_id, client_name, client_account_balance, setClient, cash_session_id, setCashSession,
     holdCart, recallCart, on_hold_carts, is_offline, setOffline,
   } = usePosStore()
 
+  const storeBusinessType = user?.store?.business_type ?? 'grande_surface'
+  const isRestaurant = storeBusinessType === 'restaurant' || storeBusinessType === 'mixte'
+
   const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<CachedProduct[]>([])
+  const [searchResults, setSearchResults] = useState<PosItem[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null)
   const [showPayment, setShowPayment] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [showCloseSession, setShowCloseSession] = useState(false)
   const [showClientSearch, setShowClientSearch] = useState(false)
   const [showHoldCarts, setShowHoldCarts] = useState(false)
+  const [showRecentSales, setShowRecentSales] = useState(false)
   const [session, setSession] = useState<CashSession | null>(null)
   const [sessionLoading, setSessionLoading] = useState(true)
   const [saleReceipt, setSaleReceipt] = useState<SaleReceipt | null>(null)
@@ -761,68 +1009,98 @@ export default function PosPage() {
     ),
   })
 
-  // Fetch products for grid (by category) — only with stock available
-  const { data: gridProducts = [], isLoading: productsLoading, isError: productsError } = useQuery<CachedProduct[]>({
-    queryKey: ['pos-products', selectedCategoryId],
-    queryFn: () => api.get('/products', {
-      params: { category_id: selectedCategoryId ?? undefined, per_page: 500, is_active: true, has_stock: 1 }
-    }).then(res => res.data.data.map((p: {
-      id: number; internal_code: string; name: string; short_name: string
-      sale_price_ttc: number; vat_rate: number; is_weight_based: boolean
-      category?: { name: string }; stock_level?: { qty_on_hand: number }
-      barcodes: { barcode: string }[]
-    }) => ({
-      id: p.id,
-      internal_code: p.internal_code,
-      name: p.name,
-      short_name: p.short_name,
-      sale_price_ttc: p.sale_price_ttc,
-      vat_rate: p.vat_rate,
-      is_weight_based: p.is_weight_based,
-      category_name: p.category?.name,
-      stock_qty: p.stock_level?.qty_on_hand ?? 0,
-      barcodes: p.barcodes?.map(b => b.barcode) ?? [],
-    }))),
+  // Fetch items for grid — products or restaurant items depending on store type
+  const { data: gridProducts = [], isLoading: productsLoading, isError: productsError } = useQuery<PosItem[]>({
+    queryKey: isRestaurant
+      ? ['pos-restaurant-items', selectedCourse]
+      : ['pos-products', selectedCategoryId],
+    queryFn: isRestaurant
+      ? () => api.get('/restaurant-items', {
+          params: { course: selectedCourse ?? undefined, available: 1, active: 1 },
+        }).then(res => (res.data as any[]).map(ri => ({
+          id: ri.id,
+          name: ri.name,
+          short_name: ri.name,
+          sale_price_ttc: parseFloat(ri.price_ttc),
+          vat_rate: parseFloat(ri.vat_rate),
+          is_weight_based: false,
+          stock_qty: 999,
+          category_name: COURSES.find(c => c.value === ri.course)?.label,
+          source: 'restaurant_item' as const,
+        })))
+      : () => api.get('/products', {
+          params: { category_id: selectedCategoryId ?? undefined, per_page: 500, is_active: true, has_stock: 1 },
+        }).then(res => res.data.data.map((p: {
+          id: number; name: string; short_name: string
+          sale_price_ttc: number; vat_rate: number; is_weight_based: boolean
+          category?: { name: string }; stock_level?: { qty_on_hand: number }
+        }) => ({
+          id: p.id,
+          name: p.name,
+          short_name: p.short_name,
+          sale_price_ttc: p.sale_price_ttc,
+          vat_rate: p.vat_rate,
+          is_weight_based: p.is_weight_based,
+          stock_qty: p.stock_level?.qty_on_hand ?? 0,
+          category_name: p.category?.name,
+          source: 'product' as const,
+        }))),
     enabled: !is_offline,
   })
 
-  // Search products
+  // Search products / restaurant items
   useEffect(() => {
     if (!search || search.length < 2) { setSearchResults([]); return }
     const timer = setTimeout(async () => {
-      if (is_offline) {
-        setSearchResults(await searchProductsOffline(search))
+      if (isRestaurant) {
+        try {
+          const res = await api.get('/restaurant-items', { params: { search, available: 1, active: 1 } })
+          setSearchResults((res.data as any[]).map(ri => ({
+            id: ri.id,
+            name: ri.name,
+            short_name: ri.name,
+            sale_price_ttc: parseFloat(ri.price_ttc),
+            vat_rate: parseFloat(ri.vat_rate),
+            is_weight_based: false,
+            stock_qty: 999,
+            category_name: COURSES.find(c => c.value === ri.course)?.label,
+            source: 'restaurant_item' as const,
+          })))
+        } catch {
+          setSearchResults([])
+        }
+      } else if (is_offline) {
+        setSearchResults(await searchProductsOffline(search) as any)
       } else {
         try {
           const res = await api.get('/products', { params: { search, per_page: 10, is_active: true } })
           setSearchResults(res.data.data.map((p: {
-            id: number; internal_code: string; name: string; short_name: string
+            id: number; name: string; short_name: string
             sale_price_ttc: number; vat_rate: number; is_weight_based: boolean
             category?: { name: string }; stock_level?: { qty_on_hand: number }
-            barcodes: { barcode: string }[]
           }) => ({
             id: p.id,
-            internal_code: p.internal_code,
             name: p.name,
             short_name: p.short_name,
             sale_price_ttc: p.sale_price_ttc,
             vat_rate: p.vat_rate,
             is_weight_based: p.is_weight_based,
-            category_name: p.category?.name,
             stock_qty: p.stock_level?.qty_on_hand ?? 0,
-            barcodes: p.barcodes?.map(b => b.barcode) ?? [],
+            category_name: p.category?.name,
+            source: 'product' as const,
           })))
         } catch {
-          setSearchResults(await searchProductsOffline(search))
+          setSearchResults(await searchProductsOffline(search) as any)
         }
       }
     }, 300)
     return () => clearTimeout(timer)
-  }, [search, is_offline])
+  }, [search, is_offline, isRestaurant])
 
   const handleScanOrSearch = async (value: string) => {
     if (!value.trim()) return
-    if (/^\d{8,14}$/.test(value.trim())) {
+    // Barcode scan only for non-restaurant stores
+    if (!isRestaurant && /^\d{8,14}$/.test(value.trim())) {
       let product: CachedProduct | undefined
       if (is_offline) {
         product = await findProductByBarcode(value.trim())
@@ -834,31 +1112,32 @@ export default function PosPage() {
           product = await findProductByBarcode(value.trim())
         }
       }
-      if (product) { addProductToCart(product); setSearch(''); return }
+      if (product) { addProductToCart(product as unknown as PosItem); setSearch(''); return }
       toast.error(`Produit non trouvé : ${value}`)
       return
     }
     setSearch(value)
   }
 
-  const addProductToCart = useCallback((product: CachedProduct) => {
-    if (product.stock_qty <= 0) {
-      toast.error(`${product.short_name ?? product.name} — Rupture de stock`, { duration: 2000 })
+  const addProductToCart = useCallback((item: PosItem) => {
+    if (item.source !== 'restaurant_item' && item.stock_qty <= 0) {
+      toast.error(`${item.short_name ?? item.name} — Rupture de stock`, { duration: 2000 })
       return
     }
     addItem({
-      product_id: product.id,
-      product_name: product.name,
+      product_id: item.id,
+      restaurant_item_id: item.source === 'restaurant_item' ? item.id : undefined,
+      product_name: item.name,
       qty: 1,
-      unit_price_ttc: product.sale_price_ttc,
-      vat_rate: product.vat_rate,
-      is_weight_based: product.is_weight_based,
+      unit_price_ttc: item.sale_price_ttc,
+      vat_rate: item.vat_rate,
+      is_weight_based: item.is_weight_based,
       discount_pct: 0,
     })
     setSearch('')
     setSearchResults([])
     searchRef.current?.focus()
-    toast.success(`${product.short_name ?? product.name} ajouté`, { duration: 800 })
+    toast.success(`${item.short_name ?? item.name} ajouté`, { duration: 800 })
   }, [addItem])
 
   const handleSaleConfirm = async (payments: { payment_method: string; amount: number }[]) => {
@@ -872,11 +1151,12 @@ export default function PosPage() {
       cash_session_id,
       client_id,
       items: items.map(i => ({
-        product_id: i.product_id,
+        ...(i.restaurant_item_id
+          ? { restaurant_item_id: i.restaurant_item_id }
+          : { product_id: i.product_id, lot_id: i.lot_id }),
         qty: i.qty,
         unit_price_ttc: i.unit_price_ttc,
         discount_pct: i.discount_pct,
-        lot_id: i.lot_id,
       })),
       payments,
       offline_id,
@@ -1006,6 +1286,11 @@ export default function PosPage() {
             <span>Ouverture {formatCurrency(session.opening_balance)}</span>
           </div>
           <button
+            onClick={() => setShowRecentSales(true)}
+            className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 px-2 py-1 rounded-lg bg-indigo-50">
+            <Clock size={12} /> Ventes récentes
+          </button>
+          <button
             onClick={() => setShowCloseSession(true)}
             className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-300 px-2 py-1 rounded-lg">
             <Lock size={12} /> Clôturer
@@ -1018,17 +1303,19 @@ export default function PosPage() {
             {searchResults.map(p => (
               <button key={p.id}
                 onClick={() => addProductToCart(p)}
-                disabled={p.stock_qty <= 0}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b last:border-0 ${p.stock_qty <= 0 ? 'opacity-40 cursor-not-allowed bg-gray-50' : 'hover:bg-primary-50'}`}>
+                disabled={p.source !== 'restaurant_item' && p.stock_qty <= 0}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b last:border-0 ${p.source !== 'restaurant_item' && p.stock_qty <= 0 ? 'opacity-40 cursor-not-allowed bg-gray-50' : 'hover:bg-primary-50'}`}>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                  <p className="text-xs text-gray-400">{p.internal_code} · {p.category_name}</p>
+                  <p className="text-xs text-gray-400">{p.category_name}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
-                  <p className={`text-xs ${p.stock_qty > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {p.stock_qty <= 0 ? 'Rupture' : `Stock: ${formatNumber(p.stock_qty, 0)}`}
-                  </p>
+                  {p.source !== 'restaurant_item' && (
+                    <p className={`text-xs ${p.stock_qty > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      {p.stock_qty <= 0 ? 'Rupture' : `Stock: ${formatNumber(p.stock_qty, 0)}`}
+                    </p>
+                  )}
                 </div>
               </button>
             ))}
@@ -1038,20 +1325,39 @@ export default function PosPage() {
           <div className="bg-white border-b px-4 py-3 text-sm text-gray-400">Aucun produit trouvé pour «{search}»</div>
         )}
 
-        {/* Category pills */}
+        {/* Category / Course filter pills */}
         <div className="bg-white border-b px-4 py-2 flex gap-2 overflow-x-auto flex-shrink-0">
-          <button
-            onClick={() => setSelectedCategoryId(null)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === null ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
-            Tous
-          </button>
-          {categories.map(c => (
-            <button key={c.id}
-              onClick={() => setSelectedCategoryId(c.id)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === c.id ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
-              {c.name}
-            </button>
-          ))}
+          {isRestaurant ? (
+            <>
+              <button
+                onClick={() => setSelectedCourse(null)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCourse === null ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
+                Tout le menu
+              </button>
+              {COURSES.map(c => (
+                <button key={c.value}
+                  onClick={() => setSelectedCourse(c.value)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCourse === c.value ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
+                  {c.label}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setSelectedCategoryId(null)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === null ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
+                Tous
+              </button>
+              {categories.map(c => (
+                <button key={c.id}
+                  onClick={() => setSelectedCategoryId(c.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === c.id ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
+                  {c.name}
+                </button>
+              ))}
+            </>
+          )}
         </div>
 
         {/* Product grid */}
@@ -1082,7 +1388,7 @@ export default function PosPage() {
                 <button
                   key={p.id}
                   onClick={() => addProductToCart(p)}
-                  className={`bg-white rounded-xl border p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all group ${p.stock_qty <= 5 ? 'border-amber-200' : ''}`}>
+                  className={`bg-white rounded-xl border p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all group ${!isRestaurant && p.stock_qty <= 5 ? 'border-amber-200' : ''}`}>
                   <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center mb-2 group-hover:bg-primary-100">
                     <ShoppingBag size={16} className="text-primary" />
                   </div>
@@ -1090,9 +1396,13 @@ export default function PosPage() {
                     {p.short_name ?? p.name}
                   </p>
                   <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
-                  <p className={`text-xs mt-0.5 ${p.stock_qty <= 5 ? 'text-amber-500' : 'text-gray-400'}`}>
-                    Stock: {formatNumber(p.stock_qty, 0)}
-                  </p>
+                  {isRestaurant ? (
+                    <p className="text-xs mt-0.5 text-gray-400">{p.category_name}</p>
+                  ) : (
+                    <p className={`text-xs mt-0.5 ${p.stock_qty <= 5 ? 'text-amber-500' : 'text-gray-400'}`}>
+                      Stock: {formatNumber(p.stock_qty, 0)}
+                    </p>
+                  )}
                 </button>
               ))}
             </div>
@@ -1183,6 +1493,8 @@ export default function PosPage() {
       {showPayment && (
         <PaymentModal
           total={totalTtc}
+          clientAccountBalance={client_account_balance ?? undefined}
+          clientName={client_name ?? undefined}
           onClose={() => setShowPayment(false)}
           onConfirm={handleSaleConfirm}
           processing={processing}
@@ -1190,7 +1502,7 @@ export default function PosPage() {
       )}
       {showClientSearch && (
         <ClientSearchModal
-          onSelect={(c) => { setClient(c.id, c.name); setShowClientSearch(false) }}
+          onSelect={(c) => { setClient(c.id, c.name, c.account_balance ?? null); setShowClientSearch(false) }}
           onClose={() => setShowClientSearch(false)}
         />
       )}
@@ -1211,6 +1523,11 @@ export default function PosPage() {
         <ReceiptModal
           sale={saleReceipt}
           onNewSale={() => setSaleReceipt(null)}
+        />
+      )}
+      {showRecentSales && (
+        <PosRecentSalesModal
+          onClose={() => setShowRecentSales(false)}
         />
       )}
     </div>

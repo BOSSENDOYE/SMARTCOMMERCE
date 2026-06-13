@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 export interface CartItem {
   product_id: number
+  restaurant_item_id?: number
   product_name: string
   barcode?: string
   qty: number
@@ -27,6 +28,7 @@ interface PosState {
   payments: Payment[]
   client_id: number | null
   client_name: string | null
+  client_account_balance: number | null
   cash_session_id: number | null
   on_hold_carts: { id: string; items: CartItem[]; client_id: number | null; held_at: string }[]
   is_offline: boolean
@@ -36,7 +38,7 @@ interface PosState {
   updateDiscount: (productId: number, discountPct: number) => void
   removeItem: (productId: number) => void
   clearCart: () => void
-  setClient: (id: number | null, name: string | null) => void
+  setClient: (id: number | null, name: string | null, accountBalance?: number | null) => void
   setCashSession: (id: number | null) => void
   addPayment: (payment: Payment) => void
   clearPayments: () => void
@@ -63,6 +65,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   payments: [],
   client_id: null,
   client_name: null,
+  client_account_balance: null,
   cash_session_id: null,
   on_hold_carts: [],
   is_offline: false,
@@ -104,9 +107,9 @@ export const usePosStore = create<PosState>((set, get) => ({
     set({ items: get().items.filter(i => i.product_id !== productId) })
   },
 
-  clearCart: () => set({ items: [], payments: [], client_id: null, client_name: null }),
+  clearCart: () => set({ items: [], payments: [], client_id: null, client_name: null, client_account_balance: null }),
 
-  setClient: (id, name) => set({ client_id: id, client_name: name }),
+  setClient: (id, name, accountBalance = null) => set({ client_id: id, client_name: name, client_account_balance: accountBalance }),
 
   setCashSession: (id) => set({ cash_session_id: id }),
 
@@ -125,6 +128,7 @@ export const usePosStore = create<PosState>((set, get) => ({
       payments: [],
       client_id: null,
       client_name: null,
+      client_account_balance: null,
     })
     return id
   },

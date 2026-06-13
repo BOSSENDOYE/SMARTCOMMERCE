@@ -8,7 +8,23 @@ import toast from 'react-hot-toast'
 import {
   Plus, Trash2, User, ArrowLeft,
   Printer, X, FileText, Ban, RotateCcw, AlertTriangle,
+  Eye, Edit2, ShoppingCart, Package,
 } from 'lucide-react'
+import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
+
+// ─── Channel helpers ──────────────────────────────────────────────────────────
+
+const CHANNEL_DISPLAY: Record<string, { label: string; cls: string }> = {
+  pos:       { label: 'Caisse POS',  cls: 'bg-violet-100 text-violet-700' },
+  takeaway:  { label: 'Emporter',    cls: 'bg-orange-100 text-orange-600' },
+  delivery:  { label: 'Livraison',   cls: 'bg-blue-100 text-blue-600'    },
+  online:    { label: 'En ligne',    cls: 'bg-emerald-100 text-emerald-700' },
+  counter:   { label: 'Comptoir',    cls: 'bg-gray-100 text-gray-600'    },
+}
+function ChannelBadge({ channel }: { channel: string }) {
+  const d = CHANNEL_DISPLAY[channel] ?? { label: channel, cls: 'bg-gray-100 text-gray-500' }
+  return <span className={`px-2 py-0.5 rounded text-xs font-medium ${d.cls}`}>{d.label}</span>
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -17,15 +33,6 @@ const CHANNELS = [
   { value: 'takeaway',  label: 'Emporter' },
   { value: 'delivery',  label: 'Livraison' },
   { value: 'online',    label: 'En ligne' },
-]
-
-const PAYMENT_METHODS = [
-  { key: 'cash',         label: 'Espèces' },
-  { key: 'wave',         label: 'Wave' },
-  { key: 'orange_money', label: 'Orange Money' },
-  { key: 'free_money',   label: 'Free Money' },
-  { key: 'card',         label: 'Carte bancaire' },
-  { key: 'credit',       label: 'Crédit client' },
 ]
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -337,7 +344,11 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
 
 // ─── Sale Form ────────────────────────────────────────────────────────────────
 
-function SaleForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => void }) {
+function SaleForm({ onSaved, onCancel, initialLines }: {
+  onSaved: () => void
+  onCancel: () => void
+  initialLines?: SaleLine[]
+}) {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
 
@@ -349,22 +360,23 @@ function SaleForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => 
   const [clientSearch, setClientSearch] = useState('')
   const [clientSugs,   setClientSugs]   = useState<ClientSuggestion[]>([])
   const [showClientSug, setShowClientSug] = useState(false)
+  const [clientAccountBalance, setClientAccountBalance] = useState<number | undefined>()
   const [note, setNote] = useState('')
 
   // Payment
-  const [paymentMethod, setPaymentMethod] = useState('cash')
-  const [paidAmount,    setPaidAmount]    = useState('')
+  const [payments, setPayments] = useState<PaymentEntry[]>([{ method: 'cash', amount: 0 }])
 
   // Lines
-  const [lines, setLines] = useState<SaleLine[]>([emptyLine()])
+  const [lines, setLines] = useState<SaleLine[]>(
+    initialLines && initialLines.length > 0 ? initialLines : [emptyLine()]
+  )
 
   // Totals
   const subtotalHt    = lines.reduce((s, l) => s + l.total_ht, 0)
   const vatAmount     = lines.reduce((s, l) => s + (l.total_ttc - l.total_ht), 0)
   const discountTotal = lines.reduce((s, l) => s + r(l.unit_price_ttc * l.qty * l.discount_pct / 100), 0)
   const totalTtc      = lines.reduce((s, l) => s + l.total_ttc, 0)
-  const paid          = parseFloat(paidAmount) || 0
-  const change        = Math.max(0, paid - totalTtc)
+  const totalPaid     = payments.reduce((s, p) => s + (p.amount || 0), 0)
 
   // Client search debounce
   useEffect(() => {
@@ -423,7 +435,9 @@ function SaleForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => 
     mutationFn: () => {
       const validLines = lines.filter(l => l.product_id !== null && l.qty > 0)
       if (validLines.length === 0) throw new Error('Ajoutez au moins un produit.')
-      if (paymentMethod !== 'credit' && paid < totalTtc) throw new Error('Le montant reçu est insuffisant.')
+      const hasCredit = payments.some(p => p.method === 'credit')
+      if (!hasCredit && totalPaid < totalTtc) throw new Error('Le montant reçu est insuffisant.')
+      if (payments.length === 0) throw new Error('Sélectionnez un mode de paiement.')
 
       return api.post('/sales', {
         store_id:   user!.store_id,
@@ -437,10 +451,10 @@ function SaleForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => 
           unit_price_ttc: l.unit_price_ttc,
           discount_pct:  l.discount_pct,
         })),
-        payments: [{
-          payment_method: paymentMethod,
-          amount: paymentMethod === 'credit' ? totalTtc : paid,
-        }],
+        payments: payments.map(p => ({
+          payment_method: p.method,
+          amount: p.method === 'credit' ? totalTtc - payments.filter(x => x.method !== 'credit').reduce((s, x) => s + x.amount, 0) : p.amount,
+        })),
       })
     },
     onSuccess: res => {
@@ -537,10 +551,23 @@ function SaleForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => 
                 <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                   {clientSugs.map(c => (
                     <button key={c.id}
-                      onMouseDown={() => { setClientId(c.id); setClientName(c.name); setClientSearch(''); setShowClientSug(false) }}
+                      onMouseDown={() => {
+                        setClientId(c.id)
+                        setClientName(c.name)
+                        setClientSearch('')
+                        setShowClientSug(false)
+                        setClientAccountBalance((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0)
+                      }}
                       className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex justify-between border-b border-gray-100 last:border-0">
                       <span className="font-medium text-gray-800">{c.name}</span>
-                      <span className="text-gray-400 text-xs">{c.phone}</span>
+                      <div className="text-right">
+                        <span className="text-gray-400 text-xs block">{c.phone}</span>
+                        {(c as ClientSuggestion & { account_balance?: number }).account_balance !== undefined && (
+                          <span className={`text-[10px] font-medium ${((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0) >= 0 ? 'text-indigo-600' : 'text-red-500'}`}>
+                            Compte: {formatCurrency((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0)}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -635,56 +662,21 @@ function SaleForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => 
             <div className="flex items-center gap-2 mb-4">
               <div className="w-1 h-4 bg-primary rounded-full" />
               <h2 className="text-sm font-semibold text-gray-700">Mode de règlement</h2>
+              {clientId && clientName && (
+                <span className="ml-auto text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-medium">
+                  Client : {clientName}
+                </span>
+              )}
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              {PAYMENT_METHODS.map(m => (
-                <button key={m.key} onClick={() => setPaymentMethod(m.key)}
-                  className={`py-2.5 px-3 rounded-lg text-xs font-medium border transition-all ${
-                    paymentMethod === m.key
-                      ? 'bg-primary text-white border-primary shadow-sm'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-primary/50 hover:text-primary'
-                  }`}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
-
-            {paymentMethod !== 'credit' ? (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Montant reçu (FCFA)</label>
-                  <input
-                    type="number"
-                    value={paidAmount}
-                    onChange={e => setPaidAmount(e.target.value)}
-                    placeholder={`Minimum : ${formatCurrency(totalTtc)}`}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right font-mono"
-                  />
-                </div>
-                {change > 0 && (
-                  <div className="flex justify-between items-center px-4 py-3 bg-green-50 rounded-lg border border-green-200">
-                    <span className="text-sm text-green-700 font-medium">Monnaie à rendre</span>
-                    <span className="text-lg font-bold text-green-700">{formatCurrency(change)}</span>
-                  </div>
-                )}
-                {paid > 0 && paid < totalTtc && (
-                  <div className="flex justify-between items-center px-4 py-3 bg-red-50 rounded-lg border border-red-200">
-                    <span className="text-sm text-red-700 font-medium">Reste à payer</span>
-                    <span className="text-lg font-bold text-red-700">{formatCurrency(totalTtc - paid)}</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="px-4 py-3 bg-amber-50 rounded-lg border border-amber-200 text-sm text-amber-700">
-                Le montant total sera porté au crédit du client.
-                {clientId ? (
-                  <span className="block font-semibold mt-0.5">{clientName}</span>
-                ) : (
-                  <span className="block text-xs text-amber-600 mt-0.5">Veuillez sélectionner un client.</span>
-                )}
-              </div>
-            )}
+            <PaymentPanel
+              total={totalTtc}
+              clientAccountBalance={clientId ? clientAccountBalance : undefined}
+              clientName={clientName}
+              value={payments}
+              onChange={setPayments}
+              compact
+            />
           </div>
 
           {/* Totals — 2/5 */}
@@ -731,16 +723,122 @@ function SaleForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => 
   )
 }
 
+// ─── Modify Confirm Modal ─────────────────────────────────────────────────────
+
+interface ModifyConfirmModalProps {
+  sale: Record<string, any>
+  onClose: () => void
+  onConfirmed: () => void
+}
+
+function ModifyConfirmModal({ sale, onClose, onConfirmed }: ModifyConfirmModalProps) {
+  const [pin, setPin] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/sales/${sale.id}/cancel`, {
+      reason:         'Modification de la vente',
+      supervisor_pin: pin,
+      refund_method:  'none',
+      refund_amount:  0,
+    }),
+    onSuccess: () => {
+      toast.success('Vente annulée — modification en cours…')
+      onConfirmed()
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? 'PIN incorrect ou erreur serveur')
+    },
+  })
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center">
+              <Edit2 size={18} className="text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-800">Modifier la vente</h2>
+              <p className="text-xs text-gray-400 font-mono">{sale.reference}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {/* Info box */}
+          <div className="flex gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+            <AlertTriangle size={16} className="flex-shrink-0 mt-0.5 text-amber-500" />
+            <p>
+              Cette vente sera <strong>annulée</strong> et ses articles seront restitués en stock.
+              Un nouveau bon de vente sera ensuite créé avec les modifications.
+            </p>
+          </div>
+
+          {/* Sale summary */}
+          <div className="px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 flex justify-between items-center text-sm">
+            <div>
+              <div className="text-gray-500 text-xs">Client</div>
+              <div className="font-medium text-gray-800">{sale.client?.name ?? 'Anonyme'}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-gray-500 text-xs">Total TTC</div>
+              <div className="font-bold text-gray-800">{formatCurrency(parseFloat(sale.total_ttc ?? 0))}</div>
+            </div>
+          </div>
+
+          {/* PIN */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+              PIN Superviseur <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="password"
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+              maxLength={8}
+              placeholder="● ● ● ● ● ●"
+              onKeyDown={e => { if (e.key === 'Enter' && pin.trim()) mutation.mutate() }}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm tracking-widest text-center font-mono focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 px-6 pb-5">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            Annuler
+          </button>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={!pin.trim() || mutation.isPending}
+            className="flex-1 py-2.5 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            <Edit2 size={14} />
+            {mutation.isPending ? 'En cours…' : 'Confirmer & Modifier'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Cancel + Refund Modal ────────────────────────────────────────────────────
 
 const REFUND_METHODS = [
-  { key: 'cash',         label: 'Espèces' },
-  { key: 'wave',         label: 'Wave' },
-  { key: 'orange_money', label: 'Orange Money' },
-  { key: 'free_money',   label: 'Free Money' },
-  { key: 'card',         label: 'Carte bancaire' },
-  { key: 'credit',       label: 'Crédit client' },
-  { key: 'none',         label: 'Pas de remboursement' },
+  { key: 'cash',         label: 'Espèces',             color: 'emerald' },
+  { key: 'wave',         label: 'Wave',                color: 'sky' },
+  { key: 'orange_money', label: 'Orange Money',        color: 'orange' },
+  { key: 'free_money',   label: 'Free Money',          color: 'red' },
+  { key: 'card',         label: 'Carte bancaire',      color: 'violet' },
+  { key: 'account',      label: 'Compte client',       color: 'indigo' },
+  { key: 'credit',       label: 'Crédit client',       color: 'amber' },
+  { key: 'none',         label: 'Aucun remboursement', color: 'gray' },
 ]
 
 interface CancelModalProps {
@@ -847,12 +945,10 @@ function CancelModal({ sale, onClose, onCancelled }: CancelModalProps) {
             <div className="grid grid-cols-2 gap-2 mb-3">
               {REFUND_METHODS.map(m => (
                 <button key={m.key} onClick={() => setRefundMethod(m.key)}
-                  className={`py-2 px-3 rounded-lg text-xs font-medium border transition-all text-left ${
+                  className={`py-2 px-3 rounded-xl text-xs font-semibold border-2 transition-all text-left ${
                     refundMethod === m.key
-                      ? m.key === 'none'
-                        ? 'bg-gray-600 text-white border-gray-600'
-                        : 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                      ? `bg-${m.color}-600 text-white border-${m.color}-600 shadow-sm`
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                   }`}>
                   {m.label}
                 </button>
@@ -907,20 +1003,224 @@ function CancelModal({ sale, onClose, onCancelled }: CancelModalProps) {
   )
 }
 
+// ─── Sale Detail Modal ────────────────────────────────────────────────────────
+
+function SaleDetailModal({
+  saleId,
+  onClose,
+  onCancelled,
+  onModify,
+}: {
+  saleId: number
+  onClose: () => void
+  onCancelled: () => void
+  onModify: (lines: SaleLine[]) => void
+}) {
+  const [showCancel, setShowCancel]   = useState(false)
+  const [showModify, setShowModify]   = useState(false)
+
+  const { data: sale, isLoading } = useQuery({
+    queryKey: ['sale-detail', saleId],
+    queryFn: () => api.get(`/sales/${saleId}`).then(r => r.data),
+  })
+
+  const getModifyLines = (): SaleLine[] =>
+    (sale?.items ?? []).map((item: Record<string, any>) =>
+      calcLine({
+        _id:            uuidv4(),
+        product_id:     item.product_id,
+        product_name:   item.product?.name ?? '',
+        search:         item.product?.name ?? '',
+        qty:            parseFloat(item.qty),
+        unit_price_ttc: parseFloat(item.unit_price_ttc),
+        discount_pct:   parseFloat(item.discount_pct ?? 0),
+        vat_rate:       parseFloat(item.vat_rate ?? 18),
+        total_ttc:      parseFloat(item.total_ttc),
+        total_ht:       parseFloat(item.total_ht),
+        containers:     [],
+        container_id:   null,
+        stock_qty:      0,
+      })
+    )
+
+  const payments: Record<string, any>[] = sale?.payments ?? []
+  const items: Record<string, any>[]    = sale?.items ?? []
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileText size={16} className="text-primary" />
+                <span className="font-bold text-gray-800 font-mono">{sale?.reference ?? '…'}</span>
+                {sale && <ChannelBadge channel={sale.channel} />}
+                {sale && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    sale.status === 'completed' ? 'bg-green-100 text-green-700' :
+                    sale.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {sale.status === 'completed' ? 'Confirmée' : sale.status === 'cancelled' ? 'Annulée' : 'Brouillon'}
+                  </span>
+                )}
+              </div>
+              {sale && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {new Date(sale.created_at).toLocaleString('fr-FR')}
+                  {sale.user && ` — ${sale.user.name}`}
+                  {sale.client && ` — Client : ${sale.client.name}`}
+                </p>
+              )}
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {isLoading && (
+              <div className="flex justify-center py-10">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {/* Items */}
+            {!isLoading && items.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Articles</p>
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs text-gray-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Produit</th>
+                        <th className="px-3 py-2 text-center">Qté</th>
+                        <th className="px-3 py-2 text-right">Prix unit.</th>
+                        <th className="px-3 py-2 text-center">Remise</th>
+                        <th className="px-3 py-2 text-right">Total TTC</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="px-3 py-2 font-medium text-gray-800">
+                            {item.product?.name ?? '—'}
+                          </td>
+                          <td className="px-3 py-2 text-center text-gray-600">{parseFloat(item.qty)}</td>
+                          <td className="px-3 py-2 text-right text-gray-600">
+                            {formatCurrency(parseFloat(item.unit_price_ttc))}
+                          </td>
+                          <td className="px-3 py-2 text-center text-gray-500">
+                            {parseFloat(item.discount_pct ?? 0) > 0
+                              ? <span className="text-green-600">-{item.discount_pct}%</span>
+                              : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-800">
+                            {formatCurrency(parseFloat(item.total_ttc))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50 border-t border-gray-200">
+                      <tr>
+                        <td colSpan={4} className="px-3 py-2 text-right font-bold text-gray-800">TOTAL TTC</td>
+                        <td className="px-3 py-2 text-right font-bold text-primary">
+                          {formatCurrency(parseFloat(sale?.total_ttc ?? 0))}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Payments */}
+            {!isLoading && payments.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Règlement</p>
+                <div className="flex gap-2 flex-wrap">
+                  {payments.map((p, i) => (
+                    <span key={i} className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium">
+                      {p.payment_method} — {formatCurrency(parseFloat(p.amount))}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cancellation reason */}
+            {sale?.status === 'cancelled' && sale.cancellation_reason && (
+              <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                <span className="font-semibold">Motif : </span>{sale.cancellation_reason}
+              </div>
+            )}
+          </div>
+
+          {/* Footer actions */}
+          <div className="flex gap-2 px-6 py-4 border-t">
+            <button onClick={onClose}
+              className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+              Fermer
+            </button>
+            <button onClick={() => printReceipt(sale ?? {})}
+              className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+              <Printer size={14} /> Imprimer
+            </button>
+            {sale?.status === 'completed' && (
+              <>
+                <button
+                  onClick={() => setShowCancel(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm hover:bg-red-100 ml-auto">
+                  <Ban size={14} /> Annuler
+                </button>
+                <button
+                  onClick={() => setShowModify(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">
+                  <Edit2 size={14} /> Modifier
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showCancel && sale && (
+        <CancelModal
+          sale={sale}
+          onClose={() => setShowCancel(false)}
+          onCancelled={onCancelled}
+        />
+      )}
+
+      {showModify && sale && (
+        <ModifyConfirmModal
+          sale={sale}
+          onClose={() => setShowModify(false)}
+          onConfirmed={() => onModify(getModifyLines())}
+        />
+      )}
+    </>
+  )
+}
+
 // ─── Sales List ───────────────────────────────────────────────────────────────
 
-function SalesList({ onNew }: { onNew: () => void }) {
+function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: SaleLine[]) => void }) {
   const queryClient = useQueryClient()
   const [page,         setPage]         = useState(1)
   const [dateFrom,     setDateFrom]     = useState(new Date().toISOString().slice(0, 10))
   const [dateTo,       setDateTo]       = useState(new Date().toISOString().slice(0, 10))
   const [status,       setStatus]       = useState('')
-  const [saleToCancel, setSaleToCancel] = useState<Record<string, any> | null>(null)
+  const [channel,      setChannel]      = useState('')
+  const [detailSaleId, setDetailSaleId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales', page, dateFrom, dateTo, status],
+    queryKey: ['sales', page, dateFrom, dateTo, status, channel],
     queryFn: () => api.get('/sales', {
-      params: { page, per_page: 25, date_from: dateFrom, date_to: dateTo, status: status || undefined }
+      params: { page, per_page: 25, date_from: dateFrom, date_to: dateTo, status: status || undefined, channel: channel || undefined }
     }).then(r => r.data),
   })
 
@@ -954,13 +1254,25 @@ function SalesList({ onNew }: { onNew: () => void }) {
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
         <div>
+          <label className="block text-xs text-gray-500 mb-1">Canal</label>
+          <select value={channel} onChange={e => { setChannel(e.target.value); setPage(1) }}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">Tous les canaux</option>
+            <option value="pos">Caisse POS</option>
+            <option value="counter">Comptoir</option>
+            <option value="takeaway">Emporter</option>
+            <option value="delivery">Livraison</option>
+            <option value="online">En ligne</option>
+          </select>
+        </div>
+        <div>
           <label className="block text-xs text-gray-500 mb-1">Statut</label>
           <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">Tous les statuts</option>
             <option value="completed">Confirmées</option>
             <option value="draft">Brouillons</option>
-            <option value="cancelled">Annulées / Remboursées</option>
+            <option value="cancelled">Annulées</option>
           </select>
         </div>
       </div>
@@ -977,7 +1289,7 @@ function SalesList({ onNew }: { onNew: () => void }) {
               <th className="px-4 py-3 text-center">Canal</th>
               <th className="px-4 py-3 text-right">Total TTC</th>
               <th className="px-4 py-3 text-center">Statut</th>
-              <th className="px-4 py-3 text-center w-24">Actions</th>
+              <th className="px-4 py-3 text-center w-20">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -992,9 +1304,13 @@ function SalesList({ onNew }: { onNew: () => void }) {
               </td></tr>
             )}
             {sales.map(s => (
-              <tr key={s.id} className={`border-b border-gray-100 transition-colors ${
-                s.status === 'cancelled' ? 'bg-red-50/30 hover:bg-red-50/60' : 'hover:bg-gray-50/50'
-              }`}>
+              <tr
+                key={s.id}
+                onClick={() => setDetailSaleId(s.id)}
+                className={`border-b border-gray-100 transition-colors cursor-pointer ${
+                  s.status === 'cancelled' ? 'bg-red-50/30 hover:bg-red-50/60' : 'hover:bg-blue-50/30'
+                }`}
+              >
                 <td className="px-4 py-3">
                   <span className={`font-mono text-xs px-2 py-0.5 rounded ${
                     s.status === 'cancelled' ? 'bg-red-100 text-red-700 line-through' : 'bg-gray-100 text-gray-600'
@@ -1007,7 +1323,7 @@ function SalesList({ onNew }: { onNew: () => void }) {
                 <td className="px-4 py-3 text-gray-700">{s.client?.name ?? <span className="text-gray-300">—</span>}</td>
                 <td className="px-4 py-3 text-gray-600 text-xs">{s.user?.name ?? '—'}</td>
                 <td className="px-4 py-3 text-center">
-                  <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-600 capitalize">{s.channel}</span>
+                  <ChannelBadge channel={s.channel} />
                 </td>
                 <td className="px-4 py-3 text-right">
                   <span className={`font-semibold ${s.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
@@ -1016,7 +1332,6 @@ function SalesList({ onNew }: { onNew: () => void }) {
                 </td>
                 <td className="px-4 py-3 text-center">
                   <div className="flex flex-col items-center gap-1">
-                    {/* Main status badge */}
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       s.status === 'completed' ? 'bg-green-100 text-green-700' :
                       s.status === 'cancelled' ? 'bg-red-100 text-red-700' :
@@ -1024,31 +1339,22 @@ function SalesList({ onNew }: { onNew: () => void }) {
                     }`}>
                       {s.status === 'completed' ? 'Confirmée' : s.status === 'cancelled' ? 'Annulée' : 'Brouillon'}
                     </span>
-                    {/* Refund badge if cancelled with refund */}
                     {s.status === 'cancelled' && s.refund_method && s.refund_method !== 'none' && (
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 flex items-center gap-1">
                         <RotateCcw size={9} />
                         Remb. {formatCurrency(parseFloat(s.refund_amount ?? 0))}
                       </span>
                     )}
-                    {/* Motif tooltip (show on hover via title) */}
-                    {s.status === 'cancelled' && s.cancellation_reason && (
-                      <span className="text-[10px] text-red-400 italic max-w-[100px] truncate" title={s.cancellation_reason}>
-                        {s.cancellation_reason}
-                      </span>
-                    )}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-center">
-                  {s.status === 'completed' && (
-                    <button
-                      onClick={() => setSaleToCancel(s)}
-                      title="Annuler cette vente"
-                      className="text-gray-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50"
-                    >
-                      <Ban size={15} />
-                    </button>
-                  )}
+                <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                  <button
+                    onClick={() => setDetailSaleId(s.id)}
+                    title="Voir le détail"
+                    className="text-gray-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary/5"
+                  >
+                    <Eye size={15} />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -1071,14 +1377,19 @@ function SalesList({ onNew }: { onNew: () => void }) {
         )}
       </div>
 
-      {/* Cancel modal */}
-      {saleToCancel && (
-        <CancelModal
-          sale={saleToCancel}
-          onClose={() => setSaleToCancel(null)}
+      {/* Detail modal */}
+      {detailSaleId !== null && (
+        <SaleDetailModal
+          saleId={detailSaleId}
+          onClose={() => setDetailSaleId(null)}
           onCancelled={() => {
-            setSaleToCancel(null)
+            setDetailSaleId(null)
             queryClient.invalidateQueries({ queryKey: ['sales'] })
+          }}
+          onModify={(lines) => {
+            setDetailSaleId(null)
+            queryClient.invalidateQueries({ queryKey: ['sales'] })
+            onModify(lines)
           }}
         />
       )}
@@ -1089,9 +1400,23 @@ function SalesList({ onNew }: { onNew: () => void }) {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export default function SalesPage() {
-  const [view, setView] = useState<'list' | 'new'>('list')
+  const [view, setView]           = useState<'list' | 'new'>('list')
+  const [editLines, setEditLines] = useState<SaleLine[] | undefined>()
 
-  return view === 'new'
-    ? <SaleForm onSaved={() => setView('list')} onCancel={() => setView('list')} />
-    : <SalesList onNew={() => setView('new')} />
+  const handleModify = (lines: SaleLine[]) => {
+    setEditLines(lines)
+    setView('new')
+  }
+
+  if (view === 'new') {
+    return (
+      <SaleForm
+        onSaved={() => { setView('list'); setEditLines(undefined) }}
+        onCancel={() => { setView('list'); setEditLines(undefined) }}
+        initialLines={editLines}
+      />
+    )
+  }
+
+  return <SalesList onNew={() => setView('new')} onModify={handleModify} />
 }
