@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users, BarChart3,
   Settings, LogOut, ChevronLeft, ChevronRight, AlertTriangle,
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
-  Boxes
+  Boxes, BookOpen, FileText
 } from 'lucide-react'
 
 interface NavItem {
@@ -18,8 +18,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Tableau de bord', to: '/', icon: <LayoutDashboard size={18} /> },
-  { label: 'Caisse (POS)', to: '/pos', icon: <ShoppingCart size={18} />, permission: 'create_sales' },
-  { label: 'Catalogue', to: '/products', icon: <Package size={18} />, permission: 'manage_products' },
+  { label: 'Caisse (POS)',  to: '/pos',   icon: <ShoppingCart size={18} />, permission: 'create_sales' },
+  { label: 'Vente Comptoir', to: '/sales', icon: <FileText size={18} />,    permission: 'create_sales' },
+  { label: 'Catalogue',    to: '/products', icon: <Package size={18} />,  permission: 'manage_products' },
   { label: 'Stocks', to: '/stock', icon: <Boxes size={18} />, permission: 'view_stock' },
   { label: 'Inventaire', to: '/inventory', icon: <ClipboardList size={18} />, permission: 'manage_inventory' },
   { label: 'Fournisseurs', to: '/suppliers', icon: <Truck size={18} />, permission: 'manage_suppliers' },
@@ -29,6 +30,7 @@ const navItems: NavItem[] = [
   { label: 'Pertes', to: '/losses', icon: <TrendingDown size={18} />, permission: 'manage_losses' },
   { label: 'Restaurant', to: '/restaurant', icon: <Utensils size={18} />, license: 'restaurant' },
   { label: 'Rapports', to: '/reports', icon: <BarChart3 size={18} />, permission: 'view_reports' },
+  { label: 'Comptabilité', to: '/accounting', icon: <BookOpen size={18} />, permission: 'view_accounting' },
   { label: 'Paramètres', to: '/settings', icon: <Settings size={18} /> },
 ]
 

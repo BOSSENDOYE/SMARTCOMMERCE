@@ -86,6 +86,68 @@ class StockService
         }
     }
 
+    /**
+     * Batch destock for a completed sale — single query per table instead of N queries.
+     * @param array $items [['product_id', 'qty', 'lot_id'?], ...]
+     */
+    public function batchSaleOut(int $storeId, array $items, int $userId, int $saleId): void
+    {
+        if (empty($items)) return;
+
+        $productIds = array_column($items, 'product_id');
+        $now = now();
+
+        // Load all stock levels in ONE query
+        $levels = StockLevel::where('store_id', $storeId)
+            ->whereIn('product_id', $productIds)
+            ->get()
+            ->keyBy('product_id');
+
+        $movementsToInsert = [];
+        $lotDecrements = [];
+
+        foreach ($items as $item) {
+            $level = $levels->get($item['product_id']);
+            if (!$level) continue;
+
+            $qty = abs($item['qty']);
+            $level->qty_on_hand -= $qty;
+            $level->last_updated = $now;
+            $level->save(); // UPDATE per level (can't avoid without raw CASE WHEN)
+
+            if (!empty($item['lot_id'])) {
+                $lotDecrements[$item['lot_id']] = ($lotDecrements[$item['lot_id']] ?? 0) + $qty;
+            }
+
+            $movementsToInsert[] = [
+                'store_id'       => $storeId,
+                'product_id'     => $item['product_id'],
+                'lot_id'         => $item['lot_id'] ?? null,
+                'user_id'        => $userId,
+                'type'           => 'sale_out',
+                'qty'            => $qty,
+                'unit_cost'      => $level->avg_cost,
+                'stock_after'    => $level->qty_on_hand,
+                'reference_type' => 'sales',
+                'reference_id'   => $saleId,
+                'reason'         => null,
+                'notes'          => null,
+                'created_at'     => $now,
+                'updated_at'     => $now,
+            ];
+        }
+
+        // Batch decrement lots (one query per distinct lot)
+        foreach ($lotDecrements as $lotId => $qty) {
+            ProductLot::where('id', $lotId)->decrement('current_qty', $qty);
+        }
+
+        // ONE INSERT for all stock movements
+        if (!empty($movementsToInsert)) {
+            StockMovement::insert($movementsToInsert);
+        }
+    }
+
     public function getStockValue(int $storeId): float
     {
         return StockLevel::where('store_id', $storeId)

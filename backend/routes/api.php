@@ -26,10 +26,66 @@ Route::prefix('v1')->group(function () {
         Route::get('/products/stats', [ProductController::class, 'stats']);
         Route::get('/products/barcode', [ProductController::class, 'searchByBarcode']);
         Route::apiResource('/products', ProductController::class);
+        Route::post('/products/{product}/image', [ProductController::class, 'uploadImage']);
+
+        // Product Containers (contenances)
+        Route::get('/products/{product}/containers', fn(\App\Models\Product $product) =>
+            response()->json($product->containers()->with('unit')->get())
+        );
+        Route::post('/products/{product}/containers', function (\Illuminate\Http\Request $r, \App\Models\Product $product) {
+            $data = $r->validate([
+                'unit_id'            => 'required|exists:units,id',
+                'label'              => 'nullable|string|max:100',
+                'conversion_factor'  => 'required|numeric|min:0.0001',
+                'is_purchase_unit'   => 'boolean',
+                'is_sale_unit'       => 'boolean',
+                'is_stock_unit'      => 'boolean',
+                'price_a'            => 'nullable|numeric|min:0',
+                'price_b'            => 'nullable|numeric|min:0',
+                'price_c'            => 'nullable|numeric|min:0',
+                'barcode'            => 'nullable|string|max:100',
+                'sort_order'         => 'integer|min:0',
+            ]);
+            return response()->json($product->containers()->create($data)->load('unit'), 201);
+        });
+        Route::put('/products/{product}/containers/{container}', function (\Illuminate\Http\Request $r, \App\Models\Product $product, \App\Models\ProductContainer $container) {
+            if ($container->product_id !== $product->id) abort(403);
+            $data = $r->validate([
+                'unit_id'            => 'sometimes|exists:units,id',
+                'label'              => 'nullable|string|max:100',
+                'conversion_factor'  => 'sometimes|numeric|min:0.0001',
+                'is_purchase_unit'   => 'boolean',
+                'is_sale_unit'       => 'boolean',
+                'is_stock_unit'      => 'boolean',
+                'price_a'            => 'nullable|numeric|min:0',
+                'price_b'            => 'nullable|numeric|min:0',
+                'price_c'            => 'nullable|numeric|min:0',
+                'barcode'            => 'nullable|string|max:100',
+                'sort_order'         => 'integer|min:0',
+            ]);
+            $container->update($data);
+            return response()->json($container->load('unit'));
+        });
+        Route::delete('/products/{product}/containers/{container}', function (\App\Models\Product $product, \App\Models\ProductContainer $container) {
+            if ($container->product_id !== $product->id) abort(403);
+            $container->delete();
+            return response()->json(null, 204);
+        });
 
         // Categories
         Route::get('/categories', fn() => response()->json(\App\Models\Category::with('children')->whereNull('parent_id')->orderBy('sort_order')->get()));
         Route::post('/categories', fn(\Illuminate\Http\Request $r) => response()->json(\App\Models\Category::create($r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant'])), 201));
+        Route::put('/categories/{category}', fn(\Illuminate\Http\Request $r, \App\Models\Category $category) => response()->json(tap($category)->update($r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant']))));
+        Route::delete('/categories/{category}', function (\App\Models\Category $category) {
+            if ($category->products()->count() > 0) {
+                return response()->json(['message' => 'Impossible de supprimer : des produits utilisent cette catégorie.'], 422);
+            }
+            if ($category->children()->count() > 0) {
+                return response()->json(['message' => 'Impossible de supprimer : cette catégorie a des sous-catégories.'], 422);
+            }
+            $category->delete();
+            return response()->json(null, 204);
+        });
 
         // Brands & Units
         Route::get('/brands', fn() => response()->json(\App\Models\Brand::orderBy('name')->get()));
@@ -157,6 +213,23 @@ Route::prefix('v1')->group(function () {
             Route::get('/reservations', [\App\Http\Controllers\Api\RestaurantController::class, 'reservations']);
             Route::post('/reservations', [\App\Http\Controllers\Api\RestaurantController::class, 'createReservation']);
             Route::put('/reservations/{reservation}', [\App\Http\Controllers\Api\RestaurantController::class, 'updateReservation']);
+        });
+
+        // Comptabilité
+        Route::prefix('/accounting')->group(function () {
+            Route::post('/accounts/init',             [\App\Http\Controllers\Api\AccountingController::class, 'initAccounts']);
+            Route::get('/accounts',                   [\App\Http\Controllers\Api\AccountingController::class, 'accounts']);
+            Route::post('/accounts',                  [\App\Http\Controllers\Api\AccountingController::class, 'storeAccount']);
+            Route::put('/accounts/{account}',         [\App\Http\Controllers\Api\AccountingController::class, 'updateAccount']);
+            Route::delete('/accounts/{account}',      [\App\Http\Controllers\Api\AccountingController::class, 'destroyAccount']);
+            Route::get('/journal',                    [\App\Http\Controllers\Api\AccountingController::class, 'journal']);
+            Route::post('/journal',                   [\App\Http\Controllers\Api\AccountingController::class, 'storeEntry']);
+            Route::post('/journal/{entry}/validate',  [\App\Http\Controllers\Api\AccountingController::class, 'validateEntry']);
+            Route::get('/ledger/{account}',           [\App\Http\Controllers\Api\AccountingController::class, 'generalLedger']);
+            Route::get('/trial-balance',              [\App\Http\Controllers\Api\AccountingController::class, 'trialBalance']);
+            Route::get('/income-statement',           [\App\Http\Controllers\Api\AccountingController::class, 'incomeStatement']);
+            Route::post('/generate/sales',            [\App\Http\Controllers\Api\AccountingController::class, 'generateFromSales']);
+            Route::post('/generate/purchases',        [\App\Http\Controllers\Api\AccountingController::class, 'generateFromPurchases']);
         });
 
         // Stores & Users (admin)

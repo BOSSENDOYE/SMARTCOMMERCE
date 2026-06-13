@@ -29,6 +29,7 @@ class SetupSeeder extends Seeder
             'restaurant_orders', 'restaurant_kds', 'restaurant_reservations',
             'manage_losses', 'validate_losses',
             'manage_transfers',
+            'view_accounting', 'manage_accounting',
         ];
 
         foreach ($permissions as $perm) {
@@ -49,13 +50,14 @@ class SetupSeeder extends Seeder
                 'manage_users', 'view_audit_logs',
                 'restaurant_orders', 'restaurant_kds', 'restaurant_reservations',
                 'manage_losses', 'validate_losses', 'manage_transfers',
+                'view_accounting', 'manage_accounting',
             ],
             'caissier'    => ['create_sales', 'apply_discounts', 'manage_clients', 'open_cash_drawer', 'manage_cash_sessions'],
             'serveur'     => ['restaurant_orders'],
             'cuisinier'   => ['restaurant_kds'],
             'magasinier'  => ['view_stock', 'manage_inventory', 'manage_losses', 'create_purchase_orders'],
-            'comptable'   => ['view_dashboard', 'view_reports', 'view_margins', 'view_cash_reports', 'view_audit_logs'],
-            'proprietaire' => ['view_dashboard', 'view_reports', 'view_margins', 'view_cash_reports'],
+            'comptable'   => ['view_dashboard', 'view_reports', 'view_margins', 'view_cash_reports', 'view_audit_logs', 'view_accounting', 'manage_accounting'],
+            'proprietaire' => ['view_dashboard', 'view_reports', 'view_margins', 'view_cash_reports', 'view_accounting'],
         ];
 
         foreach ($roleMap as $roleName => $rolePermissions) {

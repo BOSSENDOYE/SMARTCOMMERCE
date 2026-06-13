@@ -30,7 +30,7 @@ interface StockLevel {
 }
 
 interface LowStockProduct extends ProductBase {
-  stockLevel?: { qty_on_hand: number; avg_cost: number }
+  stock_level?: { qty_on_hand: number; avg_cost: number }
 }
 
 interface ExpiringLot {
@@ -357,8 +357,8 @@ export default function StockPage() {
   // ── KPI values ───────────────────────────────────────────────────────────
 
   const totalValue = (valuation?.data ?? []).reduce((s, v) => s + (v.value ?? 0), 0)
-  const outProducts = lowStock.filter(p => (p.stockLevel?.qty_on_hand ?? 0) <= 0)
-  const alertProducts = lowStock.filter(p => (p.stockLevel?.qty_on_hand ?? 0) > 0)
+  const outProducts = lowStock.filter(p => (p.stock_level?.qty_on_hand ?? 0) <= 0)
+  const alertProducts = lowStock.filter(p => (p.stock_level?.qty_on_hand ?? 0) > 0)
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -587,7 +587,7 @@ export default function StockPage() {
                           <p className="text-xs font-mono text-gray-400 mt-0.5">{p.internal_code}</p>
                         </td>
                         <td className="px-4 py-3 text-right font-bold text-red-600 text-base">
-                          {formatNumber(p.stockLevel?.qty_on_hand ?? 0, 0)}
+                          {formatNumber(p.stock_level?.qty_on_hand ?? 0, 0)}
                           {p.unit && <span className="text-xs font-normal text-gray-400 ml-1">{p.unit.abbreviation}</span>}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-500">{formatNumber(p.alert_stock, 0)}</td>
@@ -631,7 +631,7 @@ export default function StockPage() {
                   </thead>
                   <tbody className="divide-y divide-amber-100">
                     {alertProducts.map(p => {
-                      const qty = p.stockLevel?.qty_on_hand ?? 0
+                      const qty = p.stock_level?.qty_on_hand ?? 0
                       const pct = p.alert_stock > 0 ? Math.round((qty / p.alert_stock) * 100) : 0
                       return (
                         <tr key={p.id} className="bg-amber-50/40 hover:bg-amber-50 transition-colors">

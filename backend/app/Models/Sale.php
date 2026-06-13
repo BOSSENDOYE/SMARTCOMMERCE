@@ -16,17 +16,23 @@ class Sale extends Model
         'paid_amount', 'change_amount',
         'loyalty_points_earned', 'loyalty_points_used',
         'offline_id', 'is_synced', 'synced_at', 'notes',
+        // Annulation & remboursement
+        'cancellation_reason', 'cancelled_by', 'cancelled_at',
+        'refund_method', 'refund_amount', 'refunded_at',
     ];
 
     protected $casts = [
-        'subtotal_ht' => 'decimal:2',
-        'vat_amount' => 'decimal:2',
-        'discount_amount' => 'decimal:2',
-        'total_ttc' => 'decimal:2',
-        'paid_amount' => 'decimal:2',
-        'change_amount' => 'decimal:2',
-        'is_synced' => 'boolean',
-        'synced_at' => 'datetime',
+        'subtotal_ht'    => 'decimal:2',
+        'vat_amount'     => 'decimal:2',
+        'discount_amount'=> 'decimal:2',
+        'total_ttc'      => 'decimal:2',
+        'paid_amount'    => 'decimal:2',
+        'change_amount'  => 'decimal:2',
+        'refund_amount'  => 'decimal:2',
+        'is_synced'      => 'boolean',
+        'synced_at'      => 'datetime',
+        'cancelled_at'   => 'datetime',
+        'refunded_at'    => 'datetime',
     ];
 
     // Prevent modifying completed sales without audit trail

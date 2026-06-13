@@ -10,6 +10,7 @@ import ProductsPage from './pages/products/ProductsPage'
 import StockPage from './pages/stock/StockPage'
 import { lazy, Suspense } from 'react'
 
+const SalesPage     = lazy(() => import('./pages/sales/SalesPage'))
 const SuppliersPage = lazy(() => import('./pages/suppliers/SuppliersPage'))
 const ClientsPage = lazy(() => import('./pages/clients/ClientsPage'))
 const PurchasesPage = lazy(() => import('./pages/purchases/PurchasesPage'))
@@ -19,6 +20,7 @@ const LossesPage = lazy(() => import('./pages/losses/LossesPage'))
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'))
 const RestaurantPage = lazy(() => import('./pages/restaurant/RestaurantPage'))
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'))
+const AccountingPage = lazy(() => import('./pages/accounting/AccountingPage'))
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -61,6 +63,7 @@ export default function App() {
             <Route path="pos" element={<PosPage />} />
             <Route path="products" element={<ProductsPage />} />
             <Route path="stock" element={<StockPage />} />
+            <Route path="sales" element={<Suspense fallback={<PageLoader />}><SalesPage /></Suspense>} />
             <Route path="suppliers" element={<Suspense fallback={<PageLoader />}><SuppliersPage /></Suspense>} />
             <Route path="clients" element={<Suspense fallback={<PageLoader />}><ClientsPage /></Suspense>} />
             <Route path="purchases" element={<Suspense fallback={<PageLoader />}><PurchasesPage /></Suspense>} />
@@ -69,6 +72,7 @@ export default function App() {
             <Route path="losses" element={<Suspense fallback={<PageLoader />}><LossesPage /></Suspense>} />
             <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
             <Route path="restaurant/*" element={<Suspense fallback={<PageLoader />}><RestaurantPage /></Suspense>} />
+            <Route path="accounting" element={<Suspense fallback={<PageLoader />}><AccountingPage /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

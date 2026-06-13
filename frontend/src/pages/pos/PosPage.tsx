@@ -707,6 +707,7 @@ function CartItemRow({ item, onQtyChange, onDiscountChange, onRemove }: {
 
 export default function PosPage() {
   const { user } = useAuthStore()
+  const queryClient = useQueryClient()
   const {
     items, addItem, updateQty, updateDiscount, removeItem, clearCart,
     client_id, client_name, setClient, cash_session_id, setCashSession,
@@ -760,15 +761,15 @@ export default function PosPage() {
     ),
   })
 
-  // Fetch products for grid (by category)
-  const { data: gridProducts = [] } = useQuery<CachedProduct[]>({
+  // Fetch products for grid (by category) — only with stock available
+  const { data: gridProducts = [], isLoading: productsLoading, isError: productsError } = useQuery<CachedProduct[]>({
     queryKey: ['pos-products', selectedCategoryId],
     queryFn: () => api.get('/products', {
-      params: { category_id: selectedCategoryId ?? undefined, per_page: 50, is_active: true }
+      params: { category_id: selectedCategoryId ?? undefined, per_page: 500, is_active: true, has_stock: 1 }
     }).then(res => res.data.data.map((p: {
       id: number; internal_code: string; name: string; short_name: string
       sale_price_ttc: number; vat_rate: number; is_weight_based: boolean
-      category?: { name: string }; stockLevel?: { qty_on_hand: number }
+      category?: { name: string }; stock_level?: { qty_on_hand: number }
       barcodes: { barcode: string }[]
     }) => ({
       id: p.id,
@@ -779,7 +780,7 @@ export default function PosPage() {
       vat_rate: p.vat_rate,
       is_weight_based: p.is_weight_based,
       category_name: p.category?.name,
-      stock_qty: p.stockLevel?.qty_on_hand ?? 0,
+      stock_qty: p.stock_level?.qty_on_hand ?? 0,
       barcodes: p.barcodes?.map(b => b.barcode) ?? [],
     }))),
     enabled: !is_offline,
@@ -797,7 +798,7 @@ export default function PosPage() {
           setSearchResults(res.data.data.map((p: {
             id: number; internal_code: string; name: string; short_name: string
             sale_price_ttc: number; vat_rate: number; is_weight_based: boolean
-            category?: { name: string }; stockLevel?: { qty_on_hand: number }
+            category?: { name: string }; stock_level?: { qty_on_hand: number }
             barcodes: { barcode: string }[]
           }) => ({
             id: p.id,
@@ -808,7 +809,7 @@ export default function PosPage() {
             vat_rate: p.vat_rate,
             is_weight_based: p.is_weight_based,
             category_name: p.category?.name,
-            stock_qty: p.stockLevel?.qty_on_hand ?? 0,
+            stock_qty: p.stock_level?.qty_on_hand ?? 0,
             barcodes: p.barcodes?.map(b => b.barcode) ?? [],
           })))
         } catch {
@@ -841,6 +842,10 @@ export default function PosPage() {
   }
 
   const addProductToCart = useCallback((product: CachedProduct) => {
+    if (product.stock_qty <= 0) {
+      toast.error(`${product.short_name ?? product.name} — Rupture de stock`, { duration: 2000 })
+      return
+    }
     addItem({
       product_id: product.id,
       product_name: product.name,
@@ -913,6 +918,8 @@ export default function PosPage() {
       clearCart()
       setShowPayment(false)
       setSaleReceipt(res.data)
+      // Refresh product stock counts after sale
+      queryClient.invalidateQueries({ queryKey: ['pos-products'] })
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Erreur lors de l\'enregistrement'
       toast.error(message)
@@ -1009,8 +1016,10 @@ export default function PosPage() {
         {search.length >= 2 && searchResults.length > 0 && (
           <div className="bg-white border-b shadow-lg max-h-72 overflow-y-auto">
             {searchResults.map(p => (
-              <button key={p.id} onClick={() => addProductToCart(p)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary-50 text-left border-b last:border-0">
+              <button key={p.id}
+                onClick={() => addProductToCart(p)}
+                disabled={p.stock_qty <= 0}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b last:border-0 ${p.stock_qty <= 0 ? 'opacity-40 cursor-not-allowed bg-gray-50' : 'hover:bg-primary-50'}`}>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">{p.name}</p>
                   <p className="text-xs text-gray-400">{p.internal_code} · {p.category_name}</p>
@@ -1018,7 +1027,7 @@ export default function PosPage() {
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
                   <p className={`text-xs ${p.stock_qty > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    Stock: {formatNumber(p.stock_qty, 0)}
+                    {p.stock_qty <= 0 ? 'Rupture' : `Stock: ${formatNumber(p.stock_qty, 0)}`}
                   </p>
                 </div>
               </button>
@@ -1047,20 +1056,33 @@ export default function PosPage() {
 
         {/* Product grid */}
         <div className="flex-1 p-3 overflow-y-auto">
-          {!search && gridProducts.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-300">
-              <Scan size={64} className="mb-4" />
-              <p className="text-base font-medium">Scannez un code-barres</p>
-              <p className="text-sm">ou sélectionnez une catégorie</p>
+          {!search && productsLoading && (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+              <p className="text-sm">Chargement des produits...</p>
             </div>
           )}
-          {!search && gridProducts.length > 0 && (
+          {!search && productsError && (
+            <div className="flex flex-col items-center justify-center h-full text-red-400">
+              <Scan size={48} className="mb-3 opacity-40" />
+              <p className="text-sm font-medium">Erreur de chargement</p>
+              <p className="text-xs text-gray-400 mt-1">Vérifiez la connexion au serveur</p>
+            </div>
+          )}
+          {!search && !productsLoading && !productsError && gridProducts.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-gray-300">
+              <Scan size={64} className="mb-4" />
+              <p className="text-base font-medium">Aucun produit disponible</p>
+              <p className="text-sm">Tous les articles sont en rupture de stock</p>
+            </div>
+          )}
+          {!search && !productsLoading && gridProducts.length > 0 && (
             <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
               {gridProducts.map(p => (
                 <button
                   key={p.id}
                   onClick={() => addProductToCart(p)}
-                  className={`bg-white rounded-xl border p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all group ${p.stock_qty <= 0 ? 'opacity-60' : ''}`}>
+                  className={`bg-white rounded-xl border p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all group ${p.stock_qty <= 5 ? 'border-amber-200' : ''}`}>
                   <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center mb-2 group-hover:bg-primary-100">
                     <ShoppingBag size={16} className="text-primary" />
                   </div>
@@ -1068,8 +1090,8 @@ export default function PosPage() {
                     {p.short_name ?? p.name}
                   </p>
                   <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
-                  <p className={`text-xs mt-0.5 ${p.stock_qty <= 0 ? 'text-red-500' : p.stock_qty <= 5 ? 'text-amber-500' : 'text-gray-400'}`}>
-                    {p.stock_qty <= 0 ? 'Rupture' : `Stock: ${formatNumber(p.stock_qty, 0)}`}
+                  <p className={`text-xs mt-0.5 ${p.stock_qty <= 5 ? 'text-amber-500' : 'text-gray-400'}`}>
+                    Stock: {formatNumber(p.stock_qty, 0)}
                   </p>
                 </button>
               ))}

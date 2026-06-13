@@ -45,10 +45,12 @@ class SaleController extends Controller
             'channel' => 'nullable|in:pos,takeaway,delivery,online',
         ]);
 
-        // Deduplicate offline sales
-        if ($request->offline_id && Sale::where('offline_id', $request->offline_id)->exists()) {
+        // Deduplicate offline sales — single query instead of exists() + first()
+        if ($request->offline_id) {
             $existing = Sale::where('offline_id', $request->offline_id)->first();
-            return response()->json($existing->load(['items', 'payments', 'ticket']), 200);
+            if ($existing) {
+                return response()->json($existing->load(['items', 'payments', 'ticket']), 200);
+            }
         }
 
         $sale = $this->saleService->createSale(
@@ -90,19 +92,30 @@ class SaleController extends Controller
     public function cancel(Request $request, Sale $sale)
     {
         $request->validate([
-            'reason' => 'required|string|max:200',
+            'reason'         => 'required|string|max:200',
             'supervisor_pin' => 'required|string',
+            'refund_method'  => 'required|in:cash,wave,orange_money,free_money,card,credit,none',
+            'refund_amount'  => 'nullable|numeric|min:0',
         ]);
 
+        // Only fetch id+pin for users that actually have a pin set (avoid loading all columns)
         $supervisor = \App\Models\User::where('store_id', $request->user()->store_id)
-            ->get()
-            ->first(fn($u) => \Hash::check($request->supervisor_pin, $u->pin ?? ''));
+            ->whereNotNull('pin')
+            ->get(['id', 'pin'])
+            ->first(fn($u) => \Hash::check($request->supervisor_pin, $u->pin));
 
         if (!$supervisor || !$supervisor->hasPermissionTo('cancel_sales')) {
             return response()->json(['message' => 'Autorisation superviseur requise.'], 403);
         }
 
-        $sale = $this->saleService->cancelSale($sale, $request->reason, $supervisor->id);
+        $sale = $this->saleService->cancelSale(
+            sale: $sale,
+            reason: $request->reason,
+            supervisorId: $supervisor->id,
+            refundMethod: $request->refund_method,
+            refundAmount: (float) ($request->refund_amount ?? $sale->paid_amount),
+        );
+
         return response()->json($sale);
     }
 
@@ -123,10 +136,12 @@ class SaleController extends Controller
             ')
             ->first();
 
-        $paymentBreakdown = \App\Models\SalePayment::whereHas('sale', fn($q) => $q
-                ->forStore($storeId)->completed()->today()
-            )
-            ->selectRaw('payment_method, SUM(amount) as total')
+        // JOIN instead of correlated whereHas subquery — much faster
+        $paymentBreakdown = \App\Models\SalePayment::join('sales', 'sales.id', '=', 'sale_payments.sale_id')
+            ->where('sales.store_id', $storeId)
+            ->where('sales.status', 'completed')
+            ->whereDate('sales.created_at', today())
+            ->selectRaw('payment_method, SUM(sale_payments.amount) as total')
             ->groupBy('payment_method')
             ->pluck('total', 'payment_method');
 

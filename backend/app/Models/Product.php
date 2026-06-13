@@ -15,7 +15,7 @@ class Product extends Model
         'category_id', 'brand_id', 'unit_id',
         'purchase_price_ht', 'sale_price_ttc', 'vat_rate',
         'is_weight_based', 'price_per_kg',
-        'min_stock', 'max_stock', 'alert_stock',
+        'min_stock', 'max_stock', 'stock_appro', 'alert_stock',
         'packaging_qty', 'packaging_type', 'image',
         'is_active', 'track_expiry', 'is_recipe',
     ];
@@ -24,8 +24,9 @@ class Product extends Model
         'purchase_price_ht' => 'decimal:2',
         'sale_price_ttc' => 'decimal:2',
         'vat_rate' => 'decimal:2',
-        'min_stock' => 'decimal:3',
-        'max_stock' => 'decimal:3',
+        'min_stock'   => 'decimal:3',
+        'max_stock'   => 'decimal:3',
+        'stock_appro' => 'decimal:3',
         'alert_stock' => 'decimal:3',
         'is_weight_based' => 'boolean',
         'is_active' => 'boolean',
@@ -45,6 +46,7 @@ class Product extends Model
     public function lots() { return $this->hasMany(ProductLot::class); }
     public function recipeIngredients() { return $this->hasMany(RecipeIngredient::class); }
     public function promotions() { return $this->belongsToMany(Promotion::class, 'promotion_products'); }
+    public function containers() { return $this->hasMany(ProductContainer::class)->orderBy('sort_order'); }
 
     public function getSalePriceHtAttribute(): float
     {
