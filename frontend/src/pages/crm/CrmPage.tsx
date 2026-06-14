@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
@@ -7,7 +8,7 @@ import {
   CheckCircle2, XCircle, ChevronRight, Edit2, Trash2, X, Check,
   ArrowRight, Calendar, MessageSquare, PhoneCall, Video,
   FileText, Star, Clock, AlertCircle, UserPlus, MoreHorizontal,
-  Kanban, List,
+  Kanban, List, FilePlus2, Receipt,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
@@ -331,6 +332,7 @@ function LeadDetail({
   onRefresh: () => void
 }) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [showEdit, setShowEdit] = useState(false)
 
   const { data: lead } = useQuery<Lead>({
@@ -516,6 +518,46 @@ function LeadDetail({
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-semibold hover:bg-red-100">
                 <XCircle size={13} /> Marquer perdu
               </button>
+            )}
+          </div>
+
+          {/* Documents commerciaux */}
+          <div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Documents commerciaux</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => navigate('/invoices', {
+                  state: {
+                    crmPrefill: {
+                      type: 'quote',
+                      client_id: lead.client?.id,
+                      client: lead.client,
+                      object: lead.title,
+                    }
+                  }
+                })}
+                className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 transition">
+                <FilePlus2 size={13} /> Créer un devis
+              </button>
+              <button
+                onClick={() => navigate('/invoices', {
+                  state: {
+                    crmPrefill: {
+                      type: 'invoice',
+                      client_id: lead.client?.id,
+                      client: lead.client,
+                      object: lead.title,
+                    }
+                  }
+                })}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition">
+                <Receipt size={13} /> Créer une facture
+              </button>
+            </div>
+            {!lead.client && (
+              <p className="text-xs text-amber-600 mt-1.5">
+                Convertissez ce lead en client pour lier les documents automatiquement.
+              </p>
             )}
           </div>
 

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
@@ -156,6 +157,13 @@ function calcLine(item: LineItem): { ht: number; ttc: number } {
 
 type BusinessType = 'grande_surface' | 'restaurant' | 'depot' | 'mixte'
 
+interface CrmPrefill {
+  client_id?: number
+  client?: ClientEntry
+  object?: string
+  type?: 'invoice' | 'quote'
+}
+
 function DocumentEditor({
   type,
   initial,
@@ -163,6 +171,7 @@ function DocumentEditor({
   businessType,
   onClose,
   onSaved,
+  prefill,
 }: {
   type: 'invoice' | 'quote'
   initial?: Invoice | Quote | null
@@ -170,11 +179,12 @@ function DocumentEditor({
   businessType: BusinessType
   onClose: () => void
   onSaved: (doc: Invoice | Quote) => void
+  prefill?: CrmPrefill
 }) {
   const isEdit = !!initial
 
-  const [clientId, setClientId]     = useState<number | ''>(initial?.client?.id ?? '')
-  const [object, setObject]         = useState(initial?.object ?? '')
+  const [clientId, setClientId]     = useState<number | ''>(initial?.client?.id ?? prefill?.client_id ?? '')
+  const [object, setObject]         = useState(initial?.object ?? prefill?.object ?? '')
   const [issueDate, setIssueDate]   = useState(initial?.issue_date ?? new Date().toISOString().slice(0, 10))
   const [dueDate, setDueDate]       = useState((initial as Invoice)?.due_date ?? '')
   const [validUntil, setValidUntil] = useState((initial as Quote)?.valid_until ?? '')
@@ -1077,6 +1087,7 @@ type Tab = 'invoices' | 'quotes'
 export default function InvoicesPage() {
   const { activeStore } = useActiveStoreStore()
   const { user } = useAuthStore()
+  const location = useLocation()
   // Fallback: si pas de magasin actif sélectionné, utiliser le magasin de l'utilisateur
   const storeId      = activeStore?.id ?? (user?.store_id ?? undefined)
   const storeName    = activeStore?.name ?? user?.store?.name ?? 'Baobab'
@@ -1088,6 +1099,20 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [showEditor, setShowEditor]     = useState(false)
   const [editing, setEditing]           = useState<Invoice | Quote | null>(null)
+  const [crmPrefill, setCrmPrefill]     = useState<CrmPrefill | undefined>(undefined)
+
+  // Pré-remplissage depuis le CRM (navigation state)
+  useEffect(() => {
+    const state = location.state as { crmPrefill?: CrmPrefill } | null
+    if (state?.crmPrefill) {
+      setCrmPrefill(state.crmPrefill)
+      setEditing(null)
+      setTab(state.crmPrefill.type === 'invoice' ? 'invoices' : 'quotes')
+      setShowEditor(true)
+      // Nettoyer le state pour éviter une ré-ouverture
+      window.history.replaceState({}, '')
+    }
+  }, [location.state])
   const [selected, setSelected]         = useState<Invoice | null>(null)
   const [printingId, setPrintingId]     = useState<number | null>(null)
 
@@ -1453,8 +1478,9 @@ export default function InvoicesPage() {
           initial={editing}
           storeId={storeId!}
           businessType={businessType}
-          onClose={() => { setShowEditor(false); setEditing(null) }}
+          onClose={() => { setShowEditor(false); setEditing(null); setCrmPrefill(undefined) }}
           onSaved={handleSaved}
+          prefill={!editing ? crmPrefill : undefined}
         />
       )}
 
