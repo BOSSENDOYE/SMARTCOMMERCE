@@ -102,4 +102,46 @@ class UserController extends Controller
         $user->delete();
         return response()->json(null, 204);
     }
+
+    /** List available roles (excluding super_admin unless caller is super_admin) */
+    public function roles(Request $request)
+    {
+        $isSuperAdmin = $request->user()->hasRole('super_admin') && $request->user()->getOriginal('store_id') === null;
+
+        $roles = \Spatie\Permission\Models\Role::withCount('permissions')
+            ->orderBy('name')
+            ->get(['id', 'name', 'guard_name']);
+
+        if (! $isSuperAdmin) {
+            $roles = $roles->where('name', '!=', 'super_admin')->values();
+        }
+
+        return response()->json($roles);
+    }
+
+    /** Update own profile (name, password, pin) */
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'name'         => 'sometimes|string|max:100',
+            'password'     => 'nullable|string|min:8|confirmed',
+            'pin'          => 'nullable|string|size:4',
+        ]);
+
+        if (! empty($data['password'])) {
+            $data['password'] = Hash::make($data['password']);
+        } else {
+            unset($data['password']);
+        }
+        if (! empty($data['pin'])) {
+            $data['pin'] = Hash::make($data['pin']);
+        } else {
+            unset($data['pin']);
+        }
+
+        $user->update($data);
+        return response()->json($user->load('roles'));
+    }
 }

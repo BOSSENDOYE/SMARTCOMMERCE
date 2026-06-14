@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import {
-  Settings, Store, Users, Shield, Printer, Building2, ArrowRight
+  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X
 } from 'lucide-react'
+import ThermalPrinterPanel from '../../components/thermal/ThermalPrinterPanel'
 
 interface SettingCard {
   icon: React.ReactNode
@@ -17,6 +19,7 @@ interface SettingCard {
 export default function SettingsPage() {
   const { user, can } = useAuthStore()
   const navigate = useNavigate()
+  const [showThermal, setShowThermal] = useState(false)
 
   const isSuperAdmin = user?.roles?.includes('super_admin')
 
@@ -45,6 +48,7 @@ export default function SettingsPage() {
       title: 'Utilisateurs & Rôles',
       desc: 'Gestion des accès et permissions',
       detail: 'Gérer les comptes utilisateurs',
+      onClick: () => navigate('/users'),
     },
     {
       icon: <Shield size={20} className="text-purple-600" />,
@@ -56,10 +60,18 @@ export default function SettingsPage() {
     {
       icon: <Printer size={20} className="text-orange-600" />,
       iconBg: 'bg-orange-100',
-      title: 'Impression',
+      title: 'Modèles d\'impression',
       desc: 'Tickets, factures, étiquettes',
       detail: 'Personnaliser les modèles d\'impression',
       onClick: () => navigate('/print-templates'),
+    },
+    {
+      icon: <Printer size={20} className="text-orange-700" />,
+      iconBg: 'bg-orange-50 border border-orange-200',
+      title: 'Imprimante thermique',
+      desc: 'ESC/POS — 58mm / 80mm',
+      detail: 'Configurer l\'imprimante USB pour tickets de caisse',
+      onClick: () => setShowThermal(true),
     },
   ]
 
@@ -102,6 +114,26 @@ export default function SettingsPage() {
           </div>
         ))}
       </div>
+
+      {/* Modal imprimante thermique */}
+      {showThermal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center overflow-y-auto p-4">
+          <div className="bg-gray-50 rounded-2xl shadow-2xl w-full max-w-lg my-6">
+            <div className="flex items-center justify-between px-5 py-4 bg-white rounded-t-2xl border-b">
+              <div className="flex items-center gap-2">
+                <Printer size={18} className="text-orange-600" />
+                <h2 className="font-bold text-gray-800">Imprimante thermique ESC/POS</h2>
+              </div>
+              <button onClick={() => setShowThermal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5">
+              <ThermalPrinterPanel />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* System info */}
       <div className="bg-gray-50 rounded-2xl border p-5">

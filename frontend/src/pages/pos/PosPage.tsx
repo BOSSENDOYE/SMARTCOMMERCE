@@ -1,11 +1,11 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react'
+﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
 import QRCode from 'react-qr-code'
 import api from '../../lib/api'
 import { usePosStore, type CartItem } from '../../store/pos.store'
 import { useAuthStore } from '../../store/auth.store'
-import { db, findProductByBarcode, searchProductsOffline, savePendingSale, type CachedProduct } from '../../lib/offline-db'
+import { db, findProductByBarcode, searchProductsOffline, savePendingSale, cacheProducts, type CachedProduct } from '../../lib/offline-db'
 import { formatCurrency, formatNumber } from '../../lib/format'
 import toast from 'react-hot-toast'
 import {
@@ -15,6 +15,7 @@ import {
   DollarSign, Tag, Users, Printer, Clock, Ban, RotateCcw, Edit2, Eye,
 } from 'lucide-react'
 import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
+import { useThermalPrinter } from '../../hooks/useThermalPrinter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -427,6 +428,36 @@ function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =>
   const timeStr = dt.toLocaleTimeString('fr-SN', { hour: '2-digit', minute: '2-digit' })
   const qrValue = sale.ticket ? `SC:${sale.reference}:${sale.ticket.qr_code}` : sale.reference
 
+  const { status: thermalStatus, printReceipt } = useThermalPrinter()
+  const thermalReady = thermalStatus === 'connected' || thermalStatus === 'printing'
+
+  const handleThermalPrint = () => {
+    printReceipt({
+      reference:    sale.reference,
+      created_at:   sale.created_at,
+      store:        sale.store,
+      user:         sale.user,
+      client:       sale.client,
+      items:        (sale.items ?? []).map(i => ({
+        description: i.product?.name ?? i.restaurantItem?.name ?? '—',
+        qty:         i.qty,
+        unit_price_ttc: i.unit_price_ttc,
+        discount_pct:   i.discount_pct,
+      })),
+      payments:     (sale.payments ?? []).map(p => ({
+        payment_method: p.payment_method,
+        amount: p.amount,
+      })),
+      subtotal_ht:  sale.subtotal_ht,
+      vat_amount:   sale.vat_amount,
+      discount_amount: sale.discount_amount,
+      total_ttc:    sale.total_ttc,
+      paid_amount:  sale.paid_amount,
+      change_amount: sale.change_amount,
+      loyalty_points_earned: sale.loyalty_points_earned,
+    })
+  }
+
   const handlePrint = () => window.print()
 
   const sep = <div style={{ borderTop: '1px dashed #666', margin: '7px 0' }} />
@@ -572,14 +603,26 @@ function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =>
         </div>
 
         {/* Action buttons */}
-        <div className="w-full max-w-sm bg-white rounded-b-2xl border-t px-4 pb-5 pt-3 flex gap-3 flex-shrink-0 shadow-2xl">
-          <button
-            onClick={handlePrint}
-            className="flex-1 flex items-center justify-center gap-2 py-3 border-2 text-sm font-semibold rounded-xl transition-colors"
-            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
-          >
-            <Printer size={17} /> Imprimer
-          </button>
+        <div className="w-full max-w-sm bg-white rounded-b-2xl border-t px-4 pb-5 pt-3 flex gap-2 flex-shrink-0 shadow-2xl">
+          {/* Impression thermique si imprimante connectée, sinon navigateur */}
+          {thermalReady ? (
+            <button
+              onClick={handleThermalPrint}
+              disabled={thermalStatus === 'printing'}
+              className="flex-1 flex items-center justify-center gap-2 py-3 border-2 text-sm font-semibold rounded-xl transition-colors border-orange-500 text-orange-600 hover:bg-orange-50 disabled:opacity-50"
+            >
+              <Printer size={17} />
+              {thermalStatus === 'printing' ? 'Impression...' : 'Ticket ESC/POS'}
+            </button>
+          ) : (
+            <button
+              onClick={handlePrint}
+              className="flex-1 flex items-center justify-center gap-2 py-3 border-2 text-sm font-semibold rounded-xl transition-colors"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+            >
+              <Printer size={17} /> Imprimer PDF
+            </button>
+          )}
           <button
             onClick={onNewSale}
             className="flex-1 py-3 btn-primary text-sm font-semibold rounded-xl flex items-center justify-center gap-2"
@@ -1048,6 +1091,53 @@ export default function PosPage() {
     enabled: !is_offline,
   })
 
+  // Cache products to Dexie when online fetch succeeds
+  useEffect(() => {
+    if (!is_offline && gridProducts.length > 0 && !isRestaurant) {
+      cacheProducts(gridProducts.map(p => ({
+        id: p.id,
+        internal_code: p.id.toString(),
+        name: p.name,
+        short_name: p.short_name,
+        sale_price_ttc: p.sale_price_ttc,
+        vat_rate: p.vat_rate,
+        is_weight_based: p.is_weight_based,
+        category_name: p.category_name,
+        stock_qty: p.stock_qty,
+        barcodes: [],
+        updated_at: new Date().toISOString(),
+      })))
+    }
+  }, [gridProducts, is_offline, isRestaurant])
+
+  // Load offline product fallback from Dexie cache
+  const [offlineProducts, setOfflineProducts] = useState<PosItem[]>([])
+
+  useEffect(() => {
+    if (is_offline && !isRestaurant) {
+      db.cachedProducts
+        .filter(p => selectedCategoryId === null || p.category_id === selectedCategoryId)
+        .toArray()
+        .then(products => {
+          setOfflineProducts(products.map(p => ({
+            id: p.id,
+            name: p.name,
+            short_name: p.short_name,
+            sale_price_ttc: p.sale_price_ttc,
+            vat_rate: p.vat_rate,
+            is_weight_based: p.is_weight_based,
+            stock_qty: p.stock_qty,
+            category_name: p.category_name,
+            source: 'product' as const,
+          })))
+        })
+    } else {
+      setOfflineProducts([])
+    }
+  }, [is_offline, isRestaurant, selectedCategoryId])
+
+  const displayProducts = is_offline ? offlineProducts : gridProducts
+
   // Search products / restaurant items
   useEffect(() => {
     if (!search || search.length < 2) { setSearchResults([]); return }
@@ -1375,16 +1465,16 @@ export default function PosPage() {
               <p className="text-xs text-gray-400 mt-1">Vérifiez la connexion au serveur</p>
             </div>
           )}
-          {!search && !productsLoading && !productsError && gridProducts.length === 0 && (
+          {!search && !productsLoading && !productsError && displayProducts.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-gray-300">
               <Scan size={64} className="mb-4" />
               <p className="text-base font-medium">Aucun produit disponible</p>
               <p className="text-sm">Tous les articles sont en rupture de stock</p>
             </div>
           )}
-          {!search && !productsLoading && gridProducts.length > 0 && (
+          {!search && !productsLoading && displayProducts.length > 0 && (
             <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
-              {gridProducts.map(p => (
+              {displayProducts.map(p => (
                 <button
                   key={p.id}
                   onClick={() => addProductToCart(p)}

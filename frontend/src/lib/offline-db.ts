@@ -95,3 +95,11 @@ export async function markSaleSynced(offlineId: string): Promise<void> {
 export async function cacheProducts(products: CachedProduct[]): Promise<void> {
   await db.cachedProducts.bulkPut(products)
 }
+
+export async function markSaleFailed(offlineId: string, error: string): Promise<void> {
+  await db.offlineSales.where('offline_id').equals(offlineId).modify({ status: 'failed', error })
+}
+
+export async function getPendingSalesCount(): Promise<number> {
+  return db.offlineSales.where('status').anyOf(['pending', 'failed']).count()
+}

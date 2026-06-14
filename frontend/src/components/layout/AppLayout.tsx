@@ -9,8 +9,11 @@ import {
   Settings, LogOut, ChevronLeft, ChevronRight, AlertTriangle,
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
-  UtensilsCrossed,
+  UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target,
 } from 'lucide-react'
+import { useNetworkStatus } from '../../hooks/useNetworkStatus'
+import { useOfflineSync } from '../../hooks/useOfflineSync'
+import { getPendingSalesCount } from '../../lib/offline-db'
 
 type BusinessType = 'grande_surface' | 'restaurant' | 'depot' | 'mixte'
 
@@ -37,6 +40,9 @@ const navItems: NavItem[] = [
   { label: 'Fournisseurs',    to: '/suppliers',  icon: <Truck size={18} />,             permission: 'manage_suppliers' },
   { label: 'Achats',          to: '/purchases',  icon: <ArrowLeftRight size={18} />,    permission: 'create_purchase_orders' },
   { label: 'Clients',         to: '/clients',    icon: <Users size={18} />,             permission: 'manage_clients',        hideFor: ['depot'] },
+  { label: 'Facturation',     to: '/invoices',   icon: <FilePlus2 size={18} />,         permission: 'manage_clients',        hideFor: ['depot'] },
+  { label: 'CRM / Leads',     to: '/crm',        icon: <Target size={18} />,            permission: 'manage_clients',        hideFor: ['depot'] },
+  { label: 'Utilisateurs',   to: '/users',      icon: <UserCircle size={18} />,        permission: 'manage_users' },
   { label: 'Promotions',      to: '/promotions', icon: <Percent size={18} />,           permission: 'manage_promotions',     hideFor: ['depot'] },
   { label: 'Pertes',          to: '/losses',     icon: <TrendingDown size={18} />,      permission: 'manage_losses' },
   { label: 'Dépenses',        to: '/expenses',   icon: <Receipt size={18} />,           permission: 'view_accounting' },
@@ -119,6 +125,16 @@ export default function AppLayout() {
   const { user, clearAuth, can, hasLicense } = useAuthStore()
   const { activeStore } = useActiveStoreStore()
   const navigate = useNavigate()
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const { isOnline, wasOffline } = useNetworkStatus()
+  useOfflineSync()
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    getPendingSalesCount().then(setPendingCount)
+    const interval = setInterval(() => getPendingSalesCount().then(setPendingCount), 10000)
+    return () => clearInterval(interval)
+  }, [])
 
   const isSuperAdmin = user?.roles?.includes('super_admin') && !user?.store_id
 
@@ -207,18 +223,25 @@ export default function AppLayout() {
         </nav>
 
         {/* User info */}
-        <div className="border-t border-brand-700 p-3">
+        <div className="border-t border-brand-700 p-3 relative">
           <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isSuperAdmin ? 'bg-yellow-500' : 'bg-primary'}`}>
+            <button
+              onClick={() => !collapsed && setShowUserMenu(m => !m)}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-opacity hover:opacity-80 ${isSuperAdmin ? 'bg-yellow-500' : 'bg-primary'}`}
+              title={collapsed ? user?.name : undefined}
+            >
               {user?.name?.charAt(0)?.toUpperCase()}
-            </div>
+            </button>
             {!collapsed && (
-              <div className="flex-1 min-w-0">
+              <button
+                onClick={() => setShowUserMenu(m => !m)}
+                className="flex-1 min-w-0 text-left"
+              >
                 <p className="text-xs font-medium text-white truncate">{user?.name}</p>
                 <p className="text-xs text-brand-300 capitalize">
                   {isSuperAdmin ? 'Super Admin' : user?.roles?.[0]?.replace('_', ' ')}
                 </p>
-              </div>
+              </button>
             )}
             {!collapsed && (
               <button
@@ -230,11 +253,47 @@ export default function AppLayout() {
               </button>
             )}
           </div>
+
+          {/* User mini-menu */}
+          {showUserMenu && !collapsed && (
+            <div className="absolute bottom-full left-2 right-2 mb-1 bg-brand-800 border border-brand-600 rounded-xl shadow-2xl py-1 z-50">
+              <button
+                onClick={() => { navigate('/profile'); setShowUserMenu(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-200 hover:bg-brand-700 hover:text-white transition-colors"
+              >
+                <UserCircle size={13} /> Mon profil
+              </button>
+              <div className="border-t border-brand-700 my-1" />
+              <button
+                onClick={() => { handleLogout(); setShowUserMenu(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-brand-700 hover:text-red-300 transition-colors"
+              >
+                <LogOut size={13} /> Déconnexion
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
+        {!isOnline && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-xs font-medium">
+            <WifiOff size={13} />
+            <span>Mode hors-ligne — les ventes seront synchronisées au retour d'Internet</span>
+            {pendingCount > 0 && (
+              <span className="ml-auto bg-white/20 px-2 py-0.5 rounded-full">
+                {pendingCount} en attente
+              </span>
+            )}
+          </div>
+        )}
+        {isOnline && wasOffline && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white text-xs font-medium">
+            <Wifi size={13} />
+            <span>Connexion rétablie — synchronisation en cours...</span>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>

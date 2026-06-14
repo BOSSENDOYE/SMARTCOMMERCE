@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AccountingTab = 'plan' | 'journal' | 'ledger' | 'balance' | 'resultat'
+type AccountingTab = 'plan' | 'journal' | 'ledger' | 'balance' | 'resultat' | 'bilan'
 
 interface Account {
   id: number
@@ -101,6 +101,7 @@ export default function AccountingPage() {
     { id: 'ledger',   label: 'Grand livre' },
     { id: 'balance',  label: 'Balance' },
     { id: 'resultat', label: 'Résultat' },
+    { id: 'bilan',    label: 'Bilan OHADA' },
   ]
 
   return (
@@ -145,6 +146,7 @@ export default function AccountingPage() {
       {tab === 'ledger'   && <GrandLivre dateFrom={dateFrom} dateTo={dateTo} />}
       {tab === 'balance'  && <Balance dateFrom={dateFrom} dateTo={dateTo} />}
       {tab === 'resultat' && <Resultat dateFrom={dateFrom} dateTo={dateTo} />}
+      {tab === 'bilan'    && <Bilan dateTo={dateTo} />}
     </div>
   )
 }
@@ -736,6 +738,197 @@ function Balance({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
           </table>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ─── Bilan OHADA ─────────────────────────────────────────────────────────────
+
+interface BilanRow { id: number; code: string; name: string; solde: number; montant?: number }
+
+interface BilanData {
+  actif: {
+    immobilise: BilanRow[]; stocks: BilanRow[]; creances: BilanRow[]
+    tresorerie: BilanRow[]; perte_exercice: number; total: number
+  }
+  passif: {
+    capitaux: BilanRow[]; resultat: number; dettes: BilanRow[]; total: number
+  }
+  resultat: number
+  equilibre: boolean
+  date_to: string
+}
+
+function BilanSection({ title, color, rows, extra, extraLabel }: {
+  title: string; color: string
+  rows: BilanRow[]; extra?: number; extraLabel?: string
+}) {
+  const total = rows.reduce((s, r) => s + (r.montant ?? r.solde), 0) + (extra ?? 0)
+  if (total === 0 && rows.length === 0) return null
+  return (
+    <div className="mb-3">
+      <div className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider ${color}`}>
+        {title}
+      </div>
+      <table className="w-full text-sm">
+        <tbody className="divide-y divide-gray-100">
+          {rows.map(r => (
+            <tr key={r.id} className="hover:bg-gray-50">
+              <td className="px-3 py-2 font-mono text-xs text-gray-400 w-20">{r.code}</td>
+              <td className="px-3 py-2 text-gray-700">{r.name}</td>
+              <td className="px-3 py-2 text-right font-medium text-gray-900">
+                {formatCurrency(r.montant ?? r.solde)}
+              </td>
+            </tr>
+          ))}
+          {extra != null && extra > 0 && (
+            <tr className="hover:bg-gray-50 italic">
+              <td className="px-3 py-2 font-mono text-xs text-gray-400">—</td>
+              <td className="px-3 py-2 text-gray-600">{extraLabel}</td>
+              <td className="px-3 py-2 text-right font-medium text-gray-900">{formatCurrency(extra)}</td>
+            </tr>
+          )}
+        </tbody>
+        <tfoot>
+          <tr className={`${color} font-semibold text-sm`}>
+            <td colSpan={2} className="px-3 py-2">Sous-total {title}</td>
+            <td className="px-3 py-2 text-right">{formatCurrency(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
+function Bilan({ dateTo }: { dateTo: string }) {
+  const { data, isLoading } = useQuery<BilanData>({
+    queryKey: ['bilan', dateTo],
+    queryFn: () => api.get('/accounting/bilan', { params: { date_to: dateTo } }).then(r => r.data),
+  })
+
+  if (isLoading) return <div className="text-center py-12 text-gray-400">Chargement du bilan…</div>
+  if (!data) return null
+
+  const { actif, passif, resultat, equilibre } = data
+
+  return (
+    <div className="space-y-4">
+      {/* En-tête */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Bilan SYSCOHADA</h2>
+          <p className="text-xs text-gray-400">Arrêté au {new Date(dateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+        </div>
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${
+          equilibre ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+        }`}>
+          {equilibre ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+          {equilibre ? 'Bilan équilibré' : 'Déséquilibre détecté'}
+        </div>
+      </div>
+
+      {/* Résultat KPI */}
+      <div className={`card p-4 border-l-4 flex items-center justify-between ${
+        resultat >= 0 ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'
+      }`}>
+        <div className="flex items-center gap-3">
+          {resultat >= 0
+            ? <TrendingUp size={22} className="text-green-600" />
+            : <TrendingDown size={22} className="text-red-500" />}
+          <div>
+            <p className="text-xs text-gray-500">Résultat de l'exercice</p>
+            <p className={`text-2xl font-bold ${resultat >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+              {resultat >= 0 ? '+' : ''}{formatCurrency(resultat)}
+            </p>
+          </div>
+        </div>
+        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+          resultat >= 0 ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+        }`}>
+          {resultat >= 0 ? 'BÉNÉFICE' : 'PERTE'}
+        </span>
+      </div>
+
+      {/* Colonnes Actif / Passif */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* ── ACTIF ── */}
+        <div className="card p-0 overflow-hidden">
+          <div className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between">
+            <span className="font-bold text-sm tracking-wide">ACTIF</span>
+            <span className="text-blue-100 text-sm font-semibold">{formatCurrency(actif.total)}</span>
+          </div>
+
+          <BilanSection
+            title="Actif immobilisé (Cl. 2)"
+            color="bg-blue-50 text-blue-700"
+            rows={actif.immobilise}
+          />
+          <BilanSection
+            title="Stocks (Cl. 3)"
+            color="bg-indigo-50 text-indigo-700"
+            rows={actif.stocks}
+          />
+          <BilanSection
+            title="Créances (Cl. 4)"
+            color="bg-violet-50 text-violet-700"
+            rows={actif.creances}
+          />
+          <BilanSection
+            title="Trésorerie (Cl. 5)"
+            color="bg-cyan-50 text-cyan-700"
+            rows={actif.tresorerie}
+          />
+          {actif.perte_exercice > 0 && (
+            <div className="px-3 py-2 flex justify-between items-center bg-red-50 text-red-700 text-sm italic border-t">
+              <span>Perte de l'exercice</span>
+              <span className="font-semibold">{formatCurrency(actif.perte_exercice)}</span>
+            </div>
+          )}
+
+          {/* Total Actif */}
+          <div className="bg-blue-600 text-white px-4 py-3 flex justify-between font-bold text-sm mt-auto">
+            <span>TOTAL ACTIF</span>
+            <span>{formatCurrency(actif.total)}</span>
+          </div>
+        </div>
+
+        {/* ── PASSIF ── */}
+        <div className="card p-0 overflow-hidden">
+          <div className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between">
+            <span className="font-bold text-sm tracking-wide">PASSIF</span>
+            <span className="text-emerald-100 text-sm font-semibold">{formatCurrency(passif.total)}</span>
+          </div>
+
+          <BilanSection
+            title="Capitaux propres (Cl. 1)"
+            color="bg-emerald-50 text-emerald-700"
+            rows={passif.capitaux}
+            extra={passif.resultat}
+            extraLabel="Résultat de l'exercice (bénéfice)"
+          />
+          <BilanSection
+            title="Dettes (Cl. 4)"
+            color="bg-orange-50 text-orange-700"
+            rows={passif.dettes}
+          />
+
+          {/* Total Passif */}
+          <div className="bg-emerald-600 text-white px-4 py-3 flex justify-between font-bold text-sm mt-auto">
+            <span>TOTAL PASSIF</span>
+            <span>{formatCurrency(passif.total)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Avertissement si données insuffisantes */}
+      {actif.total === 0 && passif.total === 0 && (
+        <div className="card p-6 text-center text-gray-400 space-y-2">
+          <AlertCircle size={32} className="mx-auto text-amber-400" />
+          <p className="font-medium text-gray-600">Aucune donnée comptable</p>
+          <p className="text-sm">Initialisez le plan comptable et générez les écritures depuis l'onglet <strong>Journal</strong>.</p>
+        </div>
+      )}
     </div>
   )
 }

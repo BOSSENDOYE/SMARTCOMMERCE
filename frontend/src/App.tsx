@@ -27,6 +27,11 @@ const PrintTemplatesPage = lazy(() => import('./pages/settings/PrintTemplatesPag
 const TransfersPage       = lazy(() => import('./pages/transfers/TransfersPage'))
 const ExpensesPage        = lazy(() => import('./pages/expenses/ExpensesPage'))
 const RestaurantMenuPage  = lazy(() => import('./pages/restaurant/RestaurantMenuPage'))
+const UsersPage           = lazy(() => import('./pages/settings/UsersPage'))
+const InvoicesPage        = lazy(() => import('./pages/invoices/InvoicesPage'))
+const CrmPage             = lazy(() => import('./pages/crm/CrmPage'))
+const ProfilePage         = lazy(() => import('./pages/settings/ProfilePage'))
+const RolesPage           = lazy(() => import('./pages/settings/RolesPage'))
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -86,6 +91,11 @@ export default function App() {
             <Route path="transfers" element={<Suspense fallback={<PageLoader />}><TransfersPage /></Suspense>} />
             <Route path="expenses" element={<Suspense fallback={<PageLoader />}><ExpensesPage /></Suspense>} />
             <Route path="restaurant-menu" element={<Suspense fallback={<PageLoader />}><RestaurantMenuPage /></Suspense>} />
+            <Route path="users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
+            <Route path="roles" element={<Suspense fallback={<PageLoader />}><RolesPage /></Suspense>} />
+            <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />
+            <Route path="invoices" element={<Suspense fallback={<PageLoader />}><InvoicesPage /></Suspense>} />
+            <Route path="crm" element={<Suspense fallback={<PageLoader />}><CrmPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

@@ -317,6 +317,108 @@ class AccountingController extends Controller
     }
 
     // -----------------------------------------------------------------------
+    // Bilan OHADA (Actif / Passif)
+    // -----------------------------------------------------------------------
+
+    public function bilan(Request $request)
+    {
+        $storeId = $this->storeId($request);
+        $to      = $request->input('date_to', now()->toDateString());
+
+        // Solde cumulé de chaque compte jusqu'à la date demandée
+        $rows = DB::table('accounting_accounts as a')
+            ->leftJoin('journal_entry_lines as l', 'l.account_id', '=', 'a.id')
+            ->leftJoin('journal_entries as e', function ($join) use ($storeId, $to) {
+                $join->on('e.id', '=', 'l.journal_entry_id')
+                     ->where('e.store_id', $storeId)
+                     ->where('e.status', 'valide')
+                     ->whereDate('e.entry_date', '<=', $to);
+            })
+            ->where('a.store_id', $storeId)
+            ->where('a.is_active', true)
+            ->select(
+                'a.id', 'a.code', 'a.name', 'a.class', 'a.nature',
+                DB::raw('COALESCE(SUM(l.debit), 0)  as total_debit'),
+                DB::raw('COALESCE(SUM(l.credit), 0) as total_credit'),
+                DB::raw('COALESCE(SUM(l.debit), 0) - COALESCE(SUM(l.credit), 0) as solde')
+            )
+            ->groupBy('a.id', 'a.code', 'a.name', 'a.class', 'a.nature')
+            ->orderBy('a.code')
+            ->get();
+
+        // Résultat de l'exercice = Total produits (Cl.7) - Total charges (Cl.6)
+        $totalProduits = $rows->where('class', '7')->sum(fn($r) => $r->total_credit - $r->total_debit);
+        $totalCharges  = $rows->where('class', '6')->sum(fn($r) => $r->total_debit  - $r->total_credit);
+        $resultat      = $totalProduits - $totalCharges;
+
+        // ── ACTIF ─────────────────────────────────────────────────────────
+        $immobilise = $rows->where('class', '2')
+            ->where('solde', '>', 0)
+            ->values();
+
+        $stocks = $rows->where('class', '3')
+            ->where('solde', '>', 0)
+            ->values();
+
+        $creances = $rows->where('class', '4')
+            ->where('nature', 'actif')
+            ->where('solde', '>', 0)
+            ->values();
+
+        $tresorerieActif = $rows->where('nature', 'tresorerie')
+            ->where('solde', '>', 0)
+            ->values();
+
+        // Perte de l'exercice = actif si résultat < 0
+        $perteActif = $resultat < 0 ? abs($resultat) : 0;
+
+        $totalActif = $immobilise->sum('solde')
+                    + $stocks->sum('solde')
+                    + $creances->sum('solde')
+                    + $tresorerieActif->sum('solde')
+                    + $perteActif;
+
+        // ── PASSIF ────────────────────────────────────────────────────────
+        $capitaux = $rows->where('class', '1')
+            ->where('nature', 'passif')
+            ->map(fn($r) => (object) array_merge((array) $r, ['montant' => abs((float) $r->solde)]))
+            ->values();
+
+        $dettes = $rows->where('class', '4')
+            ->where('nature', 'passif')
+            ->where('solde', '<', 0)
+            ->map(fn($r) => (object) array_merge((array) $r, ['montant' => abs((float) $r->solde)]))
+            ->values();
+
+        // Bénéfice = passif si résultat > 0
+        $beneficePassif = $resultat > 0 ? $resultat : 0;
+
+        $totalPassif = $capitaux->sum('montant')
+                     + $dettes->sum('montant')
+                     + $beneficePassif;
+
+        return response()->json([
+            'actif' => [
+                'immobilise'   => $immobilise,
+                'stocks'       => $stocks,
+                'creances'     => $creances,
+                'tresorerie'   => $tresorerieActif,
+                'perte_exercice' => $perteActif,
+                'total'        => $totalActif,
+            ],
+            'passif' => [
+                'capitaux'     => $capitaux,
+                'resultat'     => $beneficePassif,
+                'dettes'       => $dettes,
+                'total'        => $totalPassif,
+            ],
+            'resultat'     => $resultat,
+            'equilibre'    => abs($totalActif - $totalPassif) < 1,
+            'date_to'      => $to,
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
     // Génération automatique depuis les ventes
     // -----------------------------------------------------------------------
 

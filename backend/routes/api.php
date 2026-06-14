@@ -246,6 +246,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/ledger/{account}',           [\App\Http\Controllers\Api\AccountingController::class, 'generalLedger']);
             Route::get('/trial-balance',              [\App\Http\Controllers\Api\AccountingController::class, 'trialBalance']);
             Route::get('/income-statement',           [\App\Http\Controllers\Api\AccountingController::class, 'incomeStatement']);
+            Route::get('/bilan',                      [\App\Http\Controllers\Api\AccountingController::class, 'bilan']);
             Route::post('/generate/sales',            [\App\Http\Controllers\Api\AccountingController::class, 'generateFromSales']);
             Route::post('/generate/purchases',        [\App\Http\Controllers\Api\AccountingController::class, 'generateFromPurchases']);
             Route::post('/generate/expenses',         [\App\Http\Controllers\Api\AccountingController::class, 'generateFromExpenses']);
@@ -281,6 +282,13 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('/stores', \App\Http\Controllers\Api\StoreController::class);
         Route::post('/stores/{store}/logo', [\App\Http\Controllers\Api\StoreController::class, 'uploadLogo']);
         Route::apiResource('/users', \App\Http\Controllers\Api\UserController::class);
+        Route::put('/profile', [\App\Http\Controllers\Api\UserController::class, 'updateProfile']);
+        // Roles & Permissions management
+        Route::get('/roles', [\App\Http\Controllers\Api\RoleController::class, 'index']);
+        Route::post('/roles', [\App\Http\Controllers\Api\RoleController::class, 'store']);
+        Route::put('/roles/{role}', [\App\Http\Controllers\Api\RoleController::class, 'update']);
+        Route::delete('/roles/{role}', [\App\Http\Controllers\Api\RoleController::class, 'destroy']);
+        Route::get('/permissions', [\App\Http\Controllers\Api\RoleController::class, 'permissions']);
 
         // Store Transfers (inter-magasins)
         Route::get('/store-transfers', [\App\Http\Controllers\Api\StoreTransferController::class, 'index']);
@@ -297,5 +305,46 @@ Route::prefix('v1')->group(function () {
                 ->orderByDesc('created_at')
                 ->paginate(50)
         ));
+
+        // ── Facturation & Devis ────────────────────────────────────────────────
+        Route::prefix('invoices')->group(function () {
+            Route::get('/stats',                   [\App\Http\Controllers\Api\InvoiceController::class, 'stats']);
+            Route::get('/',                        [\App\Http\Controllers\Api\InvoiceController::class, 'index']);
+            Route::post('/',                       [\App\Http\Controllers\Api\InvoiceController::class, 'store']);
+            Route::get('/{invoice}',               [\App\Http\Controllers\Api\InvoiceController::class, 'show']);
+            Route::put('/{invoice}',               [\App\Http\Controllers\Api\InvoiceController::class, 'update']);
+            Route::delete('/{invoice}',            [\App\Http\Controllers\Api\InvoiceController::class, 'destroy']);
+            Route::post('/{invoice}/mark-sent',    [\App\Http\Controllers\Api\InvoiceController::class, 'markSent']);
+            Route::post('/{invoice}/cancel',       [\App\Http\Controllers\Api\InvoiceController::class, 'cancel']);
+            Route::post('/{invoice}/payments',     [\App\Http\Controllers\Api\InvoiceController::class, 'addPayment']);
+            Route::post('/{invoice}/reminders',    [\App\Http\Controllers\Api\InvoiceController::class, 'addReminder']);
+        });
+
+        Route::prefix('quotes')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\Api\InvoiceController::class, 'quotesIndex']);
+            Route::post('/',                       [\App\Http\Controllers\Api\InvoiceController::class, 'quotesStore']);
+            Route::get('/{quote}',                 [\App\Http\Controllers\Api\InvoiceController::class, 'quotesShow']);
+            Route::put('/{quote}',                 [\App\Http\Controllers\Api\InvoiceController::class, 'quotesUpdate']);
+            Route::delete('/{quote}',              [\App\Http\Controllers\Api\InvoiceController::class, 'quotesDestroy']);
+            Route::post('/{quote}/mark-sent',      [\App\Http\Controllers\Api\InvoiceController::class, 'quoteMarkSent']);
+            Route::post('/{quote}/accept',         [\App\Http\Controllers\Api\InvoiceController::class, 'quoteAccept']);
+            Route::post('/{quote}/convert',        [\App\Http\Controllers\Api\InvoiceController::class, 'quoteConvert']);
+        });
+
+        // ── CRM ───────────────────────────────────────────────────────────────
+        Route::prefix('crm')->group(function () {
+            Route::get('/stats',                                   [\App\Http\Controllers\Api\CrmController::class, 'stats']);
+            Route::get('/tasks',                                   [\App\Http\Controllers\Api\CrmController::class, 'tasks']);
+            Route::get('/leads',                                   [\App\Http\Controllers\Api\CrmController::class, 'index']);
+            Route::post('/leads',                                  [\App\Http\Controllers\Api\CrmController::class, 'store']);
+            Route::get('/leads/{crmLead}',                         [\App\Http\Controllers\Api\CrmController::class, 'show']);
+            Route::put('/leads/{crmLead}',                         [\App\Http\Controllers\Api\CrmController::class, 'update']);
+            Route::delete('/leads/{crmLead}',                      [\App\Http\Controllers\Api\CrmController::class, 'destroy']);
+            Route::post('/leads/{crmLead}/move-stage',             [\App\Http\Controllers\Api\CrmController::class, 'moveStage']);
+            Route::post('/leads/{crmLead}/convert-to-client',      [\App\Http\Controllers\Api\CrmController::class, 'convertToClient']);
+            Route::post('/leads/{crmLead}/activities',             [\App\Http\Controllers\Api\CrmController::class, 'storeActivity']);
+            Route::post('/activities/{crmActivity}/complete',      [\App\Http\Controllers\Api\CrmController::class, 'completeActivity']);
+            Route::delete('/activities/{crmActivity}',             [\App\Http\Controllers\Api\CrmController::class, 'destroyActivity']);
+        });
     });
 });
