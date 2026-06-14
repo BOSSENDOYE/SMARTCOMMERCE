@@ -11,5 +11,5 @@ class DiningArea extends Model
 
     protected $casts = ['is_active' => 'boolean'];
 
-    public function tables(): HasMany { return $this->hasMany(Table::class); }
+    public function tables(): HasMany { return $this->hasMany(Table::class, 'area_id'); }
 }
