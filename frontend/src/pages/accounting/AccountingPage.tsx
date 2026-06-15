@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
-import { formatCurrency, formatDate } from '../../lib/format'
-import { BookOpen, Plus, RefreshCw, CheckCircle, ChevronRight, AlertCircle, TrendingUp, TrendingDown } from 'lucide-react'
+import { formatCurrency, formatDate, downloadPdf } from '../../lib/format'
+import { BookOpen, Plus, RefreshCw, CheckCircle, ChevronRight, AlertCircle, TrendingUp, TrendingDown, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useConfirm } from '../../hooks/useConfirm'
 
@@ -86,6 +86,26 @@ function statusBadge(status: string) {
   return status === 'valide'
     ? <span className="badge-success">Validé</span>
     : <span className="badge-warning">Brouillon</span>
+}
+
+function ExportPdf({ path, filename, params }: {
+  path: string
+  filename: string
+  params?: Record<string, string>
+}) {
+  const [loading, setLoading] = useState(false)
+  const handle = async () => {
+    setLoading(true)
+    try { await downloadPdf(path, filename, params) }
+    catch { toast.error('Erreur lors de la génération du PDF') }
+    finally { setLoading(false) }
+  }
+  return (
+    <button onClick={handle} disabled={loading} className="btn-secondary flex items-center gap-2 text-sm">
+      <Download size={14} className={loading ? 'animate-spin' : ''} />
+      {loading ? 'Génération…' : 'Exporter PDF'}
+    </button>
+  )
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -361,9 +381,16 @@ function Journal({
           <button onClick={() => genExpMut.mutate()} disabled={genExpMut.isPending} className="btn-secondary flex items-center gap-2 text-sm">
             <RefreshCw size={14} className={genExpMut.isPending ? 'animate-spin' : ''} /> Dépenses
           </button>
-          <button onClick={() => setShowForm(!showForm)} className="btn-secondary flex items-center gap-2 text-sm ml-auto">
-            <Plus size={14} /> Écriture manuelle
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <ExportPdf
+              path="/pdf/accounting/journal"
+              filename={`Journal-${dateFrom}-${dateTo}.pdf`}
+              params={{ date_from: dateFrom, date_to: dateTo }}
+            />
+            <button onClick={() => setShowForm(!showForm)} className="btn-secondary flex items-center gap-2 text-sm">
+              <Plus size={14} /> Écriture manuelle
+            </button>
+          </div>
         </div>
       </div>
 
@@ -682,6 +709,13 @@ function Balance({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportPdf
+          path="/pdf/accounting/balance"
+          filename={`Balance-${dateFrom}-${dateTo}.pdf`}
+          params={{ date_from: dateFrom, date_to: dateTo }}
+        />
+      </div>
       {isLoading && <div className="text-center py-8 text-gray-400">Chargement…</div>}
 
       {totals && (
@@ -821,11 +855,18 @@ function Bilan({ dateTo }: { dateTo: string }) {
           <h2 className="text-lg font-bold text-gray-900">Bilan SYSCOHADA</h2>
           <p className="text-xs text-gray-400">Arrêté au {new Date(dateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
         </div>
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${
-          equilibre ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-        }`}>
-          {equilibre ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
-          {equilibre ? 'Bilan équilibré' : 'Déséquilibre détecté'}
+        <div className="flex items-center gap-3">
+          <ExportPdf
+            path="/pdf/accounting/bilan"
+            filename={`Bilan-OHADA-${dateTo}.pdf`}
+            params={{ date_to: dateTo }}
+          />
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${
+            equilibre ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+          }`}>
+            {equilibre ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+            {equilibre ? 'Bilan équilibré' : 'Déséquilibre détecté'}
+          </div>
         </div>
       </div>
 
@@ -950,6 +991,13 @@ function Resultat({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
 
   return (
     <div className="space-y-4 max-w-3xl">
+      <div className="flex justify-end">
+        <ExportPdf
+          path="/pdf/accounting/resultat"
+          filename={`Resultat-${dateFrom}-${dateTo}.pdf`}
+          params={{ date_from: dateFrom, date_to: dateTo }}
+        />
+      </div>
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
         <div className="card p-4 text-center">

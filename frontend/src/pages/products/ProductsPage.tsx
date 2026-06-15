@@ -9,6 +9,7 @@ import {
   Eye, Filter, ChevronDown, Trash2, History, Barcode, FolderTree,
   ChevronRight as ChevronRightIcon, Pencil, FolderPlus, Camera, Printer,
   Box, ArrowRightLeft, Upload, FileDown, CheckCircle, AlertCircle, Loader2,
+  MapPin, LayoutGrid, Move, Palette,
 } from 'lucide-react'
 import { useConfirm } from '../../hooks/useConfirm'
 
@@ -24,6 +25,16 @@ interface ProductStats {
 interface Category { id: number; name: string; type?: string; parent_id?: number | null; children?: Category[] }
 interface Brand { id: number; name: string }
 interface Unit { id: number; name: string; abbreviation: string }
+
+interface StoreSection {
+  id: number
+  name: string
+  code?: string | null
+  color: string
+  icon?: string | null
+  sort_order: number
+  products_count?: number
+}
 
 interface Container {
   id?: number
@@ -75,6 +86,9 @@ interface Product {
   stock_level?: { qty_on_hand: number; avg_cost: number }
   barcodes?: { barcode: string; is_primary: boolean; type: string }[]
   priceHistory?: PriceHistoryItem[]
+  section_id?: number | null
+  slot?: string | null
+  section?: { id: number; name: string; color: string } | null
 }
 
 interface ContainerForm {
@@ -397,6 +411,11 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     createBrandMutation.mutate({ name: newBrandName.trim() })
   }
 
+  const { data: sections = [] } = useQuery<StoreSection[]>({
+    queryKey: ['sections'],
+    queryFn: () => api.get('/sections').then(r => r.data),
+  })
+
   const [form, setForm] = useState({
     name: product?.name ?? '',
     short_name: product?.short_name ?? '',
@@ -412,6 +431,8 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     alert_stock: product?.alert_stock?.toString() ?? '',
     is_weight_based: product?.is_weight_based ?? false,
     track_expiry: product?.track_expiry ?? false,
+    section_id: product?.section_id?.toString() ?? '',
+    slot: product?.slot ?? '',
   })
 
   const [barcodes, setBarcodes] = useState<BarcodeEntry[]>(
@@ -518,6 +539,8 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
       alert_stock: form.alert_stock ? Number(form.alert_stock) : undefined,
       is_weight_based: form.is_weight_based,
       track_expiry: form.track_expiry,
+      section_id: form.section_id ? Number(form.section_id) : null,
+      slot: form.slot || null,
       barcodes: validBarcodes.length ? validBarcodes : undefined,
       containers: validContainers,
     })
@@ -715,6 +738,39 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
               </label>
             </div>
           </div>
+
+          {/* Rangement */}
+          {sections.length > 0 && (
+            <div className="bg-indigo-50/60 rounded-xl p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <MapPin size={14} className="text-indigo-500" /> Emplacement en magasin
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Rayon</label>
+                  <select value={form.section_id} onChange={set('section_id')} className="input">
+                    <option value="">— Aucun rayon —</option>
+                    {sections.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.code ? `[${s.code}] ` : ''}{s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Position / Emplacement</label>
+                  <input
+                    type="text"
+                    value={form.slot}
+                    onChange={set('slot')}
+                    className="input"
+                    placeholder="ex: Allée 3 - Étagère 2"
+                    disabled={!form.section_id}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Contenances */}
           <div className="bg-gray-50 rounded-xl p-4">
@@ -1171,12 +1227,398 @@ function CategoriesTab() {
   )
 }
 
+// ─── Rangement Tab ───────────────────────────────────────────────────────────
+
+const SECTION_COLORS = [
+  '#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316',
+  '#eab308','#22c55e','#14b8a6','#06b6d4','#3b82f6',
+  '#64748b','#78716c',
+]
+
+interface SectionProduct {
+  id: number; internal_code: string; name: string; slot: string | null
+  category: { id: number; name: string } | null
+  unit: { abbreviation: string } | null
+  qty_on_hand: number; is_active: boolean
+}
+
+function SectionFormModal({ section, onClose }: {
+  section?: StoreSection | null
+  onClose: () => void
+}) {
+  const qc = useQueryClient()
+  const [name, setName]   = useState(section?.name ?? '')
+  const [code, setCode]   = useState(section?.code ?? '')
+  const [color, setColor] = useState(section?.color ?? SECTION_COLORS[0])
+  const [icon, setIcon]   = useState(section?.icon ?? '')
+
+  const mut = useMutation({
+    mutationFn: (data: object) =>
+      section ? api.put(`/sections/${section.id}`, data) : api.post('/sections', data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sections'] })
+      toast.success(section ? 'Rayon mis à jour' : 'Rayon créé')
+      onClose()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? 'Erreur'),
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    mut.mutate({ name: name.trim(), code: code.trim() || null, color, icon: icon.trim() || null })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="p-5 border-b flex items-center justify-between">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <MapPin size={18} className="text-indigo-500" />
+            {section ? 'Modifier le rayon' : 'Nouveau rayon'}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Nom du rayon *</label>
+              <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder="ex: Épicerie sèche" autoFocus />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Code court</label>
+              <input value={code} onChange={e => setCode(e.target.value)} className="input" placeholder="R01" maxLength={10} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
+              <Palette size={11} /> Couleur
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {SECTION_COLORS.map(c => (
+                <button key={c} type="button" onClick={() => setColor(c)}
+                  className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${color === c ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : ''}`}
+                  style={{ backgroundColor: c }} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Icône (emoji optionnel)</label>
+            <input value={icon} onChange={e => setIcon(e.target.value)} className="input w-24" placeholder="🛒" maxLength={4} />
+          </div>
+
+          {/* Preview */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg font-bold"
+              style={{ backgroundColor: color }}>
+              {icon || name.charAt(0).toUpperCase() || '?'}
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">{name || 'Nom du rayon'}</p>
+              {code && <p className="text-xs text-gray-400 font-mono">{code}</p>}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">Annuler</button>
+            <button type="submit" disabled={mut.isPending || !name.trim()} className="btn-primary flex-1 flex items-center justify-center gap-2">
+              <Check size={15} />
+              {mut.isPending ? 'Enregistrement…' : (section ? 'Modifier' : 'Créer le rayon')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function RangementTab() {
+  const qc = useQueryClient()
+  const confirm = useConfirm()
+  const [selectedSectionId, setSelectedSectionId] = useState<number | 'unassigned' | null>(null)
+  const [editSection, setEditSection] = useState<StoreSection | null | undefined>(undefined)
+  const [editingSlot, setEditingSlot] = useState<{ id: number; value: string } | null>(null)
+
+  const { data: sections = [], isLoading: sectLoading } = useQuery<StoreSection[]>({
+    queryKey: ['sections'],
+    queryFn: () => api.get('/sections').then(r => r.data),
+  })
+
+  const { data: sectionProducts = [], isLoading: prodLoading } = useQuery<SectionProduct[]>({
+    queryKey: ['section-products', selectedSectionId],
+    queryFn: () =>
+      selectedSectionId === 'unassigned'
+        ? api.get('/sections/unassigned').then(r => r.data)
+        : api.get(`/sections/${selectedSectionId}/products`).then(r => r.data),
+    enabled: selectedSectionId !== null,
+  })
+
+  const deleteSection = useMutation({
+    mutationFn: (id: number) => api.delete(`/sections/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sections'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+      if (typeof selectedSectionId === 'number') setSelectedSectionId(null)
+      toast.success('Rayon supprimé')
+    },
+    onError: () => toast.error('Erreur lors de la suppression'),
+  })
+
+  const assignMut = useMutation({
+    mutationFn: ({ sectionId, productId, slot }: { sectionId: number; productId: number; slot: string | null }) =>
+      api.post(`/sections/${sectionId}/assign`, { product_id: productId, slot }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['section-products'] })
+      qc.invalidateQueries({ queryKey: ['sections'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+    },
+    onError: () => toast.error('Erreur lors de l\'affectation'),
+  })
+
+  const unassignMut = useMutation({
+    mutationFn: (productId: number) => api.delete(`/sections/products/${productId}/unassign`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['section-products'] })
+      qc.invalidateQueries({ queryKey: ['sections'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+    },
+    onError: () => toast.error('Erreur lors du retrait'),
+  })
+
+  const saveSlot = (product: SectionProduct) => {
+    if (!editingSlot || editingSlot.id !== product.id) return
+    if (typeof selectedSectionId === 'number') {
+      assignMut.mutate({ sectionId: selectedSectionId, productId: product.id, slot: editingSlot.value || null })
+    }
+    setEditingSlot(null)
+  }
+
+  const handleDeleteSection = async (s: StoreSection) => {
+    if (!(await confirm(`Supprimer le rayon "${s.name}" ?\nLes ${s.products_count ?? 0} produit(s) associé(s) seront désaffectés.`, { danger: true }))) return
+    deleteSection.mutate(s.id)
+  }
+
+  const totalProducts = sections.reduce((sum, s) => sum + (s.products_count ?? 0), 0)
+
+  return (
+    <div className="flex gap-4 min-h-[500px]">
+      {/* ── Panneau gauche : liste des rayons ── */}
+      <div className="w-72 flex-shrink-0 space-y-2">
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="card p-3 text-center">
+            <p className="text-2xl font-bold text-indigo-600">{sections.length}</p>
+            <p className="text-xs text-gray-500">Rayons</p>
+          </div>
+          <div className="card p-3 text-center">
+            <p className="text-2xl font-bold text-gray-700">{totalProducts}</p>
+            <p className="text-xs text-gray-500">Produits affectés</p>
+          </div>
+        </div>
+
+        {/* Bouton nouveau rayon */}
+        <button onClick={() => setEditSection(null)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 text-sm font-medium transition-colors">
+          <Plus size={16} /> Nouveau rayon
+        </button>
+
+        {sectLoading && <div className="text-center py-4 text-gray-400 text-sm">Chargement…</div>}
+
+        {/* Section "Non affectés" */}
+        <button
+          onClick={() => setSelectedSectionId('unassigned')}
+          className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-2.5 text-sm transition-colors border ${
+            selectedSectionId === 'unassigned'
+              ? 'bg-amber-50 border-amber-200 text-amber-800'
+              : 'bg-white border-gray-200 hover:border-amber-200 hover:bg-amber-50/50 text-gray-600'
+          }`}>
+          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle size={14} className="text-amber-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">Non affectés</p>
+            <p className="text-xs opacity-70">Sans rayon assigné</p>
+          </div>
+        </button>
+
+        {/* Liste des rayons */}
+        {sections.map(s => (
+          <button
+            key={s.id}
+            onClick={() => setSelectedSectionId(s.id)}
+            className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-2.5 text-sm transition-colors border group ${
+              selectedSectionId === s.id
+                ? 'border-transparent shadow-sm'
+                : 'bg-white border-gray-200 hover:border-gray-300 text-gray-700'
+            }`}
+            style={selectedSectionId === s.id ? { backgroundColor: s.color + '18', borderColor: s.color + '60' } : {}}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-sm font-bold"
+              style={{ backgroundColor: s.color }}>
+              {s.icon || s.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium truncate" style={selectedSectionId === s.id ? { color: s.color } : {}}>
+                {s.name}
+              </p>
+              <p className="text-xs text-gray-400">
+                {s.code && <span className="font-mono mr-1">[{s.code}]</span>}
+                {s.products_count ?? 0} produit(s)
+              </p>
+            </div>
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span onClick={e => { e.stopPropagation(); setEditSection(s) }}
+                className="p-1 rounded hover:bg-white/80 text-gray-400 hover:text-indigo-600 cursor-pointer">
+                <Pencil size={12} />
+              </span>
+              <span onClick={e => { e.stopPropagation(); handleDeleteSection(s) }}
+                className="p-1 rounded hover:bg-white/80 text-gray-400 hover:text-red-500 cursor-pointer">
+                <Trash2 size={12} />
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Panneau droit : produits du rayon sélectionné ── */}
+      <div className="flex-1 min-w-0">
+        {selectedSectionId === null ? (
+          <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 card p-12">
+            <LayoutGrid size={48} className="mx-auto mb-4 opacity-20" />
+            <p className="text-lg font-medium text-gray-500">Sélectionnez un rayon</p>
+            <p className="text-sm mt-1">Cliquez sur un rayon à gauche pour voir et gérer ses produits</p>
+            {sections.length === 0 && !sectLoading && (
+              <button onClick={() => setEditSection(null)} className="mt-4 btn-primary flex items-center gap-2">
+                <Plus size={16} /> Créer le premier rayon
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="card p-0 overflow-hidden">
+            {/* Header du panel */}
+            <div className="px-4 py-3 border-b flex items-center justify-between"
+              style={selectedSectionId !== 'unassigned' && sections.find(s => s.id === selectedSectionId) ? {
+                backgroundColor: (sections.find(s => s.id === selectedSectionId)!.color) + '12'
+              } : { backgroundColor: '#fef3c720' }}>
+              <div className="flex items-center gap-3">
+                {selectedSectionId !== 'unassigned' && sections.find(s => s.id === selectedSectionId) && (
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold"
+                    style={{ backgroundColor: sections.find(s => s.id === selectedSectionId)!.color }}>
+                    {sections.find(s => s.id === selectedSectionId)!.icon ||
+                     sections.find(s => s.id === selectedSectionId)!.name.charAt(0)}
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    {selectedSectionId === 'unassigned'
+                      ? 'Produits non affectés'
+                      : sections.find(s => s.id === selectedSectionId)?.name}
+                  </h3>
+                  <p className="text-xs text-gray-500">{sectionProducts.length} produit(s)</p>
+                </div>
+              </div>
+            </div>
+
+            {prodLoading ? (
+              <div className="p-8 text-center text-gray-400">Chargement…</div>
+            ) : sectionProducts.length === 0 ? (
+              <div className="p-10 text-center text-gray-400">
+                <Package size={36} className="mx-auto mb-3 opacity-20" />
+                <p className="font-medium">Aucun produit dans ce rayon</p>
+                <p className="text-sm mt-1">Affectez des produits depuis la fiche article ou via l'onglet Articles</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b text-xs">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500">Code</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500">Produit</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500">Catégorie</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 flex items-center gap-1">
+                      <Move size={10} /> Emplacement / Position
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium text-gray-500">Stock</th>
+                    <th className="px-4 py-2.5 w-16" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {sectionProducts.map(p => (
+                    <tr key={p.id} className="hover:bg-gray-50 group">
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{p.internal_code}</td>
+                      <td className="px-4 py-2.5">
+                        <p className="font-medium text-gray-900">{p.name}</p>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {p.category && (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">{p.category.name}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {editingSlot?.id === p.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              value={editingSlot.value}
+                              onChange={e => setEditingSlot({ id: p.id, value: e.target.value })}
+                              onKeyDown={e => { if (e.key === 'Enter') saveSlot(p); if (e.key === 'Escape') setEditingSlot(null) }}
+                              className="input text-xs py-1 h-7 flex-1"
+                              placeholder="ex: Allée A - Étagère 2"
+                              autoFocus
+                            />
+                            <button onClick={() => saveSlot(p)} className="text-green-500 hover:text-green-700"><Check size={13} /></button>
+                            <button onClick={() => setEditingSlot(null)} className="text-gray-400 hover:text-gray-600"><X size={13} /></button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setEditingSlot({ id: p.id, value: p.slot ?? '' })}
+                            className="text-left group/slot flex items-center gap-1.5 w-full">
+                            {p.slot
+                              ? <span className="text-xs text-gray-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 group-hover/slot:border-indigo-300">{p.slot}</span>
+                              : <span className="text-xs text-gray-300 italic group-hover/slot:text-indigo-400">+ Ajouter position</span>
+                            }
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`text-xs font-semibold ${p.qty_on_hand <= 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                          {formatNumber(p.qty_on_hand, 0)} {p.unit?.abbreviation ?? ''}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        {selectedSectionId !== 'unassigned' && (
+                          <button
+                            onClick={() => unassignMut.mutate(p.id)}
+                            title="Retirer du rayon"
+                            className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                            <X size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
+      {editSection !== undefined && (
+        <SectionFormModal section={editSection} onClose={() => setEditSection(undefined)} />
+      )}
+    </div>
+  )
+}
+
 // ─── Articles Tab ─────────────────────────────────────────────────────────────
 
 function ArticlesTab() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | ''>('')
+  const [selectedSectionId, setSelectedSectionId] = useState<number | ''>('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [showForm, setShowForm] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | undefined>()
@@ -1203,6 +1645,11 @@ function ArticlesTab() {
     queryFn: () => api.get('/categories').then(r => r.data),
   })
 
+  const { data: sections = [] } = useQuery<StoreSection[]>({
+    queryKey: ['sections'],
+    queryFn: () => api.get('/sections').then(r => r.data),
+  })
+
   const flatCats = flattenCategories(rawCategories)
 
   const queryParams = {
@@ -1210,6 +1657,7 @@ function ArticlesTab() {
     page,
     per_page: 25,
     category_id: selectedCategoryId || undefined,
+    section_id: selectedSectionId || undefined,
     is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
     low_stock: statusFilter === 'low_stock' ? true : undefined,
   }
@@ -1236,10 +1684,10 @@ function ArticlesTab() {
   }
 
   const resetFilters = () => {
-    setSearch(''); setSelectedCategoryId(''); setStatusFilter('all'); setPage(1)
+    setSearch(''); setSelectedCategoryId(''); setSelectedSectionId(''); setStatusFilter('all'); setPage(1)
   }
 
-  const hasFilters = search || selectedCategoryId !== '' || statusFilter !== 'all'
+  const hasFilters = search || selectedCategoryId !== '' || selectedSectionId !== '' || statusFilter !== 'all'
 
   return (
     <div className="space-y-5">
@@ -1292,13 +1740,35 @@ function ArticlesTab() {
             <button
               onClick={() => { setSelectedCategoryId(''); setPage(1) }}
               className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedCategoryId === '' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}>
-              Toutes
+              Toutes catégories
             </button>
             {flatCats.map(c => (
               <button key={c.id}
                 onClick={() => { setSelectedCategoryId(c.id); setPage(1) }}
                 className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedCategoryId === c.id ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}>
                 {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {sections.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1 border-t border-gray-100">
+            <span className="flex items-center gap-1 text-xs text-gray-400 self-center">
+              <MapPin size={11} /> Rayon :
+            </span>
+            <button
+              onClick={() => { setSelectedSectionId(''); setPage(1) }}
+              className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedSectionId === '' ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}>
+              Tous
+            </button>
+            {sections.map(s => (
+              <button key={s.id}
+                onClick={() => { setSelectedSectionId(s.id); setPage(1) }}
+                className={`px-3 py-1 rounded-full text-sm border transition-colors flex items-center gap-1.5 ${selectedSectionId === s.id ? 'text-white border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
+                style={selectedSectionId === s.id ? { backgroundColor: s.color, borderColor: s.color } : {}}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedSectionId === s.id ? 'rgba(255,255,255,0.6)' : s.color }} />
+                {s.name}
               </button>
             ))}
           </div>
@@ -1321,11 +1791,11 @@ function ArticlesTab() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Désignation</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Catégorie</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Rayon</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Achat HT</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Vente TTC</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Marge</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Stock</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">TVA</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Statut</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -1356,6 +1826,15 @@ function ArticlesTab() {
                       {p.category && (
                         <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">{p.category.name}</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.section && (
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.section.color }} />
+                          <span className="text-gray-600">{p.section.name}</span>
+                        </span>
+                      )}
+                      {p.slot && <p className="text-[10px] text-gray-400 mt-0.5 pl-3.5">{p.slot}</p>}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(p.purchase_price_ht)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(p.sale_price_ttc)}</td>
@@ -1450,7 +1929,7 @@ function ArticlesTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type Tab = 'articles' | 'categories'
+type Tab = 'articles' | 'categories' | 'rangement'
 
 // ─── ProductImportModal ───────────────────────────────────────────────────────
 
@@ -1727,8 +2206,9 @@ export default function ProductsPage() {
   const [showImport, setShowImport] = useState(false)
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'articles', label: 'Articles', icon: <Package size={16} /> },
-    { id: 'categories', label: 'Catégories', icon: <FolderTree size={16} /> },
+    { id: 'articles',    label: 'Articles',    icon: <Package size={16} /> },
+    { id: 'categories',  label: 'Catégories',  icon: <FolderTree size={16} /> },
+    { id: 'rangement',   label: 'Rangement',   icon: <MapPin size={16} /> },
   ]
 
   return (
@@ -1750,6 +2230,9 @@ export default function ProductsPage() {
             </button>
           </div>
         )}
+        {activeTab === 'rangement' && (
+          <p className="text-sm text-gray-500 hidden sm:block">Organisez vos produits par rayon et emplacement</p>
+        )}
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
@@ -1766,7 +2249,9 @@ export default function ProductsPage() {
         ))}
       </div>
 
-      {activeTab === 'articles' ? <ArticlesTab /> : <CategoriesTab />}
+      {activeTab === 'articles'   && <ArticlesTab />}
+      {activeTab === 'categories' && <CategoriesTab />}
+      {activeTab === 'rangement'  && <RangementTab />}
 
       {showForm && activeTab === 'articles' && (
         <ProductFormModal onClose={() => setShowForm(false)} />

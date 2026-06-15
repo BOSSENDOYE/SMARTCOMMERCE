@@ -19,6 +19,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
 
+        // Notifications (cloche)
+        Route::get('/notifications/summary', [\App\Http\Controllers\Api\NotificationController::class, 'summary']);
+
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index']);
 
@@ -168,6 +171,92 @@ Route::prefix('v1')->group(function () {
                 ->paginate((int)($r->per_page ?? 50))
         ));
 
+        // Stock rotation — produits les plus / moins mouvementés (paginé, adapté au type de commerce)
+        Route::get('/stock/rotation', function (\Illuminate\Http\Request $r) {
+            $storeId    = $r->user()->store_id;
+            $perPage    = min((int)($r->per_page ?? 20), 100);
+            $page       = max(1, (int)($r->page ?? 1));
+            $order      = $r->order === 'asc' ? 'asc' : 'desc';
+            $categoryId = $r->category_id ? (int)$r->category_id : null;
+
+            // Business type → types de mouvements adaptés
+            $store        = \App\Models\Store::find($storeId);
+            $businessType = $store?->business_type ?? 'grande_surface';
+            $types        = $r->mode === 'all'
+                ? \App\Config\BusinessTypeConfig::$allOutTypes
+                : \App\Config\BusinessTypeConfig::getSalesOutTypes($businessType);
+
+            // Filtre catégorie (inclut sous-catégories)
+            $categoryProductIds = null;
+            if ($categoryId) {
+                $catIds             = [$categoryId];
+                $children           = \App\Models\Category::where('parent_id', $categoryId)->pluck('id')->toArray();
+                $catIds             = array_merge($catIds, $children);
+                $categoryProductIds = \App\Models\Product::whereIn('category_id', $catIds)->pluck('id')->toArray();
+            }
+
+            // Paginator sur les agrégats groupés par produit
+            $paginator = \App\Models\StockMovement::where('store_id', $storeId)
+                ->whereIn('type', $types)
+                ->when($r->date_from,       fn($q) => $q->whereDate('created_at', '>=', $r->date_from))
+                ->when($r->date_to,         fn($q) => $q->whereDate('created_at', '<=', $r->date_to))
+                ->when($categoryProductIds, fn($q) => $q->whereIn('product_id', $categoryProductIds))
+                ->groupBy('product_id')
+                ->selectRaw('product_id,
+                    SUM(qty)             AS total_qty_out,
+                    COUNT(*)             AS movement_count,
+                    SUM(qty * unit_cost) AS total_value_out')
+                ->orderBy('total_qty_out', $order)
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            // Enrichir uniquement les produits de la page courante
+            $rows        = collect($paginator->items());
+            $productIds  = $rows->pluck('product_id')->toArray();
+            $products    = \App\Models\Product::whereIn('id', $productIds)
+                ->with(['unit', 'category'])->get()->keyBy('id');
+            $stockLevels = \App\Models\StockLevel::where('store_id', $storeId)
+                ->whereIn('product_id', $productIds)->get()->keyBy('product_id');
+
+            $enriched = $rows->map(function ($row) use ($products, $stockLevels) {
+                $p            = $products[$row->product_id]  ?? null;
+                $sl           = $stockLevels[$row->product_id] ?? null;
+                $currentStock = $sl ? (float)$sl->qty_on_hand : 0;
+                $totalQty     = (float)$row->total_qty_out;
+                return [
+                    'product_id'      => $row->product_id,
+                    'product'         => $p ? [
+                        'id'            => $p->id,
+                        'name'          => $p->name,
+                        'internal_code' => $p->internal_code,
+                        'category'      => $p->category ? ['name' => $p->category->name, 'id' => $p->category->id] : null,
+                        'unit'          => $p->unit     ? ['abbreviation' => $p->unit->abbreviation] : null,
+                    ] : null,
+                    'total_qty_out'   => $totalQty,
+                    'movement_count'  => (int)$row->movement_count,
+                    'total_value_out' => (float)$row->total_value_out,
+                    'current_stock'   => $currentStock,
+                    'avg_cost'        => $sl ? (float)$sl->avg_cost : 0,
+                    'rotation_rate'   => $currentStock > 0 ? round($totalQty / $currentStock, 2) : null,
+                ];
+            });
+
+            return response()->json([
+                'meta'         => [
+                    'business_type'       => $businessType,
+                    'business_label'      => \App\Config\BusinessTypeConfig::$labels[$businessType] ?? $businessType,
+                    'sales_mode_label'    => \App\Config\BusinessTypeConfig::$salesModeLabels[$businessType] ?? 'Ventes',
+                    'movement_types_used' => $types,
+                ],
+                'data'         => $enriched,
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'total'        => $paginator->total(),
+                'per_page'     => $paginator->perPage(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+            ]);
+        });
+
         // Inventory
         Route::apiResource('/inventory-sessions', \App\Http\Controllers\Api\InventoryController::class);
         Route::post('/inventory-sessions/{inventorySession}/validate', [\App\Http\Controllers\Api\InventoryController::class, 'validate']);
@@ -285,7 +374,9 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('/organizations', \App\Http\Controllers\Api\OrganizationController::class);
         Route::post('/organizations/{organization}/logo', [\App\Http\Controllers\Api\OrganizationController::class, 'uploadLogo']);
         Route::apiResource('/stores', \App\Http\Controllers\Api\StoreController::class);
-        Route::post('/stores/{store}/logo', [\App\Http\Controllers\Api\StoreController::class, 'uploadLogo']);
+        Route::post('/stores/{store}/logo',      [\App\Http\Controllers\Api\StoreController::class, 'uploadLogo']);
+        Route::get('/stores/menu-config',        [\App\Http\Controllers\Api\StoreController::class, 'getMenuConfig']);
+        Route::put('/stores/menu-config',        [\App\Http\Controllers\Api\StoreController::class, 'updateMenuConfig']);
         Route::apiResource('/users', \App\Http\Controllers\Api\UserController::class);
         Route::put('/profile', [\App\Http\Controllers\Api\UserController::class, 'updateProfile']);
         // Roles & Permissions management
@@ -321,6 +412,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/reports/stock-valuation',   [\App\Http\Controllers\Api\PdfController::class, 'reportStockValuation']);
             Route::get('/reports/supplier-balances', [\App\Http\Controllers\Api\PdfController::class, 'reportSupplierBalances']);
             Route::get('/reports/client-credit',     [\App\Http\Controllers\Api\PdfController::class, 'reportClientCredit']);
+            // ── États comptables ──────────────────────────────────────────────
+            Route::get('/accounting/journal',         [\App\Http\Controllers\Api\PdfController::class, 'accountingJournal']);
+            Route::get('/accounting/balance',         [\App\Http\Controllers\Api\PdfController::class, 'accountingBalance']);
+            Route::get('/accounting/resultat',        [\App\Http\Controllers\Api\PdfController::class, 'accountingResultat']);
+            Route::get('/accounting/bilan',           [\App\Http\Controllers\Api\PdfController::class, 'accountingBilan']);
         });
 
         // ── Facturation & Devis ────────────────────────────────────────────────
@@ -346,6 +442,19 @@ Route::prefix('v1')->group(function () {
             Route::post('/{quote}/mark-sent',      [\App\Http\Controllers\Api\InvoiceController::class, 'quoteMarkSent']);
             Route::post('/{quote}/accept',         [\App\Http\Controllers\Api\InvoiceController::class, 'quoteAccept']);
             Route::post('/{quote}/convert',        [\App\Http\Controllers\Api\InvoiceController::class, 'quoteConvert']);
+        });
+
+        // ── Rayons / Rangement ────────────────────────────────────────────────────
+        Route::prefix('sections')->group(function () {
+            Route::get('/',                                 [\App\Http\Controllers\Api\StoreSectionController::class, 'index']);
+            Route::post('/',                               [\App\Http\Controllers\Api\StoreSectionController::class, 'store']);
+            Route::post('/reorder',                        [\App\Http\Controllers\Api\StoreSectionController::class, 'reorder']);
+            Route::get('/unassigned',                      [\App\Http\Controllers\Api\StoreSectionController::class, 'unassigned']);
+            Route::delete('/products/{productId}/unassign',[\App\Http\Controllers\Api\StoreSectionController::class, 'unassignProduct']);
+            Route::put('/{section}',                       [\App\Http\Controllers\Api\StoreSectionController::class, 'update']);
+            Route::delete('/{section}',                    [\App\Http\Controllers\Api\StoreSectionController::class, 'destroy']);
+            Route::get('/{section}/products',              [\App\Http\Controllers\Api\StoreSectionController::class, 'products']);
+            Route::post('/{section}/assign',               [\App\Http\Controllers\Api\StoreSectionController::class, 'assignProduct']);
         });
 
         // ── CRM ───────────────────────────────────────────────────────────────

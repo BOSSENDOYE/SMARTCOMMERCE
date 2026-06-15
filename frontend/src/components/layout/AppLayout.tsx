@@ -10,50 +10,185 @@ import {
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
   UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target, Palette, Sun, Moon,
+  FolderOpen,
 } from 'lucide-react'
 import { usePreferencesStore } from '../../store/preferences.store'
+import { useMenuStore, type MenuNode } from '../../store/menu.store'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import { useOfflineSync } from '../../hooks/useOfflineSync'
 import { getPendingSalesCount } from '../../lib/offline-db'
+import NotificationBell from './NotificationBell'
 
 type BusinessType = 'grande_surface' | 'restaurant' | 'depot' | 'mixte'
 
 interface NavItem {
+  id: string
   label: string
   to: string
   icon: React.ReactNode
   permission?: string
   license?: 'grande_surface' | 'restaurant'
-  /** Si défini, n'afficher que pour ces business_types. Undefined = tous. */
   onlyFor?: BusinessType[]
-  /** Si défini, masquer pour ces business_types. */
   hideFor?: BusinessType[]
 }
 
 const navItems: NavItem[] = [
-  { label: 'Tableau de bord', to: '/',          icon: <LayoutDashboard size={18} /> },
-  { label: 'Caisse (POS)',    to: '/pos',        icon: <ShoppingCart size={18} />,      permission: 'create_sales',          hideFor: ['depot'] },
-  { label: 'Vente Comptoir',  to: '/sales',      icon: <FileText size={18} />,          permission: 'create_sales',          hideFor: ['depot'] },
-  { label: 'Catalogue',       to: '/products',   icon: <Package size={18} />,           permission: 'manage_products',       hideFor: ['restaurant'] },
-  { label: 'Menu Restaurant', to: '/restaurant-menu', icon: <UtensilsCrossed size={18} />, permission: 'manage_products',   onlyFor: ['restaurant', 'mixte'] },
-  { label: 'Stocks',          to: '/stock',      icon: <Boxes size={18} />,             permission: 'view_stock' },
-  { label: 'Inventaire',      to: '/inventory',  icon: <ClipboardList size={18} />,     permission: 'manage_inventory' },
-  { label: 'Fournisseurs',    to: '/suppliers',  icon: <Truck size={18} />,             permission: 'manage_suppliers' },
-  { label: 'Achats',          to: '/purchases',  icon: <ArrowLeftRight size={18} />,    permission: 'create_purchase_orders' },
-  { label: 'Clients',         to: '/clients',    icon: <Users size={18} />,             permission: 'manage_clients',        hideFor: ['depot'] },
-  { label: 'Facturation',     to: '/invoices',   icon: <FilePlus2 size={18} />,         permission: 'manage_invoices',       hideFor: ['depot'] },
-  { label: 'CRM / Leads',     to: '/crm',        icon: <Target size={18} />,            permission: 'manage_crm',            hideFor: ['depot'] },
-  { label: 'Utilisateurs',   to: '/users',      icon: <UserCircle size={18} />,        permission: 'manage_users' },
-  { label: 'Promotions',      to: '/promotions', icon: <Percent size={18} />,           permission: 'manage_promotions',     hideFor: ['depot'] },
-  { label: 'Pertes',          to: '/losses',     icon: <TrendingDown size={18} />,      permission: 'manage_losses' },
-  { label: 'Dépenses',        to: '/expenses',   icon: <Receipt size={18} />,           permission: 'manage_expenses' },
-  { label: 'Transferts',      to: '/transfers',  icon: <ArrowLeftRight size={18} />,    permission: 'manage_transfers' },
-  { label: 'Magasins',        to: '/stores',     icon: <Store size={18} />,             permission: 'manage_stores' },
-  { label: 'Restaurant',      to: '/restaurant', icon: <Utensils size={18} />,          license: 'restaurant' },
-  { label: 'Rapports',        to: '/reports',    icon: <BarChart3 size={18} />,         permission: 'view_reports' },
-  { label: 'Comptabilité',    to: '/accounting', icon: <BookOpen size={18} />,          permission: 'view_accounting' },
-  { label: 'Paramètres',      to: '/settings',   icon: <Settings size={18} /> },
+  { id: 'dashboard',       label: 'Tableau de bord', to: '/',               icon: <LayoutDashboard size={18} /> },
+  { id: 'pos',             label: 'Caisse (POS)',    to: '/pos',            icon: <ShoppingCart size={18} />,      permission: 'create_sales',          hideFor: ['depot'] },
+  { id: 'sales',           label: 'Vente Comptoir',  to: '/sales',          icon: <FileText size={18} />,          permission: 'create_sales',          hideFor: ['depot'] },
+  { id: 'products',        label: 'Catalogue',       to: '/products',       icon: <Package size={18} />,           permission: 'manage_products',       hideFor: ['restaurant'] },
+  { id: 'restaurant-menu', label: 'Menu Restaurant', to: '/restaurant-menu',icon: <UtensilsCrossed size={18} />,   permission: 'manage_products',       onlyFor: ['restaurant', 'mixte'] },
+  { id: 'stock',           label: 'Stocks',          to: '/stock',          icon: <Boxes size={18} />,             permission: 'view_stock' },
+  { id: 'inventory',       label: 'Inventaire',      to: '/inventory',      icon: <ClipboardList size={18} />,     permission: 'manage_inventory' },
+  { id: 'suppliers',       label: 'Fournisseurs',    to: '/suppliers',      icon: <Truck size={18} />,             permission: 'manage_suppliers' },
+  { id: 'purchases',       label: 'Achats',          to: '/purchases',      icon: <ArrowLeftRight size={18} />,    permission: 'create_purchase_orders' },
+  { id: 'clients',         label: 'Clients',         to: '/clients',        icon: <Users size={18} />,             permission: 'manage_clients',        hideFor: ['depot'] },
+  { id: 'invoices',        label: 'Facturation',     to: '/invoices',       icon: <FilePlus2 size={18} />,         permission: 'manage_invoices',       hideFor: ['depot'] },
+  { id: 'crm',             label: 'CRM / Leads',     to: '/crm',            icon: <Target size={18} />,            permission: 'manage_crm',            hideFor: ['depot'] },
+  { id: 'users',           label: 'Utilisateurs',    to: '/users',          icon: <UserCircle size={18} />,        permission: 'manage_users' },
+  { id: 'promotions',      label: 'Promotions',      to: '/promotions',     icon: <Percent size={18} />,           permission: 'manage_promotions',     hideFor: ['depot'] },
+  { id: 'losses',          label: 'Pertes',          to: '/losses',         icon: <TrendingDown size={18} />,      permission: 'manage_losses' },
+  { id: 'expenses',        label: 'Dépenses',        to: '/expenses',       icon: <Receipt size={18} />,           permission: 'manage_expenses' },
+  { id: 'transfers',       label: 'Transferts',      to: '/transfers',      icon: <ArrowLeftRight size={18} />,    permission: 'manage_transfers' },
+  { id: 'stores',          label: 'Magasins',        to: '/stores',         icon: <Store size={18} />,             permission: 'manage_stores' },
+  { id: 'restaurant',      label: 'Restaurant',      to: '/restaurant',     icon: <Utensils size={18} />,          license: 'restaurant' },
+  { id: 'reports',         label: 'Rapports',        to: '/reports',        icon: <BarChart3 size={18} />,         permission: 'view_reports' },
+  { id: 'accounting',      label: 'Comptabilité',    to: '/accounting',     icon: <BookOpen size={18} />,          permission: 'view_accounting' },
+  { id: 'settings',        label: 'Paramètres',      to: '/settings',       icon: <Settings size={18} /> },
 ]
+
+// Map for fast lookup by id
+const navCatalog = new Map(navItems.map(i => [i.id, i]))
+
+// Collect all builtinIds present anywhere in the tree
+function collectBuiltinIds(nodes: MenuNode[]): Set<string> {
+  const ids = new Set<string>()
+  const collect = (list: MenuNode[]) => {
+    for (const n of list) {
+      if (n.builtinId) ids.add(n.builtinId)
+      if (n.children) collect(n.children)
+    }
+  }
+  collect(nodes)
+  return ids
+}
+
+// ── Group Section (collapsible in sidebar) ────────────────────────────────────
+
+interface GroupSectionProps {
+  group: MenuNode
+  collapsed: boolean
+  storeBusinessType: BusinessType
+  depth?: number
+}
+
+function GroupSection({ group, collapsed, storeBusinessType, depth = 0 }: GroupSectionProps) {
+  const [open, setOpen] = useState(true)
+  const { can, hasLicense } = useAuthStore()
+  const { getLabel } = useMenuStore()
+
+  const visibleChildren = (group.children ?? []).filter(child => {
+    if (!child.visible) return false
+    if (child.type === 'group') return true // nested group handles its own filter
+    const navItem = navCatalog.get(child.builtinId ?? '')
+    if (!navItem) return false
+    if (navItem.permission && !can(navItem.permission)) return false
+    if (navItem.license && !hasLicense(navItem.license)) return false
+    if (navItem.onlyFor && !navItem.onlyFor.includes(storeBusinessType)) return false
+    if (navItem.hideFor && navItem.hideFor.includes(storeBusinessType)) return false
+    return true
+  })
+
+  if (visibleChildren.length === 0) return null
+
+  // In collapsed sidebar: show children flat (no group header), only icons
+  if (collapsed) {
+    return (
+      <>
+        {visibleChildren.map(child => {
+          if (child.type === 'group') {
+            return <GroupSection key={child.id} group={child} collapsed={collapsed} storeBusinessType={storeBusinessType} depth={depth + 1} />
+          }
+          const navItem = navCatalog.get(child.builtinId ?? '')
+          if (!navItem) return null
+          return (
+            <NavLink
+              key={child.id}
+              to={navItem.to}
+              end={navItem.to === '/'}
+              className={({ isActive }) =>
+                `flex items-center justify-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  isActive ? 'bg-primary text-white' : 'text-brand-200 hover:bg-brand-700 hover:text-white'
+                }`
+              }
+              title={getLabel(child.builtinId!, navItem.label)}
+            >
+              <span className="flex-shrink-0">{navItem.icon}</span>
+            </NavLink>
+          )
+        })}
+      </>
+    )
+  }
+
+  const indent = depth * 12
+
+  return (
+    <div className="space-y-0.5">
+      {/* Group header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ paddingLeft: `${12 + indent}px` }}
+        className="w-full flex items-center gap-3 pr-3 py-2 rounded-lg text-sm font-medium text-brand-400 hover:bg-brand-700 hover:text-white transition-all duration-150"
+      >
+        <FolderOpen size={16} className="flex-shrink-0 opacity-70" />
+        <span className="flex-1 text-left truncate text-xs font-semibold uppercase tracking-wider opacity-80">
+          {group.label}
+        </span>
+        <ChevronDown size={13} className={`transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Children */}
+      {open && (
+        <div className="space-y-0.5">
+          {visibleChildren.map(child => {
+            if (child.type === 'group') {
+              return (
+                <GroupSection
+                  key={child.id}
+                  group={child}
+                  collapsed={collapsed}
+                  storeBusinessType={storeBusinessType}
+                  depth={depth + 1}
+                />
+              )
+            }
+            const navItem = navCatalog.get(child.builtinId ?? '')
+            if (!navItem) return null
+            return (
+              <NavLink
+                key={child.id}
+                to={navItem.to}
+                end={navItem.to === '/'}
+                style={{ paddingLeft: `${24 + indent}px` }}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 pr-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    isActive
+                      ? 'bg-primary text-white'
+                      : 'text-brand-200 hover:bg-brand-700 hover:text-white'
+                  }`
+                }
+              >
+                <span className="flex-shrink-0">{navItem.icon}</span>
+                <span className="truncate">{getLabel(child.builtinId!, navItem.label)}</span>
+              </NavLink>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ── Store Switcher (super-admin only) ────────────────────────────────────────
 
@@ -139,25 +274,77 @@ export default function AppLayout() {
   }, [])
 
   const isSuperAdmin = user?.roles?.includes('super_admin') && !user?.store_id
+  const { nodes, loaded: menuLoaded, fetchConfig, getLabel, isVisible } = useMenuStore()
 
-  // business_type du magasin connecté (ou magasin actif pour super admin)
+  useEffect(() => {
+    if (!menuLoaded) fetchConfig()
+  }, [menuLoaded, fetchConfig])
+
   const storeBusinessType: BusinessType =
     (isSuperAdmin ? (activeStore as any)?.business_type : user?.store?.business_type) ?? 'grande_surface'
 
-  const visibleNav = navItems.filter(item => {
+  // ── Nav rendering helpers ─────────────────────────────────────────────────
+
+  const isItemAllowed = (item: NavItem) => {
     if (item.permission && !can(item.permission)) return false
     if (item.license && !hasLicense(item.license)) return false
     if (item.onlyFor && !item.onlyFor.includes(storeBusinessType)) return false
     if (item.hideFor && item.hideFor.includes(storeBusinessType)) return false
     return true
-  })
+  }
+
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+      isActive ? 'bg-primary text-white' : 'text-brand-200 hover:bg-brand-700 hover:text-white'
+    }`
+
+  // ── Tree mode ─────────────────────────────────────────────────────────────
+  // Items in the tree but whose builtinId is not in navItems are silently skipped.
+  // Items in navItems but NOT in the saved tree are shown at the bottom (new items).
+
+  const treeBuiltinIds = collectBuiltinIds(nodes)
+
+  const renderTreeNode = (node: MenuNode): React.ReactNode => {
+    if (!node.visible) return null
+
+    if (node.type === 'group') {
+      return (
+        <GroupSection
+          key={node.id}
+          group={node}
+          collapsed={collapsed}
+          storeBusinessType={storeBusinessType}
+        />
+      )
+    }
+
+    // builtin
+    const navItem = navCatalog.get(node.builtinId ?? '')
+    if (!navItem || !isItemAllowed(navItem)) return null
+
+    return (
+      <NavLink
+        key={node.id}
+        to={navItem.to}
+        end={navItem.to === '/'}
+        className={navLinkClass}
+        title={collapsed ? getLabel(node.builtinId!, navItem.label) : undefined}
+      >
+        <span className="flex-shrink-0">{navItem.icon}</span>
+        {!collapsed && <span className="truncate">{getLabel(node.builtinId!, navItem.label)}</span>}
+      </NavLink>
+    )
+  }
+
+  // ── Flat mode (no saved config) ───────────────────────────────────────────
+
+  const flatVisibleNav = navItems.filter(item => isItemAllowed(item) && isVisible(item.id))
 
   const handleLogout = async () => {
     clearAuth()
     navigate('/login')
   }
 
-  // Current store display name
   const storeName = isSuperAdmin
     ? activeStore?.name ?? '—'
     : user?.store?.name ?? 'Suite'
@@ -194,7 +381,6 @@ export default function AppLayout() {
           </div>
         )}
 
-        {/* Super-admin warning if no store selected */}
         {isSuperAdmin && !activeStore && !collapsed && (
           <div className="mx-2 mb-2 flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
             <AlertTriangle size={11} className="text-yellow-400 flex-shrink-0" />
@@ -204,24 +390,42 @@ export default function AppLayout() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
-          {visibleNav.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? 'bg-primary text-white'
-                    : 'text-brand-200 hover:bg-brand-700 hover:text-white'
-                }`
-              }
-              title={collapsed ? item.label : undefined}
-            >
-              <span className="flex-shrink-0">{item.icon}</span>
-              {!collapsed && <span className="truncate">{item.label}</span>}
-            </NavLink>
-          ))}
+          {nodes.length === 0 ? (
+            // ── Flat mode (no saved config) ──────────────────────────────────
+            flatVisibleNav.map(item => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={navLinkClass}
+                title={collapsed ? item.label : undefined}
+              >
+                <span className="flex-shrink-0">{item.icon}</span>
+                {!collapsed && <span className="truncate">{item.label}</span>}
+              </NavLink>
+            ))
+          ) : (
+            // ── Tree mode ────────────────────────────────────────────────────
+            <>
+              {nodes.map(renderTreeNode)}
+
+              {/* New nav items not yet in saved config appear at the bottom */}
+              {navItems
+                .filter(item => !treeBuiltinIds.has(item.id) && isItemAllowed(item))
+                .map(item => (
+                  <NavLink
+                    key={item.id}
+                    to={item.to}
+                    end={item.to === '/'}
+                    className={navLinkClass}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </NavLink>
+                ))}
+            </>
+          )}
         </nav>
 
         {/* User info */}
@@ -256,7 +460,6 @@ export default function AppLayout() {
             )}
           </div>
 
-          {/* User mini-menu */}
           {showUserMenu && !collapsed && (
             <div className="absolute bottom-full left-2 right-2 mb-1 bg-brand-800 border border-brand-600 rounded-xl shadow-2xl py-1 z-50">
               <button
@@ -271,7 +474,6 @@ export default function AppLayout() {
               >
                 <Palette size={13} /> Préférences
               </button>
-              {/* Quick theme toggle */}
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-200 hover:bg-brand-700 hover:text-white transition-colors"
@@ -292,9 +494,14 @@ export default function AppLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto flex flex-col min-h-0">
+        {/* Top bar */}
+        <div className="flex-shrink-0 flex items-center justify-end px-4 h-10 bg-white border-b border-gray-100 shadow-sm relative z-40">
+          <NotificationBell />
+        </div>
+
         {!isOnline && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-xs font-medium">
+          <div className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-xs font-medium flex-shrink-0">
             <WifiOff size={13} />
             <span>Mode hors-ligne — les ventes seront synchronisées au retour d'Internet</span>
             {pendingCount > 0 && (
@@ -305,12 +512,14 @@ export default function AppLayout() {
           </div>
         )}
         {isOnline && wasOffline && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white text-xs font-medium">
+          <div className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white text-xs font-medium flex-shrink-0">
             <Wifi size={13} />
             <span>Connexion rétablie — synchronisation en cours...</span>
           </div>
         )}
-        <Outlet />
+        <div className="flex-1 overflow-y-auto">
+          <Outlet />
+        </div>
       </main>
     </div>
   )

@@ -14,7 +14,7 @@ class Store extends Model
         'name', 'code', 'business_type', 'address', 'phone', 'email',
         'ninea', 'rc', 'logo', 'currency', 'timezone',
         'license_grande_surface', 'license_restaurant',
-        'receipt_footer', 'is_active', 'is_central',
+        'receipt_footer', 'is_active', 'is_central', 'menu_config',
     ];
 
     protected $casts = [
@@ -22,6 +22,7 @@ class Store extends Model
         'license_restaurant'     => 'boolean',
         'is_active'              => 'boolean',
         'is_central'             => 'boolean',
+        'menu_config'            => 'array',
     ];
 
     public function organization() { return $this->belongsTo(Organization::class); }

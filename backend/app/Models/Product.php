@@ -18,6 +18,7 @@ class Product extends Model
         'min_stock', 'max_stock', 'stock_appro', 'alert_stock',
         'packaging_qty', 'packaging_type', 'image',
         'is_active', 'track_expiry', 'is_recipe',
+        'section_id', 'slot',
     ];
 
     protected $casts = [
@@ -36,6 +37,7 @@ class Product extends Model
 
     public function store() { return $this->belongsTo(Store::class); }
     public function category() { return $this->belongsTo(Category::class); }
+    public function section() { return $this->belongsTo(StoreSection::class); }
     public function brand() { return $this->belongsTo(Brand::class); }
     public function unit() { return $this->belongsTo(Unit::class); }
     public function barcodes() { return $this->hasMany(ProductBarcode::class); }

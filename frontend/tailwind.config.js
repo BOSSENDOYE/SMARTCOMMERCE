@@ -37,6 +37,18 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
+      keyframes: {
+        wiggle: {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '20%':       { transform: 'rotate(-15deg)' },
+          '40%':       { transform: 'rotate(15deg)' },
+          '60%':       { transform: 'rotate(-10deg)' },
+          '80%':       { transform: 'rotate(10deg)' },
+        },
+      },
+      animation: {
+        wiggle: 'wiggle 0.7s ease-in-out',
+      },
     },
   },
   plugins: [],

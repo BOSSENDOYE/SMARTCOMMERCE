@@ -18,7 +18,7 @@ class ProductController extends Controller
 
         $products = Product::forStore($storeId)
             ->with([
-                'category', 'brand', 'unit', 'barcodes',
+                'category', 'brand', 'unit', 'barcodes', 'section',
                 // Force le stockLevel du bon magasin
                 'stockLevel' => fn($q) => $q->where('store_id', $storeId),
             ])
@@ -30,6 +30,7 @@ class ProductController extends Controller
                 )
             )
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
+            ->when($request->section_id,  fn($q) => $q->where('section_id', $request->section_id))
             ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
             ->when($request->low_stock, fn($q) => $q->whereHas('stockLevel', fn($q2) => $q2
                 ->where('store_id', $storeId)
@@ -78,6 +79,8 @@ class ProductController extends Controller
             'containers.*.price_b'            => 'nullable|numeric|min:0',
             'containers.*.price_c'            => 'nullable|numeric|min:0',
             'containers.*.barcode'            => 'nullable|string|max:100',
+            'section_id'                      => 'nullable|exists:store_sections,id',
+            'slot'                            => 'nullable|string|max:100',
         ]);
 
         $storeId = $request->user()->store_id;
@@ -124,7 +127,7 @@ class ProductController extends Controller
         AuditService::log('product_created', 'products', $product->id, $product->toArray());
 
         return response()->json(
-            $product->load(['category', 'brand', 'unit', 'barcodes', 'containers.unit']),
+            $product->load(['category', 'brand', 'unit', 'barcodes', 'containers.unit', 'section']),
             201
         );
     }
@@ -132,7 +135,7 @@ class ProductController extends Controller
     public function show(Request $request, Product $product)
     {
         return response()->json($product->load([
-            'category', 'brand', 'unit', 'barcodes', 'stockLevel',
+            'category', 'brand', 'unit', 'barcodes', 'stockLevel', 'section',
             'lots', 'suppliers',
             'containers' => fn($q) => $q->with('unit')->orderBy('sort_order'),
             'priceHistory' => fn($q) => $q->latest()->limit(20),
@@ -193,6 +196,8 @@ class ProductController extends Controller
             'containers.*.price_b'           => 'nullable|numeric|min:0',
             'containers.*.price_c'           => 'nullable|numeric|min:0',
             'containers.*.barcode'           => 'nullable|string|max:100',
+            'section_id'                     => 'nullable|exists:store_sections,id',
+            'slot'                           => 'nullable|string|max:100',
         ]);
 
         $barcodes   = $validated['barcodes'] ?? null;
@@ -235,7 +240,7 @@ class ProductController extends Controller
         AuditService::log('product_updated', 'products', $product->id, $validated, $old);
 
         return response()->json(
-            $product->fresh(['category', 'brand', 'unit', 'barcodes', 'stockLevel', 'containers.unit'])
+            $product->fresh(['category', 'brand', 'unit', 'barcodes', 'stockLevel', 'containers.unit', 'section'])
         );
     }
 

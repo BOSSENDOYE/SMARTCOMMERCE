@@ -119,4 +119,37 @@ class StoreController extends Controller
         $store->update(['is_active' => false]);
         return response()->json(null, 204);
     }
+
+    // ─── Menu personnalisé ────────────────────────────────────────────────────
+
+    /** GET /stores/menu-config — retourne la config du magasin courant */
+    public function getMenuConfig(Request $request)
+    {
+        $storeId = $request->user()->store_id
+            ?? $request->header('X-Store-Id');
+
+        $store = Store::find($storeId);
+
+        return response()->json($store?->menu_config ?? []);
+    }
+
+    /** PUT /stores/menu-config — sauvegarde la config du magasin courant */
+    public function updateMenuConfig(Request $request)
+    {
+        $storeId = $request->user()->store_id
+            ?? $request->header('X-Store-Id');
+
+        $data = $request->validate([
+            'items'                   => 'required|array',
+            'items.*.id'              => 'required|string|max:50',
+            'items.*.customLabel'     => 'nullable|string|max:80',
+            'items.*.visible'         => 'required|boolean',
+            'items.*.order'           => 'required|integer|min:0',
+        ]);
+
+        $store = Store::findOrFail($storeId);
+        $store->update(['menu_config' => $data['items']]);
+
+        return response()->json($store->menu_config);
+    }
 }

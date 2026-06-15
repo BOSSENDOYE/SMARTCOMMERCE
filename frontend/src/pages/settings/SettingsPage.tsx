@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import {
-  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X, Palette,
+  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X, Palette, Menu,
 } from 'lucide-react'
 import { usePreferencesStore, COLOR_PALETTES } from '../../store/preferences.store'
 import ThermalPrinterPanel from '../../components/thermal/ThermalPrinterPanel'
@@ -83,6 +83,14 @@ export default function SettingsPage() {
       desc: `Thème ${theme === 'dark' ? 'sombre' : 'clair'} · Couleur ${activePalette.name}`,
       detail: 'Mode sombre / clair · Couleur principale',
       onClick: () => navigate('/preferences'),
+    },
+    {
+      icon: <Menu size={20} className="text-teal-600" />,
+      iconBg: 'bg-teal-100',
+      title: 'Personnalisation du menu',
+      desc: 'Renommer, réorganiser et masquer les items',
+      detail: 'Donnez vos propres appellations aux modules',
+      onClick: () => navigate('/menu-settings'),
     },
   ]
 

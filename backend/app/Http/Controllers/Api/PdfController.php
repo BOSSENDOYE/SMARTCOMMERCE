@@ -383,4 +383,284 @@ class PdfController extends Controller
             ],
         ])->download("rapport-credit-clients-" . now()->format('Y-m-d') . ".pdf");
     }
+
+    // ─── États comptables ─────────────────────────────────────────────────────
+
+    /** Journal des écritures */
+    public function accountingJournal(Request $request)
+    {
+        $store = $this->store($request);
+        $from  = $request->input('date_from', now()->startOfMonth()->toDateString());
+        $to    = $request->input('date_to',   now()->toDateString());
+
+        $typeLabels = [
+            'vente' => 'Vente', 'achat' => 'Achat', 'paiement' => 'Paiement',
+            'charge' => 'Charge', 'ajustement' => 'Ajustement', 'perte' => 'Perte', 'autre' => 'Autre',
+        ];
+
+        $entries = DB::table('journal_entries as e')
+            ->where('e.store_id', $store->id)
+            ->when($from, fn($q) => $q->whereDate('e.entry_date', '>=', $from))
+            ->when($to,   fn($q) => $q->whereDate('e.entry_date', '<=', $to))
+            ->orderBy('e.entry_date')
+            ->orderBy('e.id')
+            ->select(
+                'e.reference', 'e.entry_date', 'e.description', 'e.type', 'e.status',
+                DB::raw('(SELECT COALESCE(SUM(l.debit),0) FROM journal_entry_lines l WHERE l.journal_entry_id = e.id) as total_debit')
+            )
+            ->get();
+
+        $totalDebit = $entries->sum('total_debit');
+        $fmt        = fn($n) => number_format((float) $n, 0, ',', ' ') . ' FCFA';
+
+        $rows = $entries->map(fn($e) => [
+            'reference'   => $e->reference,
+            'date'        => date('d/m/Y', strtotime($e->entry_date)),
+            'description' => $e->description,
+            'type'        => $typeLabels[$e->type] ?? $e->type,
+            'status'      => $e->status === 'valide' ? 'Validé' : 'Brouillon',
+            'total_debit' => $fmt($e->total_debit),
+        ])->toArray();
+
+        return $this->pdf('pdf.report', [
+            'store'   => $store,
+            'title'   => 'Journal des écritures',
+            'period'  => ['from' => date('d/m/Y', strtotime($from)), 'to' => date('d/m/Y', strtotime($to))],
+            'kpis'    => [
+                ['label' => "Nombre d'écritures", 'value' => count($rows)],
+                ['label' => 'Total débit',        'value' => $fmt($totalDebit)],
+            ],
+            'columns' => [
+                ['key' => 'reference',   'label' => 'Référence'],
+                ['key' => 'date',        'label' => 'Date'],
+                ['key' => 'description', 'label' => 'Libellé'],
+                ['key' => 'type',        'label' => 'Type'],
+                ['key' => 'status',      'label' => 'Statut'],
+                ['key' => 'total_debit', 'label' => 'Total débit', 'align' => 'right'],
+            ],
+            'rows'    => $rows,
+            'totals'  => [
+                'reference' => '', 'date' => '', 'description' => 'TOTAL',
+                'type' => '', 'status' => '', 'total_debit' => $fmt($totalDebit),
+            ],
+        ])->download("Journal-{$from}-{$to}.pdf");
+    }
+
+    /** Balance des comptes */
+    public function accountingBalance(Request $request)
+    {
+        $store = $this->store($request);
+        $from  = $request->input('date_from');
+        $to    = $request->input('date_to');
+
+        $rows = DB::table('accounting_accounts as a')
+            ->leftJoin('journal_entry_lines as l', 'l.account_id', '=', 'a.id')
+            ->leftJoin('journal_entries as e', function ($join) use ($store, $from, $to) {
+                $join->on('e.id', '=', 'l.journal_entry_id')
+                     ->where('e.store_id', $store->id)
+                     ->where('e.status', 'valide')
+                     ->when($from, fn($q) => $q->whereDate('e.entry_date', '>=', $from))
+                     ->when($to,   fn($q) => $q->whereDate('e.entry_date', '<=', $to));
+            })
+            ->where('a.store_id', $store->id)
+            ->where('a.is_active', true)
+            ->select(
+                'a.code', 'a.name', 'a.class',
+                DB::raw('COALESCE(SUM(l.debit), 0)  as total_debit'),
+                DB::raw('COALESCE(SUM(l.credit), 0) as total_credit'),
+                DB::raw('COALESCE(SUM(l.debit), 0) - COALESCE(SUM(l.credit), 0) as solde')
+            )
+            ->groupBy('a.id', 'a.code', 'a.name', 'a.class')
+            ->orderBy('a.code')
+            ->get();
+
+        $totalDebit  = $rows->sum('total_debit');
+        $totalCredit = $rows->sum('total_credit');
+        $fmt         = fn($n) => number_format((float) $n, 0, ',', ' ') . ' FCFA';
+
+        $classLabels = [
+            '1' => 'Cl.1 Ressources durables', '2' => 'Cl.2 Actif immobilisé',
+            '3' => 'Cl.3 Stocks', '4' => 'Cl.4 Tiers',
+            '5' => 'Cl.5 Trésorerie', '6' => 'Cl.6 Charges', '7' => 'Cl.7 Produits',
+        ];
+
+        $formatted = $rows->map(fn($r) => [
+            'code'         => $r->code,
+            'name'         => $r->name,
+            'class'        => $classLabels[$r->class] ?? "Classe {$r->class}",
+            'total_debit'  => $r->total_debit  > 0 ? $fmt($r->total_debit)  : '—',
+            'total_credit' => $r->total_credit > 0 ? $fmt($r->total_credit) : '—',
+            'solde'        => ($r->total_debit == 0 && $r->total_credit == 0)
+                ? '—'
+                : number_format(abs((float) $r->solde), 0, ',', ' ') . ' FCFA ' . ($r->solde >= 0 ? 'D' : 'C'),
+        ])->toArray();
+
+        return $this->pdf('pdf.report', [
+            'store'   => $store,
+            'title'   => 'Balance des comptes',
+            'period'  => [
+                'from' => $from ? date('d/m/Y', strtotime($from)) : '—',
+                'to'   => $to   ? date('d/m/Y', strtotime($to))   : '—',
+            ],
+            'kpis'    => [
+                ['label' => 'Total Débit',  'value' => $fmt($totalDebit)],
+                ['label' => 'Total Crédit', 'value' => $fmt($totalCredit)],
+            ],
+            'columns' => [
+                ['key' => 'code',         'label' => 'Code'],
+                ['key' => 'name',         'label' => 'Intitulé'],
+                ['key' => 'class',        'label' => 'Classe'],
+                ['key' => 'total_debit',  'label' => 'Débit',  'align' => 'right'],
+                ['key' => 'total_credit', 'label' => 'Crédit', 'align' => 'right'],
+                ['key' => 'solde',        'label' => 'Solde',  'align' => 'right'],
+            ],
+            'rows'    => $formatted,
+            'totals'  => [
+                'code' => '', 'name' => 'TOTAL', 'class' => '',
+                'total_debit'  => $fmt($totalDebit),
+                'total_credit' => $fmt($totalCredit),
+                'solde'        => '',
+            ],
+        ], 'landscape')->download("Balance-{$from}-{$to}.pdf");
+    }
+
+    /** Compte de résultat */
+    public function accountingResultat(Request $request)
+    {
+        $store = $this->store($request);
+        $from  = $request->input('date_from', now()->startOfYear()->toDateString());
+        $to    = $request->input('date_to',   now()->toDateString());
+
+        $rows = DB::table('accounting_accounts as a')
+            ->leftJoin('journal_entry_lines as l', 'l.account_id', '=', 'a.id')
+            ->leftJoin('journal_entries as e', function ($join) use ($store, $from, $to) {
+                $join->on('e.id', '=', 'l.journal_entry_id')
+                     ->where('e.store_id', $store->id)
+                     ->where('e.status', 'valide')
+                     ->whereDate('e.entry_date', '>=', $from)
+                     ->whereDate('e.entry_date', '<=', $to);
+            })
+            ->where('a.store_id', $store->id)
+            ->where('a.is_active', true)
+            ->whereIn('a.class', ['6', '7'])
+            ->select(
+                'a.code', 'a.name', 'a.class',
+                DB::raw('COALESCE(SUM(l.debit), 0)  as total_debit'),
+                DB::raw('COALESCE(SUM(l.credit), 0) as total_credit')
+            )
+            ->groupBy('a.code', 'a.name', 'a.class')
+            ->orderBy('a.code')
+            ->get();
+
+        $produits       = $rows->where('class', '7');
+        $charges        = $rows->where('class', '6');
+        $totalProduits  = $produits->sum('total_credit') - $produits->sum('total_debit');
+        $totalCharges   = $charges->sum('total_debit')  - $charges->sum('total_credit');
+        $resultat       = $totalProduits - $totalCharges;
+        $fmt            = fn($n) => number_format((float) $n, 0, ',', ' ') . ' FCFA';
+
+        $formatted = collect();
+        foreach ($produits as $p) {
+            $formatted->push([
+                'section' => 'Produits (Cl. 7)',
+                'code'    => $p->code,
+                'name'    => $p->name,
+                'montant' => $fmt($p->total_credit - $p->total_debit),
+            ]);
+        }
+        foreach ($charges as $c) {
+            $formatted->push([
+                'section' => 'Charges (Cl. 6)',
+                'code'    => $c->code,
+                'name'    => $c->name,
+                'montant' => $fmt($c->total_debit - $c->total_credit),
+            ]);
+        }
+
+        return $this->pdf('pdf.report', [
+            'store'   => $store,
+            'title'   => 'Compte de résultat',
+            'period'  => ['from' => date('d/m/Y', strtotime($from)), 'to' => date('d/m/Y', strtotime($to))],
+            'kpis'    => [
+                ['label' => 'Total produits', 'value' => $fmt($totalProduits)],
+                ['label' => 'Total charges',  'value' => $fmt($totalCharges)],
+                ['label' => 'Résultat net',   'value' => ($resultat >= 0 ? '+' : '') . $fmt(abs($resultat)), 'sub' => $resultat >= 0 ? 'BÉNÉFICE' : 'DÉFICIT'],
+            ],
+            'columns' => [
+                ['key' => 'section', 'label' => 'Section'],
+                ['key' => 'code',    'label' => 'Code'],
+                ['key' => 'name',    'label' => 'Intitulé'],
+                ['key' => 'montant', 'label' => 'Montant', 'align' => 'right'],
+            ],
+            'rows'    => $formatted->toArray(),
+            'totals'  => [
+                'section' => '', 'code' => '', 'name' => 'RÉSULTAT NET',
+                'montant' => ($resultat >= 0 ? '+' : '-') . $fmt(abs($resultat)),
+            ],
+        ])->download("Resultat-{$from}-{$to}.pdf");
+    }
+
+    /** Bilan OHADA (SYSCOHADA) */
+    public function accountingBilan(Request $request)
+    {
+        $store = $this->store($request);
+        $to    = $request->input('date_to', now()->toDateString());
+
+        $rows = DB::table('accounting_accounts as a')
+            ->leftJoin('journal_entry_lines as l', 'l.account_id', '=', 'a.id')
+            ->leftJoin('journal_entries as e', function ($join) use ($store, $to) {
+                $join->on('e.id', '=', 'l.journal_entry_id')
+                     ->where('e.store_id', $store->id)
+                     ->where('e.status', 'valide')
+                     ->whereDate('e.entry_date', '<=', $to);
+            })
+            ->where('a.store_id', $store->id)
+            ->where('a.is_active', true)
+            ->select(
+                'a.id', 'a.code', 'a.name', 'a.class', 'a.nature',
+                DB::raw('COALESCE(SUM(l.debit), 0)  as total_debit'),
+                DB::raw('COALESCE(SUM(l.credit), 0) as total_credit'),
+                DB::raw('COALESCE(SUM(l.debit), 0) - COALESCE(SUM(l.credit), 0) as solde')
+            )
+            ->groupBy('a.id', 'a.code', 'a.name', 'a.class', 'a.nature')
+            ->orderBy('a.code')
+            ->get();
+
+        $totalProduits  = $rows->where('class', '7')->sum(fn($r) => $r->total_credit - $r->total_debit);
+        $totalCharges   = $rows->where('class', '6')->sum(fn($r) => $r->total_debit  - $r->total_credit);
+        $resultat       = $totalProduits - $totalCharges;
+
+        $immobilise     = $rows->where('class', '2')->where('solde', '>', 0)->values();
+        $stocks         = $rows->where('class', '3')->where('solde', '>', 0)->values();
+        $creances       = $rows->where('class', '4')->where('nature', 'actif')->where('solde', '>', 0)->values();
+        $tresorerie     = $rows->where('nature', 'tresorerie')->where('solde', '>', 0)->values();
+        $perteActif     = $resultat < 0 ? abs($resultat) : 0;
+        $totalActif     = $immobilise->sum('solde') + $stocks->sum('solde') + $creances->sum('solde') + $tresorerie->sum('solde') + $perteActif;
+
+        $capitaux       = $rows->where('class', '1')->where('nature', 'passif')->values();
+        $dettes         = $rows->where('class', '4')->where('nature', 'passif')->where('solde', '<', 0)->values();
+        $benefice       = $resultat > 0 ? $resultat : 0;
+        $totalCapitaux  = $capitaux->sum(fn($r) => abs((float) $r->solde)) + $benefice;
+        $totalDettes    = $dettes->sum(fn($r) => abs((float) $r->solde));
+        $totalPassif    = $totalCapitaux + $totalDettes;
+
+        return $this->pdf('pdf.accounting_bilan', [
+            'store'          => $store,
+            'to'             => date('d/m/Y', strtotime($to)),
+            'resultat'       => $resultat,
+            'equilibre'      => abs($totalActif - $totalPassif) < 1,
+            'immobilise'     => $immobilise,
+            'stocks'         => $stocks,
+            'creances'       => $creances,
+            'tresorerie'     => $tresorerie,
+            'perte_actif'    => $perteActif,
+            'total_actif'    => $totalActif,
+            'capitaux'       => $capitaux,
+            'dettes'         => $dettes,
+            'benefice'       => $benefice,
+            'total_capitaux' => $totalCapitaux,
+            'total_dettes'   => $totalDettes,
+            'total_passif'   => $totalPassif,
+        ], 'landscape')->download("Bilan-OHADA-{$to}.pdf");
+    }
 }

@@ -7,12 +7,13 @@ import {
   Boxes, AlertTriangle, TrendingDown, Calendar, Settings2,
   PackageMinus, ChevronLeft, ChevronRight, X, Search,
   PackagePlus, Loader2, CheckCircle2, TrendingUp,
-  ShoppingCart, RefreshCw, Filter,
+  ShoppingCart, RefreshCw, Filter, Flame, Turtle, Award,
+  BarChart2, ArrowUpDown,
 } from 'lucide-react'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-type StockTab = 'levels' | 'low' | 'expiring' | 'movements'
+type StockTab = 'levels' | 'low' | 'expiring' | 'movements' | 'rotation'
 
 interface ProductBase {
   id: number
@@ -53,6 +54,45 @@ interface StockMovement {
   user?: { name: string }
 }
 
+interface RotationRow {
+  product_id: number
+  product: {
+    id: number
+    name: string
+    internal_code: string
+    category?: { name: string; id: number }
+    unit?: { abbreviation: string }
+  } | null
+  total_qty_out: number
+  movement_count: number
+  total_value_out: number
+  current_stock: number
+  avg_cost: number
+  rotation_rate: number | null
+}
+
+interface RotationResponse {
+  meta: {
+    business_type: string
+    business_label: string
+    sales_mode_label: string
+    movement_types_used: string[]
+  }
+  data: RotationRow[]
+  current_page: number
+  last_page: number
+  total: number
+  per_page: number
+  from: number | null
+  to: number | null
+}
+
+interface CategoryOption {
+  id: number
+  name: string
+  children?: CategoryOption[]
+}
+
 interface Paginated<T> {
   data: T[]
   current_page: number
@@ -64,17 +104,26 @@ interface Paginated<T> {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const MOV_META: Record<string, { label: string; color: string; isOut: boolean }> = {
-  purchase_in:          { label: 'Achat',             color: 'success', isOut: false },
-  sale_out:             { label: 'Vente',              color: 'info',    isOut: true  },
-  return_in:            { label: 'Retour client',      color: 'success', isOut: false },
-  return_out:           { label: 'Retour fournisseur', color: 'warning', isOut: true  },
-  adjustment_in:        { label: 'Ajustement +',       color: 'success', isOut: false },
-  adjustment_out:       { label: 'Ajustement −',       color: 'warning', isOut: true  },
-  transfer_in:          { label: 'Transfert (entrée)', color: 'info',    isOut: false },
-  transfer_out:         { label: 'Transfert (sortie)', color: 'warning', isOut: true  },
-  loss:                 { label: 'Perte / Démarque',   color: 'danger',  isOut: true  },
-  kitchen_consumption:  { label: 'Conso. cuisine',     color: 'gray',    isOut: true  },
-  inventory_adjustment: { label: 'Inventaire',         color: 'info',    isOut: false },
+  // ── Communs à tous les commerces ────────────────────────────────
+  purchase_in:           { label: 'Achat',               color: 'success', isOut: false },
+  sale_out:              { label: 'Vente',                color: 'info',    isOut: true  },
+  return_in:             { label: 'Retour client',        color: 'success', isOut: false },
+  return_out:            { label: 'Retour fournisseur',   color: 'warning', isOut: true  },
+  adjustment_in:         { label: 'Ajustement +',         color: 'success', isOut: false },
+  adjustment_out:        { label: 'Ajustement −',         color: 'warning', isOut: true  },
+  transfer_in:           { label: 'Transfert (entrée)',   color: 'info',    isOut: false },
+  transfer_out:          { label: 'Transfert (sortie)',   color: 'warning', isOut: true  },
+  loss:                  { label: 'Perte / Démarque',     color: 'danger',  isOut: true  },
+  inventory_adjustment:  { label: 'Inventaire',           color: 'info',    isOut: false },
+  // ── Restaurant / Café / Boulangerie ─────────────────────────────
+  kitchen_consumption:   { label: 'Conso. cuisine',       color: 'gray',    isOut: true  },
+  // ── Boulangerie / Production ─────────────────────────────────────
+  production_in:         { label: 'Produit fabriqué',     color: 'success', isOut: false },
+  production_consumption:{ label: 'Conso. production',    color: 'gray',    isOut: true  },
+  waste_out:             { label: 'Invendu / Déchet',      color: 'danger',  isOut: true  },
+  // ── Pharmacie ────────────────────────────────────────────────────
+  prescription_out:      { label: 'Délivrance ordonnance',color: 'info',    isOut: true  },
+  expired_out:           { label: 'Retrait expiré',       color: 'danger',  isOut: true  },
 }
 
 const EXPIRY_DAYS_OPTIONS = [7, 15, 30, 60, 90]
@@ -84,6 +133,16 @@ const DATE_PRESETS = [
   { label: '7 derniers jours', from: () => new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10), to: () => new Date().toISOString().slice(0, 10) },
   { label: '30 derniers jours', from: () => new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10), to: () => new Date().toISOString().slice(0, 10) },
 ]
+
+const ROTATION_PERIODS = [
+  { label: '7 jours',  days: 7 },
+  { label: '30 jours', days: 30 },
+  { label: '90 jours', days: 90 },
+  { label: '1 an',     days: 365 },
+] as const
+
+function daysAgo(n: number) { return new Date(Date.now() - (n - 1) * 86400000).toISOString().slice(0, 10) }
+function today() { return new Date().toISOString().slice(0, 10) }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -312,6 +371,14 @@ export default function StockPage() {
   const [movDateFrom, setMovDateFrom] = useState('')
   const [movDateTo, setMovDateTo] = useState('')
 
+  // Onglet 5 — Rotation
+  const [rotPeriodDays, setRotPeriodDays] = useState<number>(30)
+  const [rotMode, setRotMode] = useState<'sales' | 'all'>('sales')
+  const [rotOrder, setRotOrder] = useState<'desc' | 'asc'>('desc')
+  const [rotPerPage, setRotPerPage] = useState<number>(20)
+  const [rotPage, setRotPage] = useState<number>(1)
+  const [rotCategoryId, setRotCategoryId] = useState<number | ''>('')
+
   const resetSearch = useCallback((v: string) => { setSearch(v); setPage(1) }, [])
   const resetStatus = useCallback((v: '' | 'low' | 'out') => { setStatusFilter(v); setPage(1) }, [])
 
@@ -347,6 +414,33 @@ export default function StockPage() {
     }).then(r => r.data),
     enabled: tab === 'movements',
     placeholderData: prev => prev,
+  })
+
+  const { data: rotationResp, isLoading: rotLoading } = useQuery<RotationResponse>({
+    queryKey: ['stock-rotation', rotPeriodDays, rotMode, rotOrder, rotPerPage, rotPage, rotCategoryId],
+    queryFn: () => api.get('/stock/rotation', {
+      params: {
+        date_from: daysAgo(rotPeriodDays),
+        date_to: today(),
+        mode: rotMode,
+        order: rotOrder,
+        per_page: rotPerPage,
+        page: rotPage,
+        category_id: rotCategoryId || undefined,
+      },
+    }).then(r => r.data as RotationResponse),
+    enabled: tab === 'rotation',
+    staleTime: 60_000,
+    placeholderData: prev => prev,
+  })
+  const rotation = rotationResp?.data ?? []
+  const rotMeta  = rotationResp?.meta
+
+  const { data: categories = [] } = useQuery<CategoryOption[]>({
+    queryKey: ['categories-flat'],
+    queryFn: () => api.get('/categories').then(r => r.data as CategoryOption[]),
+    staleTime: 300_000,
+    enabled: tab === 'rotation',
   })
 
   const { data: valuation } = useQuery<{ data: { value: number }[] }>({
@@ -411,6 +505,7 @@ export default function StockPage() {
           { id: 'low' as StockTab,       label: 'Alertes & Ruptures', icon: <AlertTriangle size={14} />, badge: lowStock.length },
           { id: 'expiring' as StockTab,  label: 'DLC à venir',        icon: <Calendar size={14} /> },
           { id: 'movements' as StockTab, label: 'Mouvements',         icon: <TrendingDown size={14} /> },
+          { id: 'rotation' as StockTab,  label: 'Rotation',           icon: <Flame size={14} /> },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-5 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap -mb-px ${
@@ -947,6 +1042,306 @@ export default function StockPage() {
           )}
         </div>
       )}
+
+      {/* ════════════════════════════════════════════════════════════════
+          TAB 5 — ROTATION DES STOCKS
+      ════════════════════════════════════════════════════════════════ */}
+      {tab === 'rotation' && (() => {
+        const maxQty = rotation.length > 0 ? Math.max(...rotation.map(r => r.total_qty_out)) : 1
+
+        // KPIs rapides
+        const totalOut   = rotation.reduce((s, r) => s + r.total_qty_out, 0)
+        const totalValue = rotation.reduce((s, r) => s + r.total_value_out, 0)
+        const avgRate    = (() => {
+          const withRate = rotation.filter(r => r.rotation_rate !== null)
+          if (!withRate.length) return null
+          return withRate.reduce((s, r) => s + (r.rotation_rate ?? 0), 0) / withRate.length
+        })()
+
+        return (
+          <div className="space-y-4">
+
+            {/* ── Filtres ───────────────────────────────────────────── */}
+            <div className="card p-4 space-y-3">
+              {/* Ligne 1 — Période */}
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5 flex-shrink-0">
+                  <Calendar size={12} /> Période
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {ROTATION_PERIODS.map(p => (
+                    <button key={p.days} onClick={() => { setRotPeriodDays(p.days); setRotPage(1) }}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-all ${
+                        rotPeriodDays === p.days
+                          ? 'bg-primary border-primary text-white shadow-sm'
+                          : 'border-gray-200 text-gray-600 hover:border-primary/40 hover:text-primary'
+                      }`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Badge business type */}
+                {rotMeta && (
+                  <span className="ml-auto flex items-center gap-1.5 text-[10px] bg-indigo-50 border border-indigo-200 text-indigo-600 px-2.5 py-1 rounded-full font-semibold">
+                    🏪 {rotMeta.business_label}
+                  </span>
+                )}
+              </div>
+
+              {/* Ligne 2 — Mode + Ordre + Catégorie + Limite */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Mode (adapté au business type) */}
+                <div className="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                  <button onClick={() => { setRotMode('sales'); setRotPage(1) }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${rotMode === 'sales' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}`}
+                    title={rotMeta?.sales_mode_label}>
+                    <ShoppingCart size={11} />
+                    {rotMeta?.sales_mode_label ?? 'Ventes'}
+                  </button>
+                  <button onClick={() => { setRotMode('all'); setRotPage(1) }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${rotMode === 'all' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <ArrowUpDown size={11} /> Tous mouvements
+                  </button>
+                </div>
+
+                {/* Ordre */}
+                <div className="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                  <button onClick={() => { setRotOrder('desc'); setRotPage(1) }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${rotOrder === 'desc' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <Flame size={11} /> Top vendeurs
+                  </button>
+                  <button onClick={() => { setRotOrder('asc'); setRotPage(1) }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${rotOrder === 'asc' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <Turtle size={11} /> Moins vendus
+                  </button>
+                </div>
+
+                {/* Filtre catégorie */}
+                <select
+                  value={rotCategoryId}
+                  onChange={e => { setRotCategoryId(e.target.value === '' ? '' : Number(e.target.value)); setRotPage(1) }}
+                  className="input text-xs h-8 w-48">
+                  <option value="">Toutes catégories</option>
+                  {categories.map(cat => (
+                    <optgroup key={cat.id} label={cat.name}>
+                      <option value={cat.id}>{cat.name} (tout)</option>
+                      {(cat.children ?? []).map(child => (
+                        <option key={child.id} value={child.id}>↳ {child.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+
+                {/* Par page */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 ml-auto">
+                  <BarChart2 size={12} />
+                  <select value={rotPerPage} onChange={e => { setRotPerPage(Number(e.target.value)); setRotPage(1) }}
+                    className="input text-xs h-7 w-16 py-0 px-2">
+                    {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  par page
+                </div>
+
+                {rotLoading && <Loader2 size={15} className="animate-spin text-primary ml-auto" />}
+              </div>
+
+              {/* Types de mouvements utilisés (contexte debug/transparence) */}
+              {rotMeta && (
+                <div className="flex flex-wrap gap-1 pt-1 border-t border-gray-100">
+                  <span className="text-[10px] text-gray-400 mr-1">Mouvements inclus :</span>
+                  {rotMeta.movement_types_used.map(t => (
+                    <span key={t} className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{t}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── KPI Summary ───────────────────────────────────────── */}
+            {!rotLoading && rotation.length > 0 && (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="card p-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center flex-shrink-0">
+                    <TrendingDown size={18} className="text-orange-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Qté totale sortie</p>
+                    <p className="text-lg font-bold text-gray-900">{formatNumber(totalOut, 0)}</p>
+                    <p className="text-[10px] text-gray-400">sur {rotPeriodDays} jours</p>
+                  </div>
+                </div>
+                <div className="card p-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                    <TrendingUp size={18} className="text-emerald-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">CA généré</p>
+                    <p className="text-lg font-bold text-gray-900">{formatCurrency(totalValue)}</p>
+                    <p className="text-[10px] text-gray-400">coût d'achat × qté</p>
+                  </div>
+                </div>
+                <div className="card p-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center flex-shrink-0">
+                    <RefreshCw size={18} className="text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Taux moy. de rotation</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {avgRate !== null ? `${avgRate.toFixed(1)}×` : '—'}
+                    </p>
+                    <p className="text-[10px] text-gray-400">renouvellements de stock</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Podium top 3 ─────────────────────────────────────── */}
+            {!rotLoading && rotOrder === 'desc' && rotation.length >= 3 && (
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { rank: 1, entry: rotation[0], icon: '🥇', bg: 'bg-yellow-50 border-yellow-200' },
+                  { rank: 2, entry: rotation[1], icon: '🥈', bg: 'bg-gray-50 border-gray-200' },
+                  { rank: 3, entry: rotation[2], icon: '🥉', bg: 'bg-orange-50 border-orange-200' },
+                ].map(({ rank, entry, icon, bg }) => (
+                  <div key={rank} className={`card border ${bg} p-4 text-center`}>
+                    <div className="text-2xl mb-1">{icon}</div>
+                    <p className="font-bold text-gray-900 text-sm leading-snug">{entry.product?.name ?? '—'}</p>
+                    <p className="text-xs text-gray-400 font-mono mt-0.5">{entry.product?.internal_code}</p>
+                    <p className="text-base font-bold text-primary mt-2">{formatNumber(entry.total_qty_out, 0)}
+                      <span className="text-xs font-normal text-gray-400 ml-1">{entry.product?.unit?.abbreviation}</span>
+                    </p>
+                    <p className="text-[10px] text-gray-400">{entry.movement_count} transaction{entry.movement_count > 1 ? 's' : ''}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── Table ─────────────────────────────────────────────── */}
+            <div className="card p-0 overflow-hidden">
+              {rotLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <Loader2 size={22} className="animate-spin text-primary" />
+                </div>
+              ) : rotation.length === 0 ? (
+                <div className="p-12 text-center">
+                  <BarChart2 size={36} className="mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-500 font-medium">Aucun mouvement sur cette période.</p>
+                  <p className="text-sm text-gray-400 mt-1">Élargissez la période ou changez le mode.</p>
+                </div>
+              ) : (
+                <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        <th className="text-center px-3 py-3 w-10">#</th>
+                        <th className="text-left px-4 py-3">Produit</th>
+                        <th className="text-left px-3 py-3">Catégorie</th>
+                        <th className="text-right px-4 py-3">Qté sortie</th>
+                        <th className="text-right px-4 py-3">Mvts</th>
+                        <th className="text-right px-4 py-3">Valeur sortie</th>
+                        <th className="text-right px-4 py-3">Stock actuel</th>
+                        <th className="text-right px-4 py-3">Taux rotation</th>
+                        <th className="px-4 py-3 w-32">Volume relatif</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {rotation.map((row, idx) => {
+                        const globalRank = (rotPage - 1) * rotPerPage + idx + 1
+                        const isFirstPage = rotPage === 1
+                        const barPct = maxQty > 0 ? Math.round((row.total_qty_out / maxQty) * 100) : 0
+                        const rate   = row.rotation_rate
+                        const rateColor = rate === null ? 'text-gray-400' : rate >= 5 ? 'text-emerald-600 font-bold' : rate >= 2 ? 'text-primary font-semibold' : 'text-gray-500'
+                        return (
+                          <tr key={row.product_id}
+                            className={`hover:bg-gray-50/60 transition-colors ${isFirstPage && idx === 0 && rotOrder === 'desc' ? 'bg-yellow-50/40' : ''}`}>
+                            <td className="px-3 py-3 text-center">
+                              {rotOrder === 'desc' && isFirstPage && idx === 0 ? <span className="text-base">🥇</span>
+                               : rotOrder === 'desc' && isFirstPage && idx === 1 ? <span className="text-base">🥈</span>
+                               : rotOrder === 'desc' && isFirstPage && idx === 2 ? <span className="text-base">🥉</span>
+                               : <span className="text-xs font-bold text-gray-400">{globalRank}</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-gray-900">{row.product?.name ?? '—'}</p>
+                              <p className="text-xs font-mono text-gray-400">{row.product?.internal_code}</p>
+                            </td>
+                            <td className="px-3 py-3 text-xs text-gray-500">
+                              {row.product?.category?.name ?? <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="font-bold text-gray-900">{formatNumber(row.total_qty_out, 1)}</span>
+                              {row.product?.unit && (
+                                <span className="text-xs text-gray-400 ml-1">{row.product.unit.abbreviation}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right text-gray-500 text-xs">{row.movement_count}</td>
+                            <td className="px-4 py-3 text-right text-gray-700 text-xs">{formatCurrency(row.total_value_out)}</td>
+                            <td className="px-4 py-3 text-right text-xs">
+                              <span className={row.current_stock <= 0 ? 'text-red-500 font-semibold' : 'text-gray-600'}>
+                                {formatNumber(row.current_stock, 0)}
+                              </span>
+                              {row.product?.unit && (
+                                <span className="text-gray-400 ml-1">{row.product.unit.abbreviation}</span>
+                              )}
+                            </td>
+                            <td className={`px-4 py-3 text-right text-xs ${rateColor}`}>
+                              {rate !== null ? `${rate}×` : '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${
+                                      idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-400' : 'bg-primary-300'
+                                    }`}
+                                    style={{ width: `${barPct}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-gray-400 w-7 text-right">{barPct}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 border-t text-xs font-semibold text-gray-600">
+                        <td colSpan={3} className="px-4 py-2.5">
+                          {rotationResp?.from != null && rotationResp.to != null
+                            ? `${rotationResp.from}–${rotationResp.to} sur ${rotationResp.total} produit${rotationResp.total > 1 ? 's' : ''}`
+                            : `${rotation.length} produit${rotation.length > 1 ? 's' : ''}`}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-bold text-gray-900">{formatNumber(totalOut, 0)}</td>
+                        <td className="px-4 py-2.5 text-right">{rotation.reduce((s, r) => s + r.movement_count, 0)}</td>
+                        <td className="px-4 py-2.5 text-right font-bold text-gray-900">{formatCurrency(totalValue)}</td>
+                        <td colSpan={3} />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                {/* Pagination */}
+                <Pagination
+                  page={rotationResp?.current_page ?? 1}
+                  lastPage={rotationResp?.last_page ?? 1}
+                  total={rotationResp?.total}
+                  onPage={setRotPage}
+                />
+                </>
+              )}
+            </div>
+
+            {/* Légende taux de rotation */}
+            {!rotLoading && rotation.length > 0 && (
+              <div className="flex flex-wrap gap-3 text-xs text-gray-500 px-1">
+                <span className="flex items-center gap-1"><span className="text-emerald-600 font-bold">5×+</span> Forte rotation (stock très actif)</span>
+                <span className="flex items-center gap-1"><span className="text-primary font-semibold">2–5×</span> Rotation normale</span>
+                <span className="flex items-center gap-1"><span className="text-gray-500">&lt;2×</span> Rotation faible (stock dormant)</span>
+                <span className="ml-auto italic">Taux = qté vendue ÷ stock actuel sur {rotPeriodDays}j</span>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Modal d'ajustement ─────────────────────────────────────── */}
       {adjustTarget !== undefined && (
