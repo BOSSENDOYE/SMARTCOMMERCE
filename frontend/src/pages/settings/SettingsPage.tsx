@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import {
-  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X
+  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X, Palette,
 } from 'lucide-react'
+import { usePreferencesStore, COLOR_PALETTES } from '../../store/preferences.store'
 import ThermalPrinterPanel from '../../components/thermal/ThermalPrinterPanel'
 
 interface SettingCard {
@@ -20,6 +21,8 @@ export default function SettingsPage() {
   const { user, can } = useAuthStore()
   const navigate = useNavigate()
   const [showThermal, setShowThermal] = useState(false)
+  const { theme, primaryColor } = usePreferencesStore()
+  const activePalette = COLOR_PALETTES[primaryColor]
 
   const isSuperAdmin = user?.roles?.includes('super_admin')
 
@@ -72,6 +75,14 @@ export default function SettingsPage() {
       desc: 'ESC/POS — 58mm / 80mm',
       detail: 'Configurer l\'imprimante USB pour tickets de caisse',
       onClick: () => setShowThermal(true),
+    },
+    {
+      icon: <Palette size={20} style={{ color: activePalette.DEFAULT }} />,
+      iconBg: 'rounded-xl flex items-center justify-center',
+      title: 'Préférences d\'affichage',
+      desc: `Thème ${theme === 'dark' ? 'sombre' : 'clair'} · Couleur ${activePalette.name}`,
+      detail: 'Mode sombre / clair · Couleur principale',
+      onClick: () => navigate('/preferences'),
     },
   ]
 

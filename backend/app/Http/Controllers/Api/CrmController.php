@@ -74,6 +74,9 @@ class CrmController extends Controller
             $q->where('expected_close_date', '<', now())
               ->whereNotIn('stage', ['won', 'lost']);
         }
+        if ($request->filled('pipeline_id')) {
+            $q->where('pipeline_id', $request->pipeline_id);
+        }
 
         // Vue Kanban : retourner groupé par stage
         if ($request->boolean('kanban')) {
@@ -92,6 +95,7 @@ class CrmController extends Controller
 
         $data = $request->validate([
             'store_id'            => 'required|exists:stores,id',
+            'pipeline_id'         => 'nullable|exists:crm_pipelines,id',
             'title'               => 'required|string|max:255',
             'client_id'           => 'nullable|exists:clients,id',
             'contact_name'        => 'nullable|string|max:150',

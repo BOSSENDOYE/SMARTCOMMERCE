@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
+import { useState } from 'react'
 import { useAuthStore } from './store/auth.store'
+import { ConfirmProvider } from './hooks/useConfirm'
+import { usePreferencesStore } from './store/preferences.store'
 import AppLayout from './components/layout/AppLayout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
@@ -32,6 +35,7 @@ const InvoicesPage        = lazy(() => import('./pages/invoices/InvoicesPage'))
 const CrmPage             = lazy(() => import('./pages/crm/CrmPage'))
 const ProfilePage         = lazy(() => import('./pages/settings/ProfilePage'))
 const RolesPage           = lazy(() => import('./pages/settings/RolesPage'))
+const PreferencesPage     = lazy(() => import('./pages/settings/PreferencesPage'))
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -51,6 +55,14 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Apply saved preferences (theme + primary color) immediately on first render
+function PreferencesBootstrap() {
+  const applyOnBoot = usePreferencesStore(s => s.applyOnBoot)
+  // Run once synchronously via useState initializer (before paint)
+  const [_] = useState(() => { applyOnBoot(); return null })
+  return null
+}
+
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-64">
@@ -62,6 +74,8 @@ function PageLoader() {
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
+      <ConfirmProvider>
+      <PreferencesBootstrap />
       <BrowserRouter>
         <Toaster
           position="top-right"
@@ -94,12 +108,14 @@ export default function App() {
             <Route path="users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
             <Route path="roles" element={<Suspense fallback={<PageLoader />}><RolesPage /></Suspense>} />
             <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />
+            <Route path="preferences" element={<Suspense fallback={<PageLoader />}><PreferencesPage /></Suspense>} />
             <Route path="invoices" element={<Suspense fallback={<PageLoader />}><InvoicesPage /></Suspense>} />
             <Route path="crm" element={<Suspense fallback={<PageLoader />}><CrmPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
+      </ConfirmProvider>
     </QueryClientProvider>
   )
 }

@@ -38,3 +38,60 @@ export function formatPercent(n: number | null | undefined, decimals = 1): strin
 export function classNames(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ')
 }
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000'
+
+/**
+ * Converts a backend image path (/storage/...) to a fully qualified URL.
+ * Returns null if no path provided.
+ */
+export function imageUrl(path?: string | null): string | null {
+  if (!path) return null
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+  return `${API_BASE}${path}`
+}
+
+/**
+ * Télécharge un PDF depuis le backend (avec authentification Bearer).
+ * @param path  - chemin relatif API, ex: '/pdf/invoices/42'
+ * @param filename - nom du fichier téléchargé
+ * @param params   - query params optionnels
+ */
+export async function downloadPdf(
+  path: string,
+  filename: string,
+  params?: Record<string, string>,
+): Promise<void> {
+  const token = localStorage.getItem('sc_token')
+  const url = new URL(`${API_BASE}/api/v1${path}`)
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
+  }
+
+  // Propager le contexte super-admin si nécessaire
+  const headers: Record<string, string> = {
+    'Accept': 'application/pdf',
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  try {
+    const scActiveStore = localStorage.getItem('sc-active-store')
+    if (scActiveStore) {
+      const { state } = JSON.parse(scActiveStore)
+      if (state?.activeStore?.id) headers['X-Store-Id'] = String(state.activeStore.id)
+    }
+  } catch { /* ignore */ }
+
+  const res = await fetch(url.toString(), { headers })
+  if (!res.ok) throw new Error(`Erreur PDF (${res.status})`)
+
+  const blob = await res.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(blobUrl)
+}

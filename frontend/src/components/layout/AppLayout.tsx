@@ -9,8 +9,9 @@ import {
   Settings, LogOut, ChevronLeft, ChevronRight, AlertTriangle,
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
-  UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target,
+  UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target, Palette, Sun, Moon,
 } from 'lucide-react'
+import { usePreferencesStore } from '../../store/preferences.store'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import { useOfflineSync } from '../../hooks/useOfflineSync'
 import { getPendingSalesCount } from '../../lib/offline-db'
@@ -40,12 +41,12 @@ const navItems: NavItem[] = [
   { label: 'Fournisseurs',    to: '/suppliers',  icon: <Truck size={18} />,             permission: 'manage_suppliers' },
   { label: 'Achats',          to: '/purchases',  icon: <ArrowLeftRight size={18} />,    permission: 'create_purchase_orders' },
   { label: 'Clients',         to: '/clients',    icon: <Users size={18} />,             permission: 'manage_clients',        hideFor: ['depot'] },
-  { label: 'Facturation',     to: '/invoices',   icon: <FilePlus2 size={18} />,         permission: 'manage_clients',        hideFor: ['depot'] },
-  { label: 'CRM / Leads',     to: '/crm',        icon: <Target size={18} />,            permission: 'manage_clients',        hideFor: ['depot'] },
+  { label: 'Facturation',     to: '/invoices',   icon: <FilePlus2 size={18} />,         permission: 'manage_invoices',       hideFor: ['depot'] },
+  { label: 'CRM / Leads',     to: '/crm',        icon: <Target size={18} />,            permission: 'manage_crm',            hideFor: ['depot'] },
   { label: 'Utilisateurs',   to: '/users',      icon: <UserCircle size={18} />,        permission: 'manage_users' },
   { label: 'Promotions',      to: '/promotions', icon: <Percent size={18} />,           permission: 'manage_promotions',     hideFor: ['depot'] },
   { label: 'Pertes',          to: '/losses',     icon: <TrendingDown size={18} />,      permission: 'manage_losses' },
-  { label: 'Dépenses',        to: '/expenses',   icon: <Receipt size={18} />,           permission: 'view_accounting' },
+  { label: 'Dépenses',        to: '/expenses',   icon: <Receipt size={18} />,           permission: 'manage_expenses' },
   { label: 'Transferts',      to: '/transfers',  icon: <ArrowLeftRight size={18} />,    permission: 'manage_transfers' },
   { label: 'Magasins',        to: '/stores',     icon: <Store size={18} />,             permission: 'manage_stores' },
   { label: 'Restaurant',      to: '/restaurant', icon: <Utensils size={18} />,          license: 'restaurant' },
@@ -126,6 +127,7 @@ export default function AppLayout() {
   const { activeStore } = useActiveStoreStore()
   const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const { theme, setTheme } = usePreferencesStore()
   const { isOnline, wasOffline } = useNetworkStatus()
   useOfflineSync()
   const [pendingCount, setPendingCount] = useState(0)
@@ -262,6 +264,20 @@ export default function AppLayout() {
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-200 hover:bg-brand-700 hover:text-white transition-colors"
               >
                 <UserCircle size={13} /> Mon profil
+              </button>
+              <button
+                onClick={() => { navigate('/preferences'); setShowUserMenu(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-200 hover:bg-brand-700 hover:text-white transition-colors"
+              >
+                <Palette size={13} /> Préférences
+              </button>
+              {/* Quick theme toggle */}
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-200 hover:bg-brand-700 hover:text-white transition-colors"
+              >
+                {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+                {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
               </button>
               <div className="border-t border-brand-700 my-1" />
               <button

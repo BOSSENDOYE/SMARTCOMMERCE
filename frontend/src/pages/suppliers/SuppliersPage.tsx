@@ -9,6 +9,7 @@ import {
   Package, FileText, ShoppingCart, CheckCircle, Clock,
   AlertTriangle, X, Star, Trash2,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -616,6 +617,7 @@ function InvoicesTab({ supplier }: { supplier: Supplier }) {
 
 function ProductsTab({ supplier }: { supplier: Supplier }) {
   const qc = useQueryClient()
+  const confirm = useConfirm()
   const [showLink, setShowLink] = useState(false)
 
   const { data: products, isLoading } = useQuery<LinkedProduct[]>({
@@ -673,7 +675,7 @@ function ProductsTab({ supplier }: { supplier: Supplier }) {
                   </td>
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => window.confirm('Retirer ce produit du fournisseur ?') && unlinkMut.mutate(p.id)}
+                      onClick={async () => { if (await confirm('Retirer ce produit du fournisseur ?', { danger: true })) unlinkMut.mutate(p.id) }}
                       className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
                     >
                       <Trash2 size={15} />

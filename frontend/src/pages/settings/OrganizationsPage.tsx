@@ -7,6 +7,7 @@ import {
   Users, Phone, Mail, MapPin, FileText, CheckCircle, XCircle,
   Upload, Camera,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -398,6 +399,7 @@ function OrgCard({
 export default function OrganizationsPage() {
   const [modalOrg, setModalOrg] = useState<Org | null | 'new'>()
   const qc = useQueryClient()
+  const confirm = useConfirm()
 
   const { data: orgs = [], isLoading } = useQuery<Org[]>({
     queryKey: ['organizations'],
@@ -422,8 +424,8 @@ export default function OrganizationsPage() {
     onError: (e: any) => toast.error(e.response?.data?.message ?? 'Erreur'),
   })
 
-  const handleDelete = (org: Org) => {
-    if (confirm(`Supprimer l'organisation "${org.name}" ?`)) {
+  const handleDelete = async (org: Org) => {
+    if (await confirm(`Supprimer l'organisation "${org.name}" ?`, { danger: true })) {
       remove.mutate(org)
     }
   }

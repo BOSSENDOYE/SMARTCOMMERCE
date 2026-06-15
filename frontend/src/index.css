@@ -8,6 +8,7 @@
   :root {
     --color-primary:     #ff7631;
     --color-primary-600: #e65c18;
+    --color-primary-700: #bf4a10;
     --color-primary-100: #ffe6d9;
     --color-primary-50:  #fff4ef;
     --color-brand:       #002f59;
@@ -16,6 +17,73 @@
     --color-brand-300:   #6690c3;
   }
 }
+
+/* ── Dark mode — overrides globaux ─────────────────────────────────────────── */
+/* Stratégie : on cible les classes Tailwind les plus fréquentes dans l'app    */
+
+.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+/* Surfaces */
+.dark .bg-white          { background-color: #1e293b !important; }
+.dark .bg-gray-50        { background-color: #162032 !important; }
+.dark .bg-gray-100       { background-color: #0f172a !important; }
+.dark .bg-gray-200       { background-color: #1e293b !important; }
+
+/* Textes */
+.dark .text-gray-900     { color: #f1f5f9 !important; }
+.dark .text-gray-800     { color: #e2e8f0 !important; }
+.dark .text-gray-700     { color: #cbd5e1 !important; }
+.dark .text-gray-600     { color: #94a3b8 !important; }
+.dark .text-gray-500     { color: #64748b !important; }
+.dark .text-gray-400     { color: #475569 !important; }
+
+/* Bordures */
+.dark .border-gray-100   { border-color: #1e293b !important; }
+.dark .border-gray-200   { border-color: #334155 !important; }
+.dark .border-gray-300   { border-color: #475569 !important; }
+.dark .border             { border-color: #334155 !important; }
+.dark .divide-y > * + *  { border-color: #334155 !important; }
+
+/* Inputs et selects */
+.dark input:not([type='checkbox']):not([type='radio']),
+.dark select,
+.dark textarea {
+  background-color: #162032 !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: #475569 !important; }
+
+/* Tables */
+.dark table                { background-color: #1e293b !important; }
+.dark thead                { background-color: #162032 !important; }
+.dark .hover\:bg-gray-50:hover { background-color: #1a2a3f !important; }
+
+/* Badges et pills */
+.dark .bg-blue-50          { background-color: #172554 !important; }
+.dark .bg-green-50         { background-color: #052e16 !important; }
+.dark .bg-red-50           { background-color: #450a0a !important; }
+.dark .bg-yellow-50        { background-color: #422006 !important; }
+.dark .bg-orange-50        { background-color: #431407 !important; }
+.dark .bg-purple-50        { background-color: #2e1065 !important; }
+.dark .bg-amber-50         { background-color: #451a03 !important; }
+.dark .bg-indigo-50        { background-color: #1e1b4b !important; }
+
+/* Shadows atténuées en dark */
+.dark .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4) !important; }
+.dark .shadow    { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5) !important; }
+.dark .shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important; }
+.dark .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6) !important; }
+.dark .shadow-2xl{ box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important; }
+
+/* Scrollbar dark */
+.dark ::-webkit-scrollbar-track { background: #0f172a; }
+.dark ::-webkit-scrollbar-thumb { background: #334155; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
 * {
   box-sizing: border-box;

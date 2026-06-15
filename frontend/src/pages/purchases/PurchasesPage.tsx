@@ -7,7 +7,9 @@ import {
   ShoppingCart, Plus, Search, ChevronRight, ArrowLeft,
   Package, Truck, CheckCircle, Clock, AlertCircle,
   Send, X, Trash2, Edit2, RotateCcw, FileText, Star,
+  Upload, FileDown, Loader2, Check,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -724,6 +726,7 @@ function StatusFlow({ status }: { status: PurchaseStatus }) {
 
 function OrderDetail({ orderId, onBack }: { orderId: number; onBack: () => void }) {
   const qc = useQueryClient()
+  const confirm = useConfirm()
   const [tab, setTab] = useState<'items' | 'receptions'>('items')
   const [showEdit, setShowEdit] = useState(false)
   const [showReceive, setShowReceive] = useState(false)
@@ -795,7 +798,7 @@ function OrderDetail({ orderId, onBack }: { orderId: number; onBack: () => void 
                   <Edit2 size={15} /> Modifier
                 </button>
                 <button
-                  onClick={() => window.confirm('Supprimer ce bon de commande ?') && deleteMut.mutate()}
+                  onClick={async () => { if (await confirm('Supprimer ce bon de commande ?', { danger: true })) deleteMut.mutate() }}
                   className="btn-secondary text-red-600 hover:bg-red-50 flex items-center gap-2 text-sm"
                 >
                   <Trash2 size={15} /> Supprimer
@@ -811,7 +814,7 @@ function OrderDetail({ orderId, onBack }: { orderId: number; onBack: () => void 
                   <CheckCircle size={15} /> Réceptionner
                 </button>
                 <button
-                  onClick={() => window.confirm('Annuler cette commande ?') && cancelMut.mutate()}
+                  onClick={async () => { if (await confirm('Annuler cette commande ?', { danger: true })) cancelMut.mutate() }}
                   className="btn-secondary text-red-600 hover:bg-red-50 flex items-center gap-2 text-sm"
                 >
                   <RotateCcw size={15} /> Annuler
@@ -982,11 +985,283 @@ function OrderDetail({ orderId, onBack }: { orderId: number; onBack: () => void 
 
 type StatusFilter = 'all' | PurchaseStatus
 
+// ─── BLImportModal ────────────────────────────────────────────────────────────
+
+interface BLRow {
+  row: number
+  reference?: string | null
+  designation?: string | null
+  product_id?: number | null
+  product_name?: string | null
+  product_code?: string | null
+  quantite: number
+  prix_achat_ht: number
+  tva: number
+  lot?: string | null
+  date_expiration?: string | null
+  errors: string[]
+  warnings: string[]
+  status: 'ok' | 'error'
+}
+
+interface BLPreview { rows: BLRow[]; total: number; ok: number; errors: number }
+interface BLResult  { reception_ref: string; order_ref: string; lines: number }
+
+function BLImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [step, setStep]           = useState<1 | 2 | 3>(1)
+  const [file, setFile]           = useState<File | null>(null)
+  const [supplierId, setSupplierId] = useState<string>('')
+  const [blRef, setBlRef]         = useState('')
+  const [preview, setPreview]     = useState<BLPreview | null>(null)
+  const [result, setResult]       = useState<BLResult | null>(null)
+  const [loading, setLoading]     = useState(false)
+  const fileRef                   = useRef<HTMLInputElement>(null)
+
+  const { data: suppliers } = useQuery<{ data: Supplier[] }>({
+    queryKey: ['suppliers-bl'],
+    queryFn:  () => api.get('/suppliers', { params: { per_page: 200 } }).then(r => r.data),
+  })
+
+  async function handlePreview() {
+    if (!file) return
+    setLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await api.post<BLPreview>('/purchase-orders/import-bl/preview', fd)
+      setPreview(data)
+      setStep(2)
+    } catch (e: any) {
+      toast.error(e.response?.data?.message ?? "Erreur lors de l'analyse du BL")
+    } finally { setLoading(false) }
+  }
+
+  async function handleConfirm() {
+    if (!preview) return
+    const validRows = preview.rows.filter(r => r.status === 'ok')
+    if (validRows.length === 0) { toast.error('Aucune ligne valide'); return }
+    setLoading(true)
+    try {
+      const { data } = await api.post<BLResult>('/purchase-orders/import-bl/confirm', {
+        supplier_id:  supplierId ? parseInt(supplierId) : undefined,
+        bl_reference: blRef || undefined,
+        rows:         validRows,
+      })
+      setResult(data)
+      setStep(3)
+      onDone()
+    } catch (e: any) {
+      toast.error(e.response?.data?.message ?? "Erreur lors de l'import BL")
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Import Bon de Livraison (BL)</h2>
+            <p className="text-xs text-gray-500">
+              {step === 1 ? 'Étape 1 — Fichier & paramètres' :
+               step === 2 ? 'Étape 2 — Vérification des lignes' :
+               'Étape 3 — Résultat'}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {([1, 2, 3] as const).map(s => (
+              <div key={s} className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                step === s ? 'bg-primary border-primary text-white' :
+                step > s  ? 'bg-green-500 border-green-500 text-white' :
+                'border-gray-200 text-gray-400'
+              }`}>{step > s ? <Check size={12} /> : s}</div>
+            ))}
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5">
+
+          {/* Step 1 */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Fournisseur (optionnel)</label>
+                  <select value={supplierId} onChange={e => setSupplierId(e.target.value)} className="input text-sm">
+                    <option value="">— Sélectionner un fournisseur —</option>
+                    {(suppliers?.data ?? []).map(s => (
+                      <option key={s.id} value={s.id}>{s.company_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Référence BL</label>
+                  <input value={blRef} onChange={e => setBlRef(e.target.value)} className="input text-sm"
+                    placeholder="Ex: BL-2024-0042" />
+                </div>
+              </div>
+
+              <div
+                onClick={() => fileRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f) }}
+                className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-primary hover:bg-primary-50 transition-colors"
+              >
+                <Upload size={32} className="mx-auto text-gray-300 mb-3" />
+                {file ? (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{file.name}</p>
+                    <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} Ko</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Glisser-déposer ou cliquer pour choisir</p>
+                    <p className="text-xs text-gray-400 mt-1">Formats : XLSX, XLS, CSV (max 10 Mo)</p>
+                  </div>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
+
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-gray-600 mb-2">Colonnes attendues dans le fichier BL :</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['reference_produit *', 'designation', 'quantite *', 'prix_achat_ht', 'tva', 'lot', 'date_expiration'].map(c => (
+                    <span key={c} className={`text-xs px-2 py-0.5 rounded-full ${
+                      c.endsWith('*') ? 'bg-primary-100 text-primary font-semibold' : 'bg-gray-100 text-gray-600'
+                    }`}>{c}</span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2">* reference_produit = code interne ou code-barres du produit existant dans le système</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2 */}
+          {step === 2 && preview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{preview.total}</p>
+                  <p className="text-xs text-gray-500">Lignes trouvées</p>
+                </div>
+                <div className="bg-green-50 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-green-600">{preview.ok}</p>
+                  <p className="text-xs text-green-600">Produits identifiés</p>
+                </div>
+                <div className="bg-red-50 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-red-600">{preview.errors}</p>
+                  <p className="text-xs text-red-500">Non trouvés (ignorés)</p>
+                </div>
+              </div>
+
+              <div className="border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto max-h-96">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">#</th>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">Référence</th>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">Produit trouvé</th>
+                        <th className="px-3 py-2 text-right text-gray-500 font-medium">Qté</th>
+                        <th className="px-3 py-2 text-right text-gray-500 font-medium">Prix HT</th>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">Lot / Exp.</th>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {preview.rows.map(r => (
+                        <tr key={r.row} className={r.status === 'error' ? 'bg-red-50' : ''}>
+                          <td className="px-3 py-2 text-gray-400">{r.row}</td>
+                          <td className="px-3 py-2 font-mono text-gray-700">{r.reference ?? '—'}</td>
+                          <td className="px-3 py-2 font-medium text-gray-900">
+                            {r.product_name ?? <span className="text-red-400 italic">Non trouvé</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold">{r.quantite}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(r.prix_achat_ht)}</td>
+                          <td className="px-3 py-2 text-gray-500">
+                            {r.lot ? <span className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">{r.lot}</span> : ''}
+                            {r.date_expiration ? <span className="ml-1 text-[10px] text-amber-600">{r.date_expiration}</span> : ''}
+                          </td>
+                          <td className="px-3 py-2">
+                            {r.status === 'error' ? (
+                              <div>
+                                <span className="inline-flex items-center gap-1 text-red-600 font-medium"><AlertCircle size={11} /> Erreur</span>
+                                {r.errors.map((e, i) => <div key={i} className="text-red-500 text-[10px]">{e}</div>)}
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="inline-flex items-center gap-1 text-green-600 font-medium"><CheckCircle size={11} /> OK</span>
+                                {r.warnings.map((w, i) => <div key={i} className="text-amber-500 text-[10px]">{w}</div>)}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3 */}
+          {step === 3 && result && (
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <CheckCircle size={56} className="text-green-500" />
+              <h3 className="text-xl font-bold text-gray-900">BL importé avec succès !</h3>
+              <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
+                <div className="bg-green-50 rounded-xl p-4 text-center">
+                  <p className="text-3xl font-bold text-green-600">{result.lines}</p>
+                  <p className="text-xs text-green-600 mt-1">Lignes réceptionnées</p>
+                </div>
+                <div className="bg-primary-50 rounded-xl p-4 text-center">
+                  <p className="text-sm font-bold text-primary font-mono">{result.reception_ref}</p>
+                  <p className="text-xs text-primary-600 mt-1">Réf. réception</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Stock mis à jour automatiquement pour toutes les lignes importées.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t flex justify-between">
+          <button onClick={onClose} className="btn-outline">
+            {step === 3 ? 'Fermer' : 'Annuler'}
+          </button>
+          <div className="flex gap-2">
+            {step === 2 && (
+              <button onClick={() => setStep(1)} className="btn-outline">Retour</button>
+            )}
+            {step === 1 && (
+              <button onClick={handlePreview} disabled={!file || loading} className="btn-primary flex items-center gap-2">
+                {loading ? <><Loader2 size={15} className="animate-spin" /> Analyse...</> : 'Analyser le BL'}
+              </button>
+            )}
+            {step === 2 && (
+              <button onClick={handleConfirm} disabled={(preview?.ok ?? 0) === 0 || loading} className="btn-primary flex items-center gap-2">
+                {loading ? <><Loader2 size={15} className="animate-spin" /> Import...</> : `Réceptionner ${preview?.ok ?? 0} ligne(s)`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── PurchasesPage ────────────────────────────────────────────────────────────
+
 export default function PurchasesPage() {
+  const queryClient                 = useQueryClient()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [search, setSearch]         = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [showCreate, setShowCreate] = useState(false)
+  const [showBLImport, setShowBLImport] = useState(false)
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ['po-stats'],
@@ -1024,12 +1299,14 @@ export default function PurchasesPage() {
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <ShoppingCart size={24} /> Achats & Approvisionnements
         </h1>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} /> Nouveau bon de commande
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowBLImport(true)} className="btn-outline flex items-center gap-2">
+            <Upload size={16} /> Importer un BL
+          </button>
+          <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
+            <Plus size={18} /> Nouveau bon de commande
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -1148,6 +1425,16 @@ export default function PurchasesPage() {
       </div>
 
       {showCreate && <OrderFormModal onClose={() => setShowCreate(false)} />}
+
+      {showBLImport && (
+        <BLImportModal
+          onClose={() => setShowBLImport(false)}
+          onDone={() => {
+            queryClient.invalidateQueries({ queryKey: ['purchase-orders'] })
+            queryClient.invalidateQueries({ queryKey: ['po-stats'] })
+          }}
+        />
+      )}
     </div>
   )
 }

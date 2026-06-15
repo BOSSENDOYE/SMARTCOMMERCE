@@ -6,6 +6,7 @@ import {
   TrendingDown, Plus, AlertTriangle, CheckCircle, XCircle,
   Search, Filter, Trash2, ChevronLeft, ChevronRight,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -204,6 +205,7 @@ function NewLossModal({ onClose }: { onClose: () => void }) {
 
 export default function LossesPage() {
   const qc = useQueryClient()
+  const confirm = useConfirm()
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
@@ -454,8 +456,8 @@ export default function LossesPage() {
                           </button>
                           <button
                             title="Supprimer"
-                            onClick={() => {
-                              if (confirm('Annuler cette perte et restaurer le stock ?')) deleteLoss(l.id)
+                            onClick={async () => {
+                              if (await confirm('Annuler cette perte et restaurer le stock ?', { danger: true })) deleteLoss(l.id)
                             }}
                             className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
                           >

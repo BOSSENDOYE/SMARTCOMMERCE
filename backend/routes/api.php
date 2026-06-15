@@ -25,6 +25,9 @@ Route::prefix('v1')->group(function () {
         // Products
         Route::get('/products/stats', [ProductController::class, 'stats']);
         Route::get('/products/barcode', [ProductController::class, 'searchByBarcode']);
+        Route::get('/products/import-template', [\App\Http\Controllers\Api\ProductImportController::class, 'template']);
+        Route::post('/products/import/preview', [\App\Http\Controllers\Api\ProductImportController::class, 'preview']);
+        Route::post('/products/import/confirm', [\App\Http\Controllers\Api\ProductImportController::class, 'confirm']);
         Route::apiResource('/products', ProductController::class);
         Route::post('/products/{product}/image', [ProductController::class, 'uploadImage']);
 
@@ -122,6 +125,8 @@ Route::prefix('v1')->group(function () {
 
         // Purchase Orders
         Route::get('/purchase-orders/stats', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'stats']);
+        Route::post('/purchase-orders/import-bl/preview', [\App\Http\Controllers\Api\BLImportController::class, 'preview']);
+        Route::post('/purchase-orders/import-bl/confirm', [\App\Http\Controllers\Api\BLImportController::class, 'confirm']);
         Route::apiResource('/purchase-orders', \App\Http\Controllers\Api\PurchaseOrderController::class);
         Route::post('/purchase-orders/{purchaseOrder}/receive', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'receive']);
         Route::post('/purchase-orders/{purchaseOrder}/send', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'send']);
@@ -306,6 +311,18 @@ Route::prefix('v1')->group(function () {
                 ->paginate(50)
         ));
 
+        // ── PDF Export ────────────────────────────────────────────────────────
+        Route::prefix('pdf')->group(function () {
+            Route::get('/invoices/{invoice}',        [\App\Http\Controllers\Api\PdfController::class, 'invoice']);
+            Route::get('/quotes/{quote}',            [\App\Http\Controllers\Api\PdfController::class, 'quote']);
+            Route::get('/reports/sales-by-product',  [\App\Http\Controllers\Api\PdfController::class, 'reportSalesByProduct']);
+            Route::get('/reports/sales-by-cashier',  [\App\Http\Controllers\Api\PdfController::class, 'reportSalesByCashier']);
+            Route::get('/reports/sales-by-category', [\App\Http\Controllers\Api\PdfController::class, 'reportSalesByCategory']);
+            Route::get('/reports/stock-valuation',   [\App\Http\Controllers\Api\PdfController::class, 'reportStockValuation']);
+            Route::get('/reports/supplier-balances', [\App\Http\Controllers\Api\PdfController::class, 'reportSupplierBalances']);
+            Route::get('/reports/client-credit',     [\App\Http\Controllers\Api\PdfController::class, 'reportClientCredit']);
+        });
+
         // ── Facturation & Devis ────────────────────────────────────────────────
         Route::prefix('invoices')->group(function () {
             Route::get('/stats',                   [\App\Http\Controllers\Api\InvoiceController::class, 'stats']);
@@ -335,6 +352,13 @@ Route::prefix('v1')->group(function () {
         Route::prefix('crm')->group(function () {
             Route::get('/stats',                                   [\App\Http\Controllers\Api\CrmController::class, 'stats']);
             Route::get('/tasks',                                   [\App\Http\Controllers\Api\CrmController::class, 'tasks']);
+            // Pipelines
+            Route::get('/pipelines',                               [\App\Http\Controllers\Api\CrmPipelineController::class, 'index']);
+            Route::post('/pipelines',                              [\App\Http\Controllers\Api\CrmPipelineController::class, 'store']);
+            Route::put('/pipelines/{pipeline}',                    [\App\Http\Controllers\Api\CrmPipelineController::class, 'update']);
+            Route::delete('/pipelines/{pipeline}',                 [\App\Http\Controllers\Api\CrmPipelineController::class, 'destroy']);
+            Route::post('/pipelines/reorder',                      [\App\Http\Controllers\Api\CrmPipelineController::class, 'reorder']);
+            // Leads
             Route::get('/leads',                                   [\App\Http\Controllers\Api\CrmController::class, 'index']);
             Route::post('/leads',                                  [\App\Http\Controllers\Api\CrmController::class, 'store']);
             Route::get('/leads/{crmLead}',                         [\App\Http\Controllers\Api\CrmController::class, 'show']);

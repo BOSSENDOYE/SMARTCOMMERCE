@@ -8,10 +8,11 @@ import {
   CheckCircle2, XCircle, ChevronRight, Edit2, Trash2, X, Check,
   ArrowRight, Calendar, MessageSquare, PhoneCall, Video,
   FileText, Star, Clock, AlertCircle, UserPlus, MoreHorizontal,
-  Kanban, List, FilePlus2, Receipt,
+  Kanban, List, FilePlus2, Receipt, GitBranch, Settings2,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,7 @@ type ActivityType = 'call' | 'email' | 'meeting' | 'visit' | 'whatsapp' | 'sms' 
 
 interface Lead {
   id: number
+  pipeline_id?: number
   title: string
   display_name: string
   display_phone: string
@@ -36,7 +38,9 @@ interface Lead {
   lost_reason?: string
   won_at?: string
   lost_at?: string
+  store_id?: number
   client?: { id: number; name: string; phone: string }
+  client_id?: number
   assigned_to?: { id: number; name: string }
   activities?: Activity[]
   client_sales?: { id: number; reference: string; total_ttc: number; created_at: string }[]
@@ -60,6 +64,15 @@ interface Stats {
   overdue_tasks: number
   activities_today: number
   by_stage: Record<Stage, { count: number; value: number }>
+}
+
+interface Pipeline {
+  id: number
+  name: string
+  description?: string
+  is_default: boolean
+  sort_order: number
+  leads_count: number
 }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -104,14 +117,149 @@ const fmtDate = (d?: string) =>
 const fmtDateTime = (d?: string) =>
   d ? new Date(d).toLocaleString('fr-SN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
 
+// ── Pipeline Form Modal ───────────────────────────────────────────────────────
+
+function PipelineFormModal({
+  storeId,
+  initial,
+  onClose,
+  onSaved,
+}: {
+  storeId: number
+  initial?: Pipeline | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isEdit = !!initial
+  const qc = useQueryClient()
+  const confirm = useConfirm()
+
+  const [name, setName]           = useState(initial?.name ?? '')
+  const [description, setDesc]    = useState(initial?.description ?? '')
+  const [isDefault, setIsDefault] = useState(initial?.is_default ?? false)
+
+  const saveMut = useMutation({
+    mutationFn: (payload: object) => isEdit
+      ? api.put(`/crm/pipelines/${initial!.id}`, payload).then(r => r.data)
+      : api.post('/crm/pipelines', payload).then(r => r.data),
+    onSuccess: () => {
+      toast.success(isEdit ? 'Pipeline mis à jour' : 'Pipeline créé')
+      qc.invalidateQueries({ queryKey: ['crm-pipelines'] })
+      onSaved()
+      onClose()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? 'Erreur'),
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: () => api.delete(`/crm/pipelines/${initial!.id}`),
+    onSuccess: () => {
+      toast.success('Pipeline supprimé')
+      qc.invalidateQueries({ queryKey: ['crm-pipelines'] })
+      onSaved()
+      onClose()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? 'Impossible de supprimer ce pipeline'),
+  })
+
+  const handleSubmit = () => {
+    if (!name.trim()) return toast.error('Le nom est requis')
+    saveMut.mutate({ store_id: storeId, name: name.trim(), description: description.trim() || null, is_default: isDefault })
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div className="flex items-center gap-2">
+            <GitBranch size={18} className="text-blue-600" />
+            <h2 className="text-base font-bold text-gray-800">
+              {isEdit ? 'Modifier le pipeline' : 'Nouveau pipeline'}
+            </h2>
+          </div>
+          <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nom du pipeline *</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Ex: Vente directe, Partenariats, Recrutement..."
+              className="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              value={description}
+              onChange={e => setDesc(e.target.value)}
+              rows={2}
+              placeholder="Décrivez l'objectif de ce pipeline..."
+              className="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isDefault}
+              onChange={e => setIsDefault(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm text-gray-700">Pipeline par défaut</span>
+            <span className="text-xs text-gray-400">(affiché en premier)</span>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
+          <div>
+            {isEdit && (
+              <button
+                onClick={async () => {
+                  if (await confirm(`Supprimer le pipeline "${initial!.name}" ?`, { danger: true }))
+                    deleteMut.mutate()
+                }}
+                disabled={deleteMut.isPending}
+                className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50"
+              >
+                Supprimer
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5">
+              Annuler
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={saveMut.isPending}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+            >
+              <Check size={14} />
+              {saveMut.isPending ? 'Sauvegarde...' : isEdit ? 'Mettre à jour' : 'Créer'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Lead Form Modal ───────────────────────────────────────────────────────────
 
 function LeadFormModal({
-  storeId, initial, users, onClose, onSaved,
+  storeId, initial, users, defaultPipelineId, onClose, onSaved,
 }: {
   storeId: number
   initial?: Lead | null
   users: { id: number; name: string }[]
+  defaultPipelineId?: number
   onClose: () => void
   onSaved: () => void
 }) {
@@ -142,7 +290,9 @@ function LeadFormModal({
   const handleSubmit = () => {
     if (!title.trim()) return toast.error('Le titre est requis')
     mut.mutate({
-      store_id: storeId, title, contact_name: contactName || null,
+      store_id: storeId,
+      pipeline_id: defaultPipelineId ?? null,
+      title, contact_name: contactName || null,
       contact_phone: phone || null, contact_email: email || null,
       company_name: company || null, stage, source,
       expected_amount: amount ? Number(amount) : null,
@@ -333,6 +483,7 @@ function LeadDetail({
 }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const confirm = useConfirm()
   const [showEdit, setShowEdit] = useState(false)
 
   const { data: lead } = useQuery<Lead>({
@@ -414,7 +565,7 @@ function LeadDetail({
                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                 <Edit2 size={15} />
               </button>
-              <button onClick={() => { if (confirm('Supprimer ce lead ?')) deleteMut.mutate() }}
+              <button onClick={async () => { if (await confirm('Supprimer ce lead ?', { danger: true })) deleteMut.mutate() }}
                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
                 <Trash2 size={15} />
               </button>
@@ -501,7 +652,7 @@ function LeadDetail({
           {/* Actions rapides */}
           <div className="flex flex-wrap gap-2">
             {lead.stage !== 'won' && lead.stage !== 'lost' && !lead.client_id && (
-              <button onClick={() => { if (confirm('Convertir ce lead en client ?')) convertMut.mutate() }}
+              <button onClick={async () => { if (await confirm('Convertir ce lead en client ?')) convertMut.mutate() }}
                 disabled={convertMut.isPending}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-xl text-xs font-semibold hover:bg-green-700 disabled:opacity-50">
                 <UserPlus size={13} /> Convertir en client
@@ -777,8 +928,24 @@ export default function CrmPage() {
   const [stageFilter, setStageFilter] = useState('')
   const [selected, setSelected]     = useState<Lead | null>(null)
   const [showForm, setShowForm]     = useState(false)
+  const [activePipelineId, setActivePipelineId] = useState<number | null>(null)
+  const [pipelineForm, setPipelineForm] = useState<{ open: boolean; pipeline?: Pipeline | null }>({ open: false })
 
   // ── Données ────────────────────────────────────────────────────────────────
+
+  const { data: pipelines = [] } = useQuery<Pipeline[]>({
+    queryKey: ['crm-pipelines', storeId],
+    queryFn: () => api.get('/crm/pipelines', { params: { store_id: storeId } }).then(r => r.data),
+    enabled: !!storeId,
+    staleTime: 60_000,
+    select: (data) => {
+      // Auto-select default pipeline on first load
+      return data
+    },
+  })
+
+  // Once pipelines load, auto-select default if none active
+  const effectivePipelineId = activePipelineId ?? pipelines.find(p => p.is_default)?.id ?? pipelines[0]?.id ?? null
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ['crm-stats', storeId],
@@ -788,16 +955,24 @@ export default function CrmPage() {
   })
 
   const { data: kanbanData = {} } = useQuery<Record<Stage, Lead[]>>({
-    queryKey: ['crm-leads', 'kanban', storeId],
-    queryFn: () => api.get('/crm/leads', { params: { store_id: storeId, kanban: 1 } }).then(r => r.data),
+    queryKey: ['crm-leads', 'kanban', storeId, effectivePipelineId],
+    queryFn: () => api.get('/crm/leads', {
+      params: { store_id: storeId, kanban: 1, pipeline_id: effectivePipelineId ?? undefined }
+    }).then(r => r.data),
     enabled: !!storeId && view === 'kanban',
     staleTime: 30_000,
   })
 
   const { data: listData } = useQuery<{ data: Lead[] }>({
-    queryKey: ['crm-leads', 'list', storeId, stageFilter, search],
+    queryKey: ['crm-leads', 'list', storeId, stageFilter, search, effectivePipelineId],
     queryFn: () => api.get('/crm/leads', {
-      params: { store_id: storeId, stage: stageFilter || undefined, search: search || undefined, per_page: 50 }
+      params: {
+        store_id: storeId,
+        stage: stageFilter || undefined,
+        search: search || undefined,
+        per_page: 50,
+        pipeline_id: effectivePipelineId ?? undefined,
+      }
     }).then(r => r.data),
     enabled: !!storeId && view === 'list',
     staleTime: 30_000,
@@ -821,6 +996,7 @@ export default function CrmPage() {
   const handleRefresh = () => {
     qc.invalidateQueries({ queryKey: ['crm-leads'] })
     qc.invalidateQueries({ queryKey: ['crm-stats'] })
+    qc.invalidateQueries({ queryKey: ['crm-pipelines'] })
   }
 
   const leads = listData?.data ?? []
@@ -828,9 +1004,9 @@ export default function CrmPage() {
   return (
     <div className="p-6 max-w-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">CRM — Pipeline commercial</h1>
+          <h1 className="text-2xl font-bold text-gray-900">CRM</h1>
           <p className="text-sm text-gray-500 mt-0.5">Suivi des prospects et opportunités</p>
         </div>
         <div className="flex items-center gap-2">
@@ -852,6 +1028,44 @@ export default function CrmPage() {
             <Plus size={15} /> Nouveau lead
           </button>
         </div>
+      </div>
+
+      {/* Pipeline tabs */}
+      <div className="flex items-center gap-1 mb-5 border-b">
+        {pipelines.map(p => (
+          <button
+            key={p.id}
+            onClick={() => setActivePipelineId(p.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition -mb-px ${
+              effectivePipelineId === p.id
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <GitBranch size={13} />
+            {p.name}
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ml-0.5 ${
+              effectivePipelineId === p.id ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {p.leads_count}
+            </span>
+            <button
+              onClick={e => { e.stopPropagation(); setPipelineForm({ open: true, pipeline: p }) }}
+              className="ml-1 text-gray-300 hover:text-gray-500 transition"
+              title="Modifier ce pipeline"
+            >
+              <Settings2 size={12} />
+            </button>
+          </button>
+        ))}
+        {/* Nouveau pipeline */}
+        <button
+          onClick={() => setPipelineForm({ open: true, pipeline: null })}
+          className="flex items-center gap-1 px-3 py-2 text-sm text-gray-400 hover:text-blue-600 transition border-b-2 border-transparent -mb-px"
+          title="Nouveau pipeline"
+        >
+          <Plus size={14} /> Pipeline
+        </button>
       </div>
 
       {/* KPIs */}
@@ -972,8 +1186,25 @@ export default function CrmPage() {
         <LeadFormModal
           storeId={storeId!}
           users={users}
+          defaultPipelineId={effectivePipelineId ?? undefined}
           onClose={() => setShowForm(false)}
           onSaved={handleRefresh}
+        />
+      )}
+
+      {/* Modal pipeline */}
+      {pipelineForm.open && (
+        <PipelineFormModal
+          storeId={storeId!}
+          initial={pipelineForm.pipeline}
+          onClose={() => setPipelineForm({ open: false })}
+          onSaved={() => {
+            handleRefresh()
+            // If the deleted pipeline was active, reset to default
+            if (pipelineForm.pipeline && activePipelineId === pipelineForm.pipeline.id) {
+              setActivePipelineId(null)
+            }
+          }}
         />
       )}
 

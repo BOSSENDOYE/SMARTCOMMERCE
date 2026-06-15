@@ -9,6 +9,7 @@ import {
   ToggleLeft, ToggleRight, Search, ChevronDown, AlertTriangle,
   Zap, Package,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -586,6 +587,7 @@ function PromotionDetail({ promo, onClose, onEdit }: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PromotionsPage() {
+  const confirm = useConfirm()
   const [search, setSearch]         = useState('')
   const [page, setPage]             = useState(1)
   const [statusFilter, setStatus]   = useState<PromoStatus>('all')
@@ -796,7 +798,7 @@ export default function PromotionsPage() {
                         <button onClick={() => setViewPromo(p)} title="Voir" className="text-gray-400 hover:text-primary"><Eye size={15} /></button>
                         <button onClick={() => { setEditPromo(p); setShowForm(true) }} title="Modifier" className="text-gray-400 hover:text-primary"><Edit2 size={15} /></button>
                         <button
-                          onClick={() => { if (confirm(`Supprimer "${p.name}" ?`)) deletePromo.mutate(p.id) }}
+                          onClick={async () => { if (await confirm(`Supprimer "${p.name}" ?`, { danger: true })) deletePromo.mutate(p.id) }}
                           title="Supprimer" className="text-gray-400 hover:text-red-500">
                           <Trash2 size={15} />
                         </button>

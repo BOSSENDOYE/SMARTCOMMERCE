@@ -6,6 +6,7 @@ import {
   Printer, Plus, Pencil, Trash2, X, Star, Copy,
   CheckCircle, Eye, ChevronDown, ChevronUp, Settings2,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -625,6 +626,7 @@ function TemplateCard({ tpl, onEdit, onDelete, onSetDefault }: {
 
 export default function PrintTemplatesPage() {
   const qc = useQueryClient()
+  const confirm = useConfirm()
   const [modal, setModal] = useState<{ tpl?: PrintTemplate; docType: DocType } | null>(null)
   const [activeTab, setActiveTab] = useState<DocType>('receipt')
 
@@ -737,7 +739,7 @@ export default function PrintTemplatesPage() {
                 key={tpl.id}
                 tpl={tpl}
                 onEdit={() => setModal({ tpl, docType: tpl.document_type })}
-                onDelete={() => { if (confirm(`Supprimer "${tpl.name}" ?`)) remove.mutate(tpl) }}
+                onDelete={async () => { if (await confirm(`Supprimer "${tpl.name}" ?`, { danger: true })) remove.mutate(tpl) }}
                 onSetDefault={() => setDefault.mutate(tpl)}
               />
             ))}

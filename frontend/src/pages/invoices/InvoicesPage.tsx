@@ -5,10 +5,12 @@ import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import {
   FileText, Plus, Search, Send, AlertCircle, ChevronRight, ArrowRight,
-  Printer, CreditCard, Bell, Trash2, Edit2, X, Check, XCircle,
+  Printer, CreditCard, Bell, Trash2, Edit2, X, Check, XCircle, FileDown,
 } from 'lucide-react'
+import { downloadPdf } from '../../lib/format'
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -743,6 +745,8 @@ function InvoiceDetail({
   onClose: () => void
   onRefresh: () => void
 }) {
+  const confirm = useConfirm()
+  const [pdfLoading, setPdfLoading] = useState(false)
   const [payModal, setPayModal] = useState(false)
   const [reminderModal, setReminderModal] = useState(false)
   const [payAmount, setPayAmount] = useState(String(invoice.balance))
@@ -824,7 +828,23 @@ function InvoiceDetail({
               onClick={() => printDocument(inv, 'invoice', storeName)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm text-gray-600 hover:bg-gray-50"
             >
-              <Printer size={14} /> Imprimer PDF
+              <Printer size={14} /> Imprimer
+            </button>
+            <button
+              disabled={pdfLoading}
+              onClick={async () => {
+                setPdfLoading(true)
+                try {
+                  await downloadPdf(`/pdf/invoices/${inv.id}`, `Facture-${inv.reference}.pdf`)
+                } catch {
+                  toast.error('Erreur lors de la génération du PDF')
+                } finally {
+                  setPdfLoading(false)
+                }
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/30 text-sm text-primary hover:bg-primary/5 disabled:opacity-50"
+            >
+              <FileDown size={14} /> {pdfLoading ? '...' : 'PDF'}
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
               <X size={20} />
@@ -978,8 +998,8 @@ function InvoiceDetail({
                 </button>
               )}
               <button
-                onClick={() => {
-                  if (confirm('Annuler cette facture ?')) cancelMut.mutate()
+                onClick={async () => {
+                  if (await confirm('Annuler cette facture ?')) cancelMut.mutate()
                 }}
                 className="flex items-center gap-1.5 px-4 py-2 border text-red-600 border-red-200 rounded-xl text-sm font-medium hover:bg-red-50"
               >
@@ -1087,6 +1107,7 @@ type Tab = 'invoices' | 'quotes'
 export default function InvoicesPage() {
   const { activeStore } = useActiveStoreStore()
   const { user } = useAuthStore()
+  const confirm = useConfirm()
   const location = useLocation()
   // Fallback: si pas de magasin actif sélectionné, utiliser le magasin de l'utilisateur
   const storeId      = activeStore?.id ?? (user?.store_id ?? undefined)
@@ -1115,6 +1136,20 @@ export default function InvoicesPage() {
   }, [location.state])
   const [selected, setSelected]         = useState<Invoice | null>(null)
   const [printingId, setPrintingId]     = useState<number | null>(null)
+  const [pdfIds, setPdfIds]             = useState<Set<number>>(new Set())
+
+  const downloadDoc = async (id: number, type: 'invoice' | 'quote', reference: string) => {
+    setPdfIds(prev => new Set(prev).add(id))
+    try {
+      const path = type === 'invoice' ? `/pdf/invoices/${id}` : `/pdf/quotes/${id}`
+      const name = type === 'invoice' ? `Facture-${reference}.pdf` : `Devis-${reference}.pdf`
+      await downloadPdf(path, name)
+    } catch {
+      toast.error('Erreur lors de la génération du PDF')
+    } finally {
+      setPdfIds(prev => { const s = new Set(prev); s.delete(id); return s })
+    }
+  }
 
   // Fetche le document complet (avec items) puis imprime
   const printFull = async (id: number, type: 'invoice' | 'quote') => {
@@ -1356,16 +1391,22 @@ export default function InvoicesPage() {
                           onClick={e => { e.stopPropagation(); printFull(inv.id, 'invoice') }}
                           disabled={printingId === inv.id}
                           className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-40"
-                          title="Imprimer PDF"
+                          title="Imprimer"
                         >
-                          {printingId === inv.id
-                            ? <span className="text-xs">...</span>
-                            : <Printer size={14} />}
+                          {printingId === inv.id ? <span className="text-xs">...</span> : <Printer size={14} />}
                         </button>
                         <button
-                          onClick={e => {
+                          onClick={e => { e.stopPropagation(); downloadDoc(inv.id, 'invoice', inv.reference) }}
+                          disabled={pdfIds.has(inv.id)}
+                          className="p-1.5 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-lg disabled:opacity-40"
+                          title="Télécharger PDF"
+                        >
+                          {pdfIds.has(inv.id) ? <span className="text-xs">...</span> : <FileDown size={14} />}
+                        </button>
+                        <button
+                          onClick={async e => {
                             e.stopPropagation()
-                            if (confirm(`Supprimer la facture ${inv.reference} ?`)) deleteInvoice.mutate(inv.id)
+                            if (await confirm(`Supprimer la facture ${inv.reference} ?`, { danger: true })) deleteInvoice.mutate(inv.id)
                           }}
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                           title="Supprimer"
@@ -1428,8 +1469,8 @@ export default function InvoicesPage() {
                         )}
                         {['draft', 'sent', 'accepted'].includes(q.status) && (
                           <button
-                            onClick={() => {
-                              if (confirm(`Convertir ${q.reference} en facture ?`)) convertQuote.mutate(q.id)
+                            onClick={async () => {
+                              if (await confirm(`Convertir ${q.reference} en facture ?`)) convertQuote.mutate(q.id)
                             }}
                             className="flex items-center gap-1 px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded-lg border border-purple-200"
                             title="Convertir en facture"
@@ -1441,9 +1482,17 @@ export default function InvoicesPage() {
                           onClick={() => printFull(q.id, 'quote')}
                           disabled={printingId === q.id}
                           className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-40"
-                          title="Imprimer PDF"
+                          title="Imprimer"
                         >
                           <Printer size={14} />
+                        </button>
+                        <button
+                          onClick={() => downloadDoc(q.id, 'quote', q.reference)}
+                          disabled={pdfIds.has(q.id)}
+                          className="p-1.5 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-lg disabled:opacity-40"
+                          title="Télécharger PDF"
+                        >
+                          {pdfIds.has(q.id) ? <span className="text-xs">...</span> : <FileDown size={14} />}
                         </button>
                         <button
                           onClick={() => { setEditing(q); setShowEditor(true) }}
@@ -1453,8 +1502,8 @@ export default function InvoicesPage() {
                           <Edit2 size={14} />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`Supprimer le devis ${q.reference} ?`)) deleteQuote.mutate(q.id)
+                          onClick={async () => {
+                            if (await confirm(`Supprimer le devis ${q.reference} ?`, { danger: true })) deleteQuote.mutate(q.id)
                           }}
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                           title="Supprimer"

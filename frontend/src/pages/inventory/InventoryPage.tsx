@@ -7,6 +7,7 @@ import {
   Loader2, X, Trash2, AlertTriangle, TrendingDown, TrendingUp,
   Package, ChevronRight, Calendar, User, BarChart2,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -293,6 +294,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
   const [search, setSearch] = useState('')
   const [filterCounted, setFilterCounted] = useState<'' | 'counted' | 'pending'>('')
   const qc = useQueryClient()
+  const confirm = useConfirm()
 
   const { data: session, isLoading } = useQuery<SessionDetail>({
     queryKey: ['inventory-session', sessionId],
@@ -391,7 +393,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
             </button>
           )}
           {canValidate && (
-            <button onClick={() => { if (window.confirm('Valider et appliquer cet inventaire au stock ?')) validateMut.mutate() }}
+            <button onClick={async () => { if (await confirm('Valider et appliquer cet inventaire au stock ?')) validateMut.mutate() }}
               disabled={validateMut.isPending || countedItems.length === 0}
               className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50">
               {validateMut.isPending

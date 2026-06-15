@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
-import { formatCurrency, formatNumber } from '../../lib/format'
+import { formatCurrency, formatNumber, imageUrl } from '../../lib/format'
 import toast from 'react-hot-toast'
 import {
   Plus, Search, Edit2, ToggleLeft, ToggleRight, ChevronLeft, ChevronRight,
   Package, AlertTriangle, X, Check, Tag, Layers, BarChart2, TrendingUp,
   Eye, Filter, ChevronDown, Trash2, History, Barcode, FolderTree,
   ChevronRight as ChevronRightIcon, Pencil, FolderPlus, Camera, Printer,
-  Box, ArrowRightLeft,
+  Box, ArrowRightLeft, Upload, FileDown, CheckCircle, AlertCircle, Loader2,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -436,7 +437,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
 
   // Photo upload
   const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(product?.image ?? null)
+  const [imagePreview, setImagePreview] = useState<string | null>(imageUrl(product?.image))
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -802,7 +803,7 @@ function ProductDetailModal({ product, onClose, onEdit }: {
         <div className="p-6 border-b flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4">
             {p.image && (
-              <img src={p.image} alt={p.name} className="w-14 h-14 rounded-xl object-cover border" />
+              <img src={imageUrl(p.image)!} alt={p.name} className="w-14 h-14 rounded-xl object-cover border" />
             )}
             <div>
               <h2 className="text-xl font-bold">{p.name}</h2>
@@ -1087,6 +1088,7 @@ function CategoryEditModal({ cat, categories, onClose }: {
 
 function CategoriesTab() {
   const qc = useQueryClient()
+  const confirm = useConfirm()
   const [editCat, setEditCat] = useState<Category | null | undefined>(undefined)
 
   const { data: categories = [], isLoading } = useQuery<Category[]>({
@@ -1105,8 +1107,8 @@ function CategoriesTab() {
     },
   })
 
-  const handleDelete = (cat: Category) => {
-    if (!window.confirm(`Supprimer la catégorie "${cat.name}" ?`)) return
+  const handleDelete = async (cat: Category) => {
+    if (!(await confirm(`Supprimer la catégorie "${cat.name}" ?`, { danger: true }))) return
     deleteMutation.mutate(cat.id)
   }
 
@@ -1341,7 +1343,7 @@ function ArticlesTab() {
                     <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.internal_code}</td>
                     <td className="px-4 py-3">
                       <button onClick={() => setViewProduct(p)} className="text-left hover:text-primary transition-colors flex items-center gap-2">
-                        {p.image && <img src={p.image} alt="" className="w-8 h-8 rounded-lg object-cover border flex-shrink-0" />}
+                        {p.image && <img src={imageUrl(p.image)!} alt="" className="w-8 h-8 rounded-lg object-cover border flex-shrink-0" />}
                         <div>
                           <p className="font-medium text-gray-900">{p.name}</p>
                           {p.barcodes?.find(b => b.is_primary) && (
@@ -1450,9 +1452,279 @@ function ArticlesTab() {
 
 type Tab = 'articles' | 'categories'
 
+// ─── ProductImportModal ───────────────────────────────────────────────────────
+
+interface ImportRow {
+  row: number
+  nom: string
+  code_interne?: string | null
+  code_barres?: string | null
+  categorie?: string | null
+  categorie_id?: number | null
+  marque?: string | null
+  marque_id?: number | null
+  unite?: string | null
+  unite_id?: number | null
+  prix_vente_ttc: number
+  tva: number
+  prix_achat_ht: number
+  stock_initial: number
+  stock_min: number
+  description?: string | null
+  errors: string[]
+  warnings: string[]
+  status: 'ok' | 'error'
+}
+
+interface PreviewData { rows: ImportRow[]; total: number; ok: number; errors: number }
+interface ImportResult { created: number; skipped: number; errors: string[] }
+
+function ProductImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [step, setStep]       = useState<1 | 2 | 3>(1)
+  const [file, setFile]       = useState<File | null>(null)
+  const [preview, setPreview] = useState<PreviewData | null>(null)
+  const [result, setResult]   = useState<ImportResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const fileRef               = useRef<HTMLInputElement>(null)
+
+  async function downloadTemplate() {
+    try {
+      const res = await api.get('/products/import-template', { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a   = document.createElement('a')
+      a.href = url; a.download = 'modele_import_produits.xlsx'; a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Erreur lors du téléchargement du modèle')
+    }
+  }
+
+  async function handlePreview() {
+    if (!file) return
+    setLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await api.post<PreviewData>('/products/import/preview', fd)
+      setPreview(data)
+      setStep(2)
+    } catch (e: any) {
+      toast.error(e.response?.data?.message ?? "Erreur lors de l'analyse")
+    } finally { setLoading(false) }
+  }
+
+  async function handleConfirm() {
+    if (!preview) return
+    const validRows = preview.rows.filter(r => r.status === 'ok')
+    if (validRows.length === 0) { toast.error('Aucune ligne valide à importer'); return }
+    setLoading(true)
+    try {
+      const { data } = await api.post<ImportResult>('/products/import/confirm', { rows: validRows })
+      setResult(data)
+      setStep(3)
+      onDone()
+    } catch (e: any) {
+      toast.error(e.response?.data?.message ?? "Erreur lors de l'import")
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Import catalogue produits</h2>
+            <p className="text-xs text-gray-500">
+              {step === 1 ? 'Étape 1 — Choisir le fichier' :
+               step === 2 ? 'Étape 2 — Vérification des données' :
+               "Étape 3 — Résultat de l'import"}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {([1, 2, 3] as const).map(s => (
+              <div key={s} className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                step === s ? 'bg-primary border-primary text-white' :
+                step > s  ? 'bg-green-500 border-green-500 text-white' :
+                'border-gray-200 text-gray-400'
+              }`}>{step > s ? <Check size={12} /> : s}</div>
+            ))}
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5">
+
+          {/* Step 1: Upload */}
+          {step === 1 && (
+            <div className="space-y-5">
+              <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 flex items-start gap-3">
+                <FileDown size={20} className="text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-primary-800">Télécharger le modèle Excel</p>
+                  <p className="text-xs text-primary-600 mt-0.5">Remplissez le modèle fourni pour garantir un import correct (colonnes avec * sont obligatoires).</p>
+                  <button onClick={downloadTemplate} className="mt-2 btn-outline text-xs px-3 py-1.5 flex items-center gap-1">
+                    <FileDown size={13} /> Télécharger le modèle
+                  </button>
+                </div>
+              </div>
+
+              <div
+                onClick={() => fileRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f) }}
+                className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-primary hover:bg-primary-50 transition-colors"
+              >
+                <Upload size={32} className="mx-auto text-gray-300 mb-3" />
+                {file ? (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{file.name}</p>
+                    <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} Ko</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Glisser-déposer ou cliquer pour choisir</p>
+                    <p className="text-xs text-gray-400 mt-1">Formats acceptés : XLSX, XLS, CSV (max 10 Mo)</p>
+                  </div>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
+
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-gray-600 mb-2">Colonnes attendues :</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['nom *', 'code_interne', 'code_barres', 'categorie', 'marque', 'unite',
+                    'prix_vente_ttc *', 'tva (0 ou 18)', 'prix_achat_ht *', 'stock_initial', 'stock_min', 'description'
+                  ].map(c => (
+                    <span key={c} className={`text-xs px-2 py-0.5 rounded-full ${
+                      c.endsWith('*') ? 'bg-primary-100 text-primary font-semibold' : 'bg-gray-100 text-gray-600'
+                    }`}>{c}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Preview */}
+          {step === 2 && preview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{preview.total}</p>
+                  <p className="text-xs text-gray-500">Lignes détectées</p>
+                </div>
+                <div className="bg-green-50 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-green-600">{preview.ok}</p>
+                  <p className="text-xs text-green-600">Prêtes à importer</p>
+                </div>
+                <div className="bg-red-50 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-red-600">{preview.errors}</p>
+                  <p className="text-xs text-red-500">Avec erreurs (ignorées)</p>
+                </div>
+              </div>
+
+              <div className="border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto max-h-96">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">#</th>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">Nom</th>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">Code</th>
+                        <th className="px-3 py-2 text-right text-gray-500 font-medium">Prix vente</th>
+                        <th className="px-3 py-2 text-right text-gray-500 font-medium">Stock init.</th>
+                        <th className="px-3 py-2 text-left text-gray-500 font-medium">Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {preview.rows.map(r => (
+                        <tr key={r.row} className={r.status === 'error' ? 'bg-red-50' : ''}>
+                          <td className="px-3 py-2 text-gray-400">{r.row}</td>
+                          <td className="px-3 py-2 font-medium text-gray-900">{r.nom}</td>
+                          <td className="px-3 py-2 text-gray-500 font-mono">{r.code_interne ?? '—'}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(r.prix_vente_ttc)}</td>
+                          <td className="px-3 py-2 text-right text-gray-500">{r.stock_initial > 0 ? formatNumber(r.stock_initial) : '—'}</td>
+                          <td className="px-3 py-2">
+                            {r.status === 'error' ? (
+                              <div>
+                                <span className="inline-flex items-center gap-1 text-red-600 font-medium"><AlertCircle size={11} /> Erreur</span>
+                                {r.errors.map((e, i) => <div key={i} className="text-red-500 text-[10px]">{e}</div>)}
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="inline-flex items-center gap-1 text-green-600 font-medium"><CheckCircle size={11} /> OK</span>
+                                {r.warnings.map((w, i) => <div key={i} className="text-amber-500 text-[10px]">{w}</div>)}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Result */}
+          {step === 3 && result && (
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <CheckCircle size={56} className="text-green-500" />
+              <h3 className="text-xl font-bold text-gray-900">Import terminé !</h3>
+              <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
+                <div className="bg-green-50 rounded-xl p-4 text-center">
+                  <p className="text-3xl font-bold text-green-600">{result.created}</p>
+                  <p className="text-xs text-green-600 mt-1">Produits créés</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <p className="text-3xl font-bold text-gray-500">{result.skipped}</p>
+                  <p className="text-xs text-gray-500 mt-1">Ignorés</p>
+                </div>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="w-full bg-red-50 rounded-xl p-3 space-y-1 max-h-40 overflow-y-auto">
+                  {result.errors.map((e, i) => <p key={i} className="text-xs text-red-600">{e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t flex justify-between">
+          <button onClick={onClose} className="btn-outline">
+            {step === 3 ? 'Fermer' : 'Annuler'}
+          </button>
+          <div className="flex gap-2">
+            {step === 2 && (
+              <button onClick={() => setStep(1)} className="btn-outline">Retour</button>
+            )}
+            {step === 1 && (
+              <button onClick={handlePreview} disabled={!file || loading} className="btn-primary flex items-center gap-2">
+                {loading ? <><Loader2 size={15} className="animate-spin" /> Analyse...</> : 'Analyser le fichier'}
+              </button>
+            )}
+            {step === 2 && (
+              <button onClick={handleConfirm} disabled={(preview?.ok ?? 0) === 0 || loading} className="btn-primary flex items-center gap-2">
+                {loading ? <><Loader2 size={15} className="animate-spin" /> Import...</> : `Importer ${preview?.ok ?? 0} produit(s)`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── ProductsPage ─────────────────────────────────────────────────────────────
+
 export default function ProductsPage() {
+  const queryClient               = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('articles')
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm]   = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'articles', label: 'Articles', icon: <Package size={16} /> },
@@ -1469,9 +1741,14 @@ export default function ProductsPage() {
           <p className="text-gray-500 text-sm">Gestion des articles, contenances et catégories</p>
         </div>
         {activeTab === 'articles' && (
-          <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2">
-            <Plus size={18} /> Nouvel article
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowImport(true)} className="btn-outline flex items-center gap-2">
+              <Upload size={16} /> Importer
+            </button>
+            <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2">
+              <Plus size={18} /> Nouvel article
+            </button>
+          </div>
         )}
       </div>
 
@@ -1493,6 +1770,16 @@ export default function ProductsPage() {
 
       {showForm && activeTab === 'articles' && (
         <ProductFormModal onClose={() => setShowForm(false)} />
+      )}
+
+      {showImport && (
+        <ProductImportModal
+          onClose={() => setShowImport(false)}
+          onDone={() => {
+            queryClient.invalidateQueries({ queryKey: ['products'] })
+            queryClient.invalidateQueries({ queryKey: ['product-stats'] })
+          }}
+        />
       )}
     </div>
   )

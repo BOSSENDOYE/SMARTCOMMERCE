@@ -4,6 +4,7 @@ import api from '../../lib/api'
 import { formatCurrency, formatDate } from '../../lib/format'
 import { BookOpen, Plus, RefreshCw, CheckCircle, ChevronRight, AlertCircle, TrendingUp, TrendingDown } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ export default function AccountingPage() {
 // ─── Plan Comptable ────────────────────────────────────────────────────────────
 
 function PlanComptable({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
+  const confirm = useConfirm()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm]         = useState({ code: '', name: '', class: '7', nature: 'produit' as Account['nature'] })
 
@@ -278,7 +280,7 @@ function PlanComptable({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
                       ? <span className="text-xs text-gray-400">Système</span>
                       : (
                         <button
-                          onClick={() => { if (confirm(`Supprimer le compte ${a.code} ?`)) deleteMut.mutate(a.id) }}
+                          onClick={async () => { if (await confirm(`Supprimer le compte ${a.code} ?`, { danger: true })) deleteMut.mutate(a.id) }}
                           className="text-xs text-red-500 hover:text-red-700"
                         >
                           Supprimer

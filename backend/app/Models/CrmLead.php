@@ -14,7 +14,7 @@ class CrmLead extends Model
     protected $table = 'crm_leads';
 
     protected $fillable = [
-        'store_id', 'client_id', 'assigned_to',
+        'store_id', 'pipeline_id', 'client_id', 'assigned_to',
         'title', 'contact_name', 'contact_phone', 'contact_email', 'company_name',
         'stage', 'source', 'probability', 'expected_amount', 'expected_close_date',
         'lost_reason', 'notes', 'won_at', 'lost_at',
@@ -31,6 +31,7 @@ class CrmLead extends Model
     // ── Relations ─────────────────────────────────────────────────────────────
 
     public function store(): BelongsTo      { return $this->belongsTo(Store::class); }
+    public function pipeline(): BelongsTo  { return $this->belongsTo(CrmPipeline::class); }
     public function client(): BelongsTo     { return $this->belongsTo(Client::class); }
     public function assignedTo(): BelongsTo { return $this->belongsTo(User::class, 'assigned_to'); }
     public function activities(): HasMany   { return $this->hasMany(CrmActivity::class, 'lead_id')->orderByDesc('created_at'); }

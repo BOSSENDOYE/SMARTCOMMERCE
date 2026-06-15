@@ -73,6 +73,8 @@ const PERMISSION_GROUPS: { label: string; icon: string; perms: { name: string; l
       { name: 'manage_clients',    label: 'Gérer les clients' },
       { name: 'manage_loyalty',    label: 'Programme de fidélité' },
       { name: 'manage_promotions', label: 'Gérer les promotions' },
+      { name: 'manage_invoices',   label: 'Gérer la facturation' },
+      { name: 'manage_crm',        label: 'CRM / Gestion des leads' },
     ],
   },
   {
@@ -100,10 +102,11 @@ const PERMISSION_GROUPS: { label: string; icon: string; perms: { name: string; l
     ],
   },
   {
-    label: 'Comptabilité', icon: '📒',
+    label: 'Comptabilité & Dépenses', icon: '📒',
     perms: [
       { name: 'view_accounting',   label: 'Voir la comptabilité' },
       { name: 'manage_accounting', label: 'Gérer la comptabilité' },
+      { name: 'manage_expenses',   label: 'Gérer les dépenses' },
     ],
   },
   {

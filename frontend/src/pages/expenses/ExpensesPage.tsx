@@ -9,6 +9,7 @@ import {
   Wallet, TrendingDown, Clock, Tag, ChevronDown, AlertTriangle,
   BookOpen, Search, Filter, Printer,
 } from 'lucide-react'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -679,6 +680,7 @@ function DetailModal({
 
 function CategoriesManager({ accounts }: { accounts: Account[] }) {
   const qc = useQueryClient()
+  const confirm = useConfirm()
   const [showForm, setShowForm] = useState(false)
   const [editCat, setEditCat] = useState<ExpenseCategory | null>(null)
   const [form, setForm] = useState({
@@ -853,7 +855,7 @@ function CategoriesManager({ accounts }: { accounts: Account[] }) {
                         className="text-gray-400 hover:text-primary transition-colors p-1">
                         <Edit2 size={14} />
                       </button>
-                      <button onClick={() => { if (confirm(`Supprimer la catégorie "${cat.name}" ?`)) deleteMut.mutate(cat.id) }}
+                      <button onClick={async () => { if (await confirm(`Supprimer la catégorie "${cat.name}" ?`, { danger: true })) deleteMut.mutate(cat.id) }}
                         className="text-gray-400 hover:text-red-500 transition-colors p-1">
                         <X size={14} />
                       </button>

@@ -6,7 +6,7 @@ import api from '../../lib/api'
 import { usePosStore, type CartItem } from '../../store/pos.store'
 import { useAuthStore } from '../../store/auth.store'
 import { db, findProductByBarcode, searchProductsOffline, savePendingSale, cacheProducts, type CachedProduct } from '../../lib/offline-db'
-import { formatCurrency, formatNumber } from '../../lib/format'
+import { formatCurrency, formatNumber, imageUrl } from '../../lib/format'
 import toast from 'react-hot-toast'
 import {
   Search, Scan, Trash2, Plus, Minus, Percent, CreditCard, Banknote,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
 import { useThermalPrinter } from '../../hooks/useThermalPrinter'
+import { useConfirm } from '../../hooks/useConfirm'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,8 +29,10 @@ interface PosItem {
   is_weight_based: boolean
   stock_qty: number
   category_name?: string
+  image?: string | null
   source: 'product' | 'restaurant_item'
 }
+
 
 const COURSES = [
   { value: 'starter', label: 'Entrées' },
@@ -991,9 +994,13 @@ function PosRecentSalesModal({ onClose }: { onClose: () => void }) {
 
 // ─── Main POS Page ────────────────────────────────────────────────────────────
 
+interface CategoryTree { id: number; name: string; type?: string; children?: CategoryTree[] }
+interface ProductPageResult { items: PosItem[]; total: number; totalPages: number }
+
 export default function PosPage() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
   const {
     items, addItem, updateQty, updateDiscount, removeItem, clearCart,
     client_id, client_name, client_account_balance, setClient, cash_session_id, setCashSession,
@@ -1003,26 +1010,38 @@ export default function PosPage() {
   const storeBusinessType = user?.store?.business_type ?? 'grande_surface'
   const isRestaurant = storeBusinessType === 'restaurant' || storeBusinessType === 'mixte'
 
-  const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<PosItem[]>([])
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [search, setSearch]                 = useState('')
+  const [searchResults, setSearchResults]   = useState<PosItem[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null)
-  const [showPayment, setShowPayment] = useState(false)
-  const [processing, setProcessing] = useState(false)
+  const [page, setPage]                     = useState(1)
+  const [activeProductTab, setActiveProductTab] = useState<'favorites' | 'recent' | 'catalog'>('catalog')
+  const [showPayment, setShowPayment]       = useState(false)
+  const [processing, setProcessing]         = useState(false)
   const [showCloseSession, setShowCloseSession] = useState(false)
   const [showClientSearch, setShowClientSearch] = useState(false)
-  const [showHoldCarts, setShowHoldCarts] = useState(false)
+  const [showHoldCarts, setShowHoldCarts]   = useState(false)
   const [showRecentSales, setShowRecentSales] = useState(false)
-  const [session, setSession] = useState<CashSession | null>(null)
+  const [session, setSession]               = useState<CashSession | null>(null)
   const [sessionLoading, setSessionLoading] = useState(true)
-  const [saleReceipt, setSaleReceipt] = useState<SaleReceipt | null>(null)
+  const [saleReceipt, setSaleReceipt]       = useState<SaleReceipt | null>(null)
+
+  // ── Favorites & recents tracking (session-scoped) ─────────────────────────
+  const [sessionFavorites, setSessionFavorites] = useState<Map<number, { item: PosItem; count: number }>>(new Map())
+  const [recentItems, setRecentItems]           = useState<PosItem[]>([])
+
+  const topFavorites = useMemo(
+    () => Array.from(sessionFavorites.values()).sort((a, b) => b.count - a.count).slice(0, 24),
+    [sessionFavorites]
+  )
 
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const totalTtc = items.reduce((s, i) => s + i.total_ttc, 0)
+  const totalTtc     = items.reduce((s, i) => s + i.total_ttc, 0)
   const totalDiscount = items.reduce((s, i) => s + i.discount_amount, 0)
 
-  // Check online status
+  // ── Online/offline ────────────────────────────────────────────────────────
   useEffect(() => {
     const update = () => setOffline(!navigator.onLine)
     window.addEventListener('online', update)
@@ -1031,86 +1050,82 @@ export default function PosPage() {
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
   }, [setOffline])
 
-  // Load current session on mount
+  // ── Session ───────────────────────────────────────────────────────────────
   useEffect(() => {
     api.get('/cash-sessions/current')
-      .then(res => {
-        if (res.data) {
-          setSession(res.data)
-          setCashSession(res.data.id)
-        }
-      })
+      .then(res => { if (res.data) { setSession(res.data); setCashSession(res.data.id) } })
       .catch(() => {})
       .finally(() => setSessionLoading(false))
   }, [setCashSession])
 
-  // Fetch categories
-  const { data: categories = [] } = useQuery<Category[]>({
-    queryKey: ['categories-flat'],
-    queryFn: () => api.get('/categories').then(r =>
-      r.data.flatMap((c: { id: number; name: string; children?: Category[] }) => [c, ...(c.children ?? [])])
-    ),
+  // ── Categories tree ───────────────────────────────────────────────────────
+  const { data: categoryTree = [] } = useQuery<CategoryTree[]>({
+    queryKey: ['categories-tree'],
+    queryFn:  () => api.get('/categories').then(r => r.data),
   })
 
-  // Fetch items for grid — products or restaurant items depending on store type
-  const { data: gridProducts = [], isLoading: productsLoading, isError: productsError } = useQuery<PosItem[]>({
+  // Reset page on category/course change
+  useEffect(() => { setPage(1) }, [selectedCategoryId, selectedCourse])
+
+  // ── Products — paginated 30/page ──────────────────────────────────────────
+  const PER_PAGE = 30
+
+  const {
+    data: productPage = { items: [], total: 0, totalPages: 1 },
+    isLoading: productsLoading,
+    isError: productsError,
+  } = useQuery<ProductPageResult>({
     queryKey: isRestaurant
       ? ['pos-restaurant-items', selectedCourse]
-      : ['pos-products', selectedCategoryId],
+      : ['pos-products', selectedCategoryId, page],
     queryFn: isRestaurant
       ? () => api.get('/restaurant-items', {
           params: { course: selectedCourse ?? undefined, available: 1, active: 1 },
-        }).then(res => (res.data as any[]).map(ri => ({
-          id: ri.id,
-          name: ri.name,
-          short_name: ri.name,
-          sale_price_ttc: parseFloat(ri.price_ttc),
-          vat_rate: parseFloat(ri.vat_rate),
-          is_weight_based: false,
-          stock_qty: 999,
-          category_name: COURSES.find(c => c.value === ri.course)?.label,
-          source: 'restaurant_item' as const,
-        })))
+        }).then(res => ({
+          items: (res.data as any[]).map(ri => ({
+            id: ri.id, name: ri.name, short_name: ri.name,
+            sale_price_ttc: parseFloat(ri.price_ttc),
+            vat_rate: parseFloat(ri.vat_rate),
+            is_weight_based: false, stock_qty: 999,
+            category_name: COURSES.find(c => c.value === ri.course)?.label,
+            image: ri.image ?? null,
+            source: 'restaurant_item' as const,
+          })),
+          total: res.data.length,
+          totalPages: 1,
+        }))
       : () => api.get('/products', {
-          params: { category_id: selectedCategoryId ?? undefined, per_page: 500, is_active: true, has_stock: 1 },
-        }).then(res => res.data.data.map((p: {
-          id: number; name: string; short_name: string
-          sale_price_ttc: number; vat_rate: number; is_weight_based: boolean
-          category?: { name: string }; stock_level?: { qty_on_hand: number }
-        }) => ({
-          id: p.id,
-          name: p.name,
-          short_name: p.short_name,
-          sale_price_ttc: p.sale_price_ttc,
-          vat_rate: p.vat_rate,
-          is_weight_based: p.is_weight_based,
-          stock_qty: p.stock_level?.qty_on_hand ?? 0,
-          category_name: p.category?.name,
-          source: 'product' as const,
-        }))),
+          params: { category_id: selectedCategoryId ?? undefined, per_page: PER_PAGE, page, is_active: true, has_stock: 1 },
+        }).then(res => ({
+          items: res.data.data.map((p: any) => ({
+            id: p.id, name: p.name, short_name: p.short_name,
+            sale_price_ttc: p.sale_price_ttc,
+            vat_rate: p.vat_rate, is_weight_based: p.is_weight_based,
+            stock_qty: p.stock_level?.qty_on_hand ?? 0,
+            category_name: p.category?.name,
+            image: p.image ?? null,
+            source: 'product' as const,
+          })),
+          total: res.data.meta?.total ?? 0,
+          totalPages: res.data.meta?.last_page ?? 1,
+        })),
     enabled: !is_offline,
-  })
+    keepPreviousData: true,
+  } as any)
 
-  // Cache products to Dexie when online fetch succeeds
+  // ── Cache to Dexie ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!is_offline && gridProducts.length > 0 && !isRestaurant) {
-      cacheProducts(gridProducts.map(p => ({
-        id: p.id,
-        internal_code: p.id.toString(),
-        name: p.name,
-        short_name: p.short_name,
-        sale_price_ttc: p.sale_price_ttc,
-        vat_rate: p.vat_rate,
-        is_weight_based: p.is_weight_based,
-        category_name: p.category_name,
-        stock_qty: p.stock_qty,
-        barcodes: [],
-        updated_at: new Date().toISOString(),
+    if (!is_offline && productPage.items.length > 0 && !isRestaurant) {
+      cacheProducts(productPage.items.map(p => ({
+        id: p.id, internal_code: p.id.toString(), name: p.name, short_name: p.short_name,
+        sale_price_ttc: p.sale_price_ttc, vat_rate: p.vat_rate,
+        is_weight_based: p.is_weight_based, category_name: p.category_name,
+        stock_qty: p.stock_qty, barcodes: [], updated_at: new Date().toISOString(),
       })))
     }
-  }, [gridProducts, is_offline, isRestaurant])
+  }, [productPage.items, is_offline, isRestaurant])
 
-  // Load offline product fallback from Dexie cache
+  // ── Offline fallback ──────────────────────────────────────────────────────
   const [offlineProducts, setOfflineProducts] = useState<PosItem[]>([])
 
   useEffect(() => {
@@ -1118,27 +1133,20 @@ export default function PosPage() {
       db.cachedProducts
         .filter(p => selectedCategoryId === null || p.category_id === selectedCategoryId)
         .toArray()
-        .then(products => {
-          setOfflineProducts(products.map(p => ({
-            id: p.id,
-            name: p.name,
-            short_name: p.short_name,
-            sale_price_ttc: p.sale_price_ttc,
-            vat_rate: p.vat_rate,
-            is_weight_based: p.is_weight_based,
-            stock_qty: p.stock_qty,
-            category_name: p.category_name,
-            source: 'product' as const,
-          })))
-        })
-    } else {
-      setOfflineProducts([])
-    }
+        .then(products => setOfflineProducts(products.map(p => ({
+          id: p.id, name: p.name, short_name: p.short_name,
+          sale_price_ttc: p.sale_price_ttc, vat_rate: p.vat_rate,
+          is_weight_based: p.is_weight_based, stock_qty: p.stock_qty,
+          category_name: p.category_name, source: 'product' as const,
+        }))))
+    } else { setOfflineProducts([]) }
   }, [is_offline, isRestaurant, selectedCategoryId])
 
-  const displayProducts = is_offline ? offlineProducts : gridProducts
+  const displayProducts = is_offline ? offlineProducts : productPage.items
+  const totalProducts   = is_offline ? offlineProducts.length : productPage.total
+  const totalPages      = is_offline ? 1 : productPage.totalPages
 
-  // Search products / restaurant items
+  // ── Search ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!search || search.length < 2) { setSearchResults([]); return }
     const timer = setTimeout(async () => {
@@ -1146,50 +1154,35 @@ export default function PosPage() {
         try {
           const res = await api.get('/restaurant-items', { params: { search, available: 1, active: 1 } })
           setSearchResults((res.data as any[]).map(ri => ({
-            id: ri.id,
-            name: ri.name,
-            short_name: ri.name,
-            sale_price_ttc: parseFloat(ri.price_ttc),
-            vat_rate: parseFloat(ri.vat_rate),
-            is_weight_based: false,
-            stock_qty: 999,
+            id: ri.id, name: ri.name, short_name: ri.name,
+            sale_price_ttc: parseFloat(ri.price_ttc), vat_rate: parseFloat(ri.vat_rate),
+            is_weight_based: false, stock_qty: 999,
             category_name: COURSES.find(c => c.value === ri.course)?.label,
-            source: 'restaurant_item' as const,
+            image: ri.image ?? null, source: 'restaurant_item' as const,
           })))
-        } catch {
-          setSearchResults([])
-        }
+        } catch { setSearchResults([]) }
       } else if (is_offline) {
         setSearchResults(await searchProductsOffline(search) as any)
       } else {
         try {
-          const res = await api.get('/products', { params: { search, per_page: 10, is_active: true } })
-          setSearchResults(res.data.data.map((p: {
-            id: number; name: string; short_name: string
-            sale_price_ttc: number; vat_rate: number; is_weight_based: boolean
-            category?: { name: string }; stock_level?: { qty_on_hand: number }
-          }) => ({
-            id: p.id,
-            name: p.name,
-            short_name: p.short_name,
-            sale_price_ttc: p.sale_price_ttc,
-            vat_rate: p.vat_rate,
+          const res = await api.get('/products', { params: { search, per_page: 15, is_active: true } })
+          setSearchResults(res.data.data.map((p: any) => ({
+            id: p.id, name: p.name, short_name: p.short_name,
+            sale_price_ttc: p.sale_price_ttc, vat_rate: p.vat_rate,
             is_weight_based: p.is_weight_based,
             stock_qty: p.stock_level?.qty_on_hand ?? 0,
-            category_name: p.category?.name,
+            category_name: p.category?.name, image: p.image ?? null,
             source: 'product' as const,
           })))
-        } catch {
-          setSearchResults(await searchProductsOffline(search) as any)
-        }
+        } catch { setSearchResults(await searchProductsOffline(search) as any) }
       }
-    }, 300)
+    }, 200)
     return () => clearTimeout(timer)
   }, [search, is_offline, isRestaurant])
 
+  // ── Barcode scan / add to cart ────────────────────────────────────────────
   const handleScanOrSearch = async (value: string) => {
     if (!value.trim()) return
-    // Barcode scan only for non-restaurant stores
     if (!isRestaurant && /^\d{8,14}$/.test(value.trim())) {
       let product: CachedProduct | undefined
       if (is_offline) {
@@ -1198,9 +1191,7 @@ export default function PosPage() {
         try {
           const res = await api.get('/products/barcode', { params: { barcode: value.trim() } })
           product = res.data
-        } catch {
-          product = await findProductByBarcode(value.trim())
-        }
+        } catch { product = await findProductByBarcode(value.trim()) }
       }
       if (product) { addProductToCart(product as unknown as PosItem); setSearch(''); return }
       toast.error(`Produit non trouvé : ${value}`)
@@ -1224,81 +1215,112 @@ export default function PosPage() {
       is_weight_based: item.is_weight_based,
       discount_pct: 0,
     })
+    // Track favorites & recents
+    setSessionFavorites(prev => {
+      const next = new Map(prev)
+      const existing = next.get(item.id)
+      next.set(item.id, { item, count: (existing?.count ?? 0) + 1 })
+      return next
+    })
+    setRecentItems(prev => [item, ...prev.filter(p => p.id !== item.id)].slice(0, 24))
     setSearch('')
     setSearchResults([])
     searchRef.current?.focus()
-    toast.success(`${item.short_name ?? item.name} ajouté`, { duration: 800 })
+    toast.success(`${item.short_name ?? item.name} ajouté`, { duration: 700 })
   }, [addItem])
 
+  // ── Sale confirm ──────────────────────────────────────────────────────────
   const handleSaleConfirm = async (payments: { payment_method: string; amount: number }[]) => {
     if (items.length === 0) return
     setProcessing(true)
     const offline_id = `OFL-${Date.now()}-${uuidv4().slice(0, 8)}`
-
     const salePayload = {
-      store_id: user!.store_id,
-      user_id: user!.id,
-      cash_session_id,
-      client_id,
+      store_id: user!.store_id, user_id: user!.id, cash_session_id, client_id,
       items: items.map(i => ({
         ...(i.restaurant_item_id
           ? { restaurant_item_id: i.restaurant_item_id }
           : { product_id: i.product_id, lot_id: i.lot_id }),
-        qty: i.qty,
-        unit_price_ttc: i.unit_price_ttc,
-        discount_pct: i.discount_pct,
+        qty: i.qty, unit_price_ttc: i.unit_price_ttc, discount_pct: i.discount_pct,
       })),
-      payments,
-      offline_id,
-      channel: 'pos',
+      payments, offline_id, channel: 'pos',
     }
-
     if (is_offline) {
       await savePendingSale({
-        offline_id,
-        store_id: user!.store_id!,
-        user_id: user!.id,
-        cash_session_id: cash_session_id ?? undefined,
-        client_id: client_id ?? undefined,
+        offline_id, store_id: user!.store_id!, user_id: user!.id,
+        cash_session_id: cash_session_id ?? undefined, client_id: client_id ?? undefined,
         items: items.map(i => ({
-          product_id: i.product_id,
-          product_name: i.product_name,
-          qty: i.qty,
-          unit_price_ttc: i.unit_price_ttc,
-          discount_pct: i.discount_pct,
-          discount_amount: i.discount_amount,
-          total_ttc: i.total_ttc,
-          vat_rate: i.vat_rate,
-          is_weight_based: i.is_weight_based,
+          product_id: i.product_id, product_name: i.product_name, qty: i.qty,
+          unit_price_ttc: i.unit_price_ttc, discount_pct: i.discount_pct,
+          discount_amount: i.discount_amount, total_ttc: i.total_ttc,
+          vat_rate: i.vat_rate, is_weight_based: i.is_weight_based,
         })),
-        payments,
-        total_ttc: totalTtc,
-        status: 'pending',
-        created_at: new Date().toISOString(),
+        payments, total_ttc: totalTtc, status: 'pending', created_at: new Date().toISOString(),
       })
-      toast.success('Vente enregistrée hors-ligne — sera synchronisée dès le retour d\'Internet')
-      clearCart()
-      setShowPayment(false)
-      setProcessing(false)
-      return
+      toast.success("Vente enregistrée hors-ligne — sera synchronisée dès le retour d'Internet")
+      clearCart(); setShowPayment(false); setProcessing(false); return
     }
-
     try {
       const res = await api.post('/sales', salePayload)
-      clearCart()
-      setShowPayment(false)
-      setSaleReceipt(res.data)
-      // Refresh product stock counts after sale
+      clearCart(); setShowPayment(false); setSaleReceipt(res.data)
       queryClient.invalidateQueries({ queryKey: ['pos-products'] })
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Erreur lors de l\'enregistrement'
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Erreur lors de l'enregistrement"
       toast.error(message)
-    } finally {
-      setProcessing(false)
-    }
+    } finally { setProcessing(false) }
   }
 
-  // Show session loading screen
+  // ── Product card (reusable) ───────────────────────────────────────────────
+  const ProductCard = useCallback(({ p, badge }: { p: PosItem; badge?: string }) => {
+    const thumb      = imageUrl(p.image)
+    const outOfStock = p.source !== 'restaurant_item' && p.stock_qty <= 0
+    const lowStock   = p.source !== 'restaurant_item' && p.stock_qty > 0 && p.stock_qty <= 5
+    return (
+      <button
+        onClick={() => addProductToCart(p)}
+        disabled={outOfStock}
+        className={`bg-white rounded-xl border text-left hover:border-primary-400 hover:shadow-md transition-all group overflow-hidden flex flex-col ${outOfStock ? 'opacity-50 cursor-not-allowed' : ''} ${lowStock ? 'border-amber-200' : 'border-gray-100'}`}
+      >
+        <div className="relative w-full aspect-square bg-gray-100 overflow-hidden">
+          {thumb ? (
+            <img src={thumb} alt={p.short_name ?? p.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              loading="lazy"
+              onError={e => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove('hidden')
+              }}
+            />
+          ) : null}
+          <div className={`absolute inset-0 flex items-center justify-center bg-primary-50 ${thumb ? 'hidden' : ''}`}>
+            <ShoppingBag size={24} className="text-primary opacity-30" />
+          </div>
+          {outOfStock && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+              <span className="text-white text-xs font-bold bg-red-500 px-1.5 py-0.5 rounded">Rupture</span>
+            </div>
+          )}
+          {lowStock && !outOfStock && (
+            <div className="absolute top-1 right-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {formatNumber(p.stock_qty, 0)}
+            </div>
+          )}
+          {badge && (
+            <div className="absolute top-1 left-1 bg-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {badge}
+            </div>
+          )}
+        </div>
+        <div className="p-2 flex-1 flex flex-col">
+          <p className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight mb-0.5 flex-1">
+            {p.short_name ?? p.name}
+          </p>
+          <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
+        </div>
+      </button>
+    )
+  }, [addProductToCart])
+
+  // ── Guards ────────────────────────────────────────────────────────────────
   if (sessionLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-100">
@@ -1306,280 +1328,365 @@ export default function PosPage() {
       </div>
     )
   }
-
-  // Show open session gate
   if (!session) {
-    return (
-      <OpenSessionModal onOpened={(s) => { setSession(s); setCashSession(s.id) }} />
-    )
+    return <OpenSessionModal onOpened={(s) => { setSession(s); setCashSession(s.id) }} />
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100">
+    <div className="flex h-screen flex-col overflow-hidden bg-gray-100">
 
-      {/* ── Left panel ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Top bar */}
-        <div className="bg-white border-b px-4 py-2.5 flex items-center gap-3">
-          {/* Online indicator */}
-          <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full flex-shrink-0 ${is_offline ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-            {is_offline ? <WifiOff size={11} /> : <Wifi size={11} />}
-            {is_offline ? 'HORS-LIGNE' : 'En ligne'}
-          </div>
-
-          {/* Search / barcode */}
-          <div className="relative flex-1">
-            <input
-              ref={searchRef}
-              type="text"
-              value={search}
-              onChange={e => handleScanOrSearch(e.target.value)}
-              placeholder="Scanner code-barres ou chercher..."
-              className="input pl-10 text-base"
-              autoFocus
-            />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            {search && (
-              <button onClick={() => { setSearch(''); setSearchResults([]) }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                <X size={16} />
-              </button>
-            )}
-          </div>
-
-          {/* Client button */}
-          <button
-            onClick={() => setShowClientSearch(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors ${client_name ? 'bg-primary-50 text-primary-600 border-primary-200' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
-            <UserPlus size={15} />
-            {client_name ? client_name : 'Client'}
-            {client_name && (
-              <button onClick={(e) => { e.stopPropagation(); setClient(null, null) }}
-                className="text-primary-400 hover:text-red-500 ml-1">
-                <X size={12} />
-              </button>
-            )}
-          </button>
-
-          {/* On-hold pill */}
-          {on_hold_carts.length > 0 && (
-            <button onClick={() => setShowHoldCarts(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-sm border border-amber-200">
-              <PauseCircle size={15} /> {on_hold_carts.length}
-            </button>
-          )}
-
-          {/* Session info + close button */}
-          <div className="flex items-center gap-2 text-xs text-gray-500 border-l pl-3">
-            <DollarSign size={13} />
-            <span>Ouverture {formatCurrency(session.opening_balance)}</span>
-          </div>
-          <button
-            onClick={() => setShowRecentSales(true)}
-            className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 px-2 py-1 rounded-lg bg-indigo-50">
-            <Clock size={12} /> Ventes récentes
-          </button>
-          <button
-            onClick={() => setShowCloseSession(true)}
-            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-300 px-2 py-1 rounded-lg">
-            <Lock size={12} /> Clôturer
-          </button>
+      {/* ═══ TOP BAR ═══════════════════════════════════════════════════════ */}
+      <div className="bg-white border-b px-3 py-2 flex items-center gap-2 flex-shrink-0 shadow-sm">
+        {/* Online indicator */}
+        <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full flex-shrink-0 ${is_offline ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+          {is_offline ? <WifiOff size={11} /> : <Wifi size={11} />}
+          <span className="hidden sm:inline">{is_offline ? 'HORS-LIGNE' : 'En ligne'}</span>
         </div>
 
-        {/* Search results overlay */}
-        {search.length >= 2 && searchResults.length > 0 && (
-          <div className="bg-white border-b shadow-lg max-h-72 overflow-y-auto">
-            {searchResults.map(p => (
-              <button key={p.id}
-                onClick={() => addProductToCart(p)}
-                disabled={p.source !== 'restaurant_item' && p.stock_qty <= 0}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b last:border-0 ${p.source !== 'restaurant_item' && p.stock_qty <= 0 ? 'opacity-40 cursor-not-allowed bg-gray-50' : 'hover:bg-primary-50'}`}>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">{p.name}</p>
+        {/* Search / barcode — takes most space */}
+        <div className="relative flex-1 max-w-lg">
+          <input
+            ref={searchRef}
+            type="text"
+            value={search}
+            onChange={e => handleScanOrSearch(e.target.value)}
+            placeholder="🔍 Scanner ou rechercher un article... (F2)"
+            className="w-full border border-gray-200 rounded-xl pl-4 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-gray-50"
+            autoFocus
+          />
+          {search && (
+            <button onClick={() => { setSearch(''); setSearchResults([]) }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Client */}
+        <button
+          onClick={() => setShowClientSearch(true)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors flex-shrink-0 ${client_name ? 'bg-primary-50 text-primary-600 border-primary-200 font-medium' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
+          <UserPlus size={13} />
+          <span className="max-w-[90px] truncate">{client_name ?? 'Client'}</span>
+          {client_name && (
+            <span onClick={e => { e.stopPropagation(); setClient(null, null) }}
+              className="text-primary-400 hover:text-red-500 ml-0.5">
+              <X size={11} />
+            </span>
+          )}
+        </button>
+
+        {/* On-hold badge */}
+        {on_hold_carts.length > 0 && (
+          <button onClick={() => setShowHoldCarts(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs border border-amber-200 flex-shrink-0">
+            <PauseCircle size={13} /> {on_hold_carts.length}
+          </button>
+        )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Session info */}
+        <div className="hidden md:flex items-center gap-1 text-xs text-gray-400 border-l pl-2">
+          <DollarSign size={12} />
+          <span>Ouverture {formatCurrency(session.opening_balance)}</span>
+        </div>
+        <button onClick={() => setShowRecentSales(true)}
+          className="flex items-center gap-1 text-xs text-indigo-600 border border-indigo-200 px-2 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 flex-shrink-0">
+          <Clock size={12} /> <span className="hidden sm:inline">Ventes</span>
+        </button>
+        <button onClick={() => setShowCloseSession(true)}
+          className="flex items-center gap-1 text-xs text-red-500 border border-red-200 px-2 py-1.5 rounded-lg hover:bg-red-50 flex-shrink-0">
+          <Lock size={12} /> <span className="hidden sm:inline">Clôturer</span>
+        </button>
+      </div>
+
+      {/* ═══ SEARCH RESULTS DROPDOWN ════════════════════════════════════════ */}
+      {search.length >= 2 && (
+        <div className="bg-white border-b shadow-xl z-20 flex-shrink-0 max-h-64 overflow-y-auto">
+          {searchResults.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-gray-400">Aucun résultat pour «{search}»</p>
+          ) : searchResults.map(p => {
+            const thumb      = imageUrl(p.image)
+            const outOfStock = p.source !== 'restaurant_item' && p.stock_qty <= 0
+            return (
+              <button key={p.id} onClick={() => addProductToCart(p)} disabled={outOfStock}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left border-b last:border-0 ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-primary-50'}`}>
+                <div className="w-9 h-9 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 flex items-center justify-center">
+                  {thumb ? <img src={thumb} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                         : <ShoppingBag size={14} className="text-gray-300" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
                   <p className="text-xs text-gray-400">{p.category_name}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
                   {p.source !== 'restaurant_item' && (
                     <p className={`text-xs ${p.stock_qty > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                      {p.stock_qty <= 0 ? 'Rupture' : `Stock: ${formatNumber(p.stock_qty, 0)}`}
+                      {p.stock_qty <= 0 ? 'Rupture' : `Qté: ${formatNumber(p.stock_qty, 0)}`}
                     </p>
                   )}
                 </div>
               </button>
-            ))}
-          </div>
-        )}
-        {search.length >= 2 && searchResults.length === 0 && (
-          <div className="bg-white border-b px-4 py-3 text-sm text-gray-400">Aucun produit trouvé pour «{search}»</div>
-        )}
-
-        {/* Category / Course filter pills */}
-        <div className="bg-white border-b px-4 py-2 flex gap-2 overflow-x-auto flex-shrink-0">
-          {isRestaurant ? (
-            <>
-              <button
-                onClick={() => setSelectedCourse(null)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCourse === null ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
-                Tout le menu
-              </button>
-              {COURSES.map(c => (
-                <button key={c.value}
-                  onClick={() => setSelectedCourse(c.value)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCourse === c.value ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
-                  {c.label}
-                </button>
-              ))}
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setSelectedCategoryId(null)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === null ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
-                Tous
-              </button>
-              {categories.map(c => (
-                <button key={c.id}
-                  onClick={() => setSelectedCategoryId(c.id)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${selectedCategoryId === c.id ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary-300'}`}>
-                  {c.name}
-                </button>
-              ))}
-            </>
-          )}
+            )
+          })}
         </div>
+      )}
 
-        {/* Product grid */}
-        <div className="flex-1 p-3 overflow-y-auto">
-          {!search && productsLoading && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
-              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
-              <p className="text-sm">Chargement des produits...</p>
-            </div>
-          )}
-          {!search && productsError && (
-            <div className="flex flex-col items-center justify-center h-full text-red-400">
-              <Scan size={48} className="mb-3 opacity-40" />
-              <p className="text-sm font-medium">Erreur de chargement</p>
-              <p className="text-xs text-gray-400 mt-1">Vérifiez la connexion au serveur</p>
-            </div>
-          )}
-          {!search && !productsLoading && !productsError && displayProducts.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-300">
-              <Scan size={64} className="mb-4" />
-              <p className="text-base font-medium">Aucun produit disponible</p>
-              <p className="text-sm">Tous les articles sont en rupture de stock</p>
-            </div>
-          )}
-          {!search && !productsLoading && displayProducts.length > 0 && (
-            <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
-              {displayProducts.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => addProductToCart(p)}
-                  className={`bg-white rounded-xl border p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all group ${!isRestaurant && p.stock_qty <= 5 ? 'border-amber-200' : ''}`}>
-                  <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center mb-2 group-hover:bg-primary-100">
-                    <ShoppingBag size={16} className="text-primary" />
+      {/* ═══ MAIN AREA ══════════════════════════════════════════════════════ */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* ── CATEGORY SIDEBAR ─────────────────────────────────────────── */}
+        <div className="w-44 bg-white border-r flex flex-col flex-shrink-0 shadow-sm">
+          <div className="px-3 py-2.5 border-b bg-gray-50">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Catégories</p>
+          </div>
+          <div className="flex-1 overflow-y-auto py-1.5 px-1.5 space-y-0.5">
+            {isRestaurant ? (
+              <>
+                <SidebarBtn label="Tout le menu" active={selectedCourse === null}
+                  onClick={() => setSelectedCourse(null)} />
+                {COURSES.map(c => (
+                  <SidebarBtn key={c.value} label={c.label} active={selectedCourse === c.value}
+                    onClick={() => setSelectedCourse(c.value)} />
+                ))}
+              </>
+            ) : (
+              <>
+                <SidebarBtn label="Tous les articles" active={selectedCategoryId === null}
+                  onClick={() => { setSelectedCategoryId(null); setPage(1) }} count={totalProducts > 0 && selectedCategoryId === null ? totalProducts : undefined} />
+                {categoryTree.map(parent => (
+                  <div key={parent.id}>
+                    <SidebarBtn label={parent.name} active={selectedCategoryId === parent.id}
+                      onClick={() => { setSelectedCategoryId(parent.id); setPage(1) }} />
+                    {(parent.children ?? []).map(child => (
+                      <SidebarBtn key={child.id} label={child.name} indent active={selectedCategoryId === child.id}
+                        onClick={() => { setSelectedCategoryId(child.id); setPage(1) }} />
+                    ))}
                   </div>
-                  <p className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight mb-1">
-                    {p.short_name ?? p.name}
-                  </p>
-                  <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
-                  {isRestaurant ? (
-                    <p className="text-xs mt-0.5 text-gray-400">{p.category_name}</p>
-                  ) : (
-                    <p className={`text-xs mt-0.5 ${p.stock_qty <= 5 ? 'text-amber-500' : 'text-gray-400'}`}>
-                      Stock: {formatNumber(p.stock_qty, 0)}
-                    </p>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Right panel: Cart ── */}
-      <div className="w-96 bg-white border-l flex flex-col shadow-xl">
-        {/* Cart header */}
-        <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-            <ShoppingBag size={18} /> Panier
-            {items.length > 0 && (
-              <span className="bg-primary text-white text-xs px-2 py-0.5 rounded-full">{items.length}</span>
+                ))}
+              </>
             )}
-          </h2>
-          {client_name && (
-            <span className="text-xs bg-primary-50 text-primary px-2 py-1 rounded-lg">{client_name}</span>
-          )}
+          </div>
         </div>
 
-        {/* Items list */}
-        <div className="flex-1 overflow-y-auto px-4 py-2">
-          {items.length === 0 ? (
-            <p className="text-center text-gray-300 py-10 text-sm">Panier vide</p>
-          ) : (
-            items.map(item => (
-              <CartItemRow
-                key={item.product_id}
-                item={item}
-                onQtyChange={updateQty}
-                onDiscountChange={updateDiscount}
-                onRemove={removeItem}
-              />
-            ))
-          )}
-        </div>
+        {/* ── PRODUCT AREA ─────────────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* Footer */}
-        <div className="border-t p-4 space-y-3">
-          {totalDiscount > 0 && (
-            <div className="flex justify-between text-sm text-green-600">
-              <span>Remises accordées</span>
-              <span>-{formatCurrency(totalDiscount)}</span>
+          {/* Tab bar — Favoris / Récents / Catalogue */}
+          {!isRestaurant && (
+            <div className="bg-white border-b px-3 py-1.5 flex items-center gap-1 flex-shrink-0">
+              <TabBtn label="Favoris" icon={<Tag size={12} />}
+                active={activeProductTab === 'favorites'}
+                badge={topFavorites.length > 0 ? topFavorites.length : undefined}
+                onClick={() => setActiveProductTab('favorites')} />
+              <TabBtn label="Récents" icon={<Clock size={12} />}
+                active={activeProductTab === 'recent'}
+                badge={recentItems.length > 0 ? recentItems.length : undefined}
+                onClick={() => setActiveProductTab('recent')} />
+              <TabBtn label="Catalogue" icon={<ShoppingBag size={12} />}
+                active={activeProductTab === 'catalog'}
+                badge={activeProductTab === 'catalog' && totalProducts > 0 ? totalProducts : undefined}
+                onClick={() => setActiveProductTab('catalog')} />
+              {/* Quick counts */}
+              <div className="flex-1" />
+              {activeProductTab === 'catalog' && !productsLoading && totalProducts > 0 && (
+                <p className="text-xs text-gray-400 pr-1">
+                  {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, totalProducts)} / {totalProducts}
+                </p>
+              )}
             </div>
           )}
-          <div className="flex justify-between items-center">
-            <span className="text-lg font-bold text-gray-900">TOTAL</span>
-            <span className="text-2xl font-bold text-primary">{formatCurrency(totalTtc)}</span>
+
+          {/* Product grid area */}
+          <div className="flex-1 p-3 overflow-y-auto">
+
+            {/* ── FAVORIS tab ── */}
+            {!isRestaurant && activeProductTab === 'favorites' && (
+              topFavorites.length === 0
+                ? <EmptyState icon={<Tag size={48} className="mx-auto mb-3 text-gray-200" />}
+                    title="Aucun favori encore"
+                    sub="Les articles que vous ajoutez au panier apparaissent ici, triés par fréquence." />
+                : <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+                    {topFavorites.map(({ item, count }) => (
+                      <ProductCard key={item.id} p={item} badge={count > 1 ? `×${count}` : undefined} />
+                    ))}
+                  </div>
+            )}
+
+            {/* ── RECENTS tab ── */}
+            {!isRestaurant && activeProductTab === 'recent' && (
+              recentItems.length === 0
+                ? <EmptyState icon={<Clock size={48} className="mx-auto mb-3 text-gray-200" />}
+                    title="Aucun article récent"
+                    sub="Les 24 derniers articles ajoutés dans cette session apparaissent ici." />
+                : <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+                    {recentItems.map(p => <ProductCard key={p.id} p={p} />)}
+                  </div>
+            )}
+
+            {/* ── CATALOGUE tab (ou restaurant) ── */}
+            {(activeProductTab === 'catalog' || isRestaurant) && (
+              <>
+                {productsLoading && (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+                    <p className="text-sm">Chargement...</p>
+                  </div>
+                )}
+                {productsError && (
+                  <EmptyState icon={<Scan size={48} className="mx-auto mb-3 text-red-200" />}
+                    title="Erreur de chargement" sub="Vérifiez la connexion au serveur." />
+                )}
+                {!productsLoading && !productsError && displayProducts.length === 0 && (
+                  <EmptyState icon={<Scan size={48} className="mx-auto mb-3 text-gray-200" />}
+                    title="Aucun article disponible" sub="Tous les articles sont en rupture de stock." />
+                )}
+                {!productsLoading && displayProducts.length > 0 && (
+                  <>
+                    <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+                      {displayProducts.map(p => <ProductCard key={p.id} p={p} />)}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="mt-4 mb-2 flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setPage(p => Math.max(1, p - 1))}
+                          disabled={page === 1}
+                          className="px-3 py-1.5 rounded-lg border text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                          ← Préc.
+                        </button>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                            let p = i + 1
+                            if (totalPages > 7) {
+                              if (page <= 4) p = i + 1
+                              else if (page >= totalPages - 3) p = totalPages - 6 + i
+                              else p = page - 3 + i
+                            }
+                            return (
+                              <button key={p} onClick={() => setPage(p)}
+                                className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${page === p ? 'bg-primary text-white' : 'border text-gray-600 hover:bg-gray-100'}`}>
+                                {p}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <button
+                          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                          disabled={page === totalPages}
+                          className="px-3 py-1.5 rounded-lg border text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                          Suiv. →
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ══ PANIER (always visible) ══════════════════════════════════════ */}
+        <div className="w-80 bg-white border-l flex flex-col shadow-xl flex-shrink-0">
+
+          {/* Cart header */}
+          <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between flex-shrink-0">
+            <h2 className="font-bold text-gray-800 flex items-center gap-2 text-sm">
+              <ShoppingBag size={16} className="text-primary" /> Panier
+              {items.length > 0 && (
+                <span className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                  {items.length}
+                </span>
+              )}
+            </h2>
+            {client_name && (
+              <span className="text-xs bg-primary-50 text-primary px-2 py-0.5 rounded-lg font-medium truncate max-w-[100px]">
+                {client_name}
+              </span>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => { if (on_hold_carts.length > 0) setShowHoldCarts(true) }}
-              onDoubleClick={() => items.length > 0 && holdCart()}
-              title="Double-clic pour mettre en attente"
-              disabled={items.length === 0}
-              className="flex items-center justify-center gap-1 py-2 px-3 border border-amber-300 text-amber-600 rounded-lg text-sm hover:bg-amber-50 disabled:opacity-40">
-              <PauseCircle size={15} />
-              {on_hold_carts.length > 0 ? `En attente (${on_hold_carts.length})` : 'Mettre en attente'}
-            </button>
-            <button
-              onClick={() => items.length > 0 && holdCart()}
-              disabled={items.length === 0}
-              className="flex items-center justify-center gap-1 py-2 px-3 border border-gray-200 text-gray-500 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-40">
-              <PauseCircle size={15} /> Suspendre
-            </button>
+          {/* Items */}
+          <div className="flex-1 overflow-y-auto px-3 py-1.5">
+            {items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-300 pb-6">
+                <ShoppingBag size={40} className="mb-2 opacity-50" />
+                <p className="text-sm">Panier vide</p>
+                <p className="text-xs text-gray-400 mt-1">Scannez ou cliquez sur un article</p>
+              </div>
+            ) : (
+              items.map(item => (
+                <CartItemRow
+                  key={item.product_id}
+                  item={item}
+                  onQtyChange={updateQty}
+                  onDiscountChange={updateDiscount}
+                  onRemove={removeItem}
+                />
+              ))
+            )}
           </div>
 
-          <button
-            onClick={() => setShowPayment(true)}
-            disabled={items.length === 0 || processing}
-            className="w-full py-4 bg-primary hover:bg-primary-600 disabled:bg-blue-300 text-white text-lg font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
-            <Receipt size={22} /> Encaisser
-          </button>
+          {/* Footer */}
+          <div className="border-t p-3 space-y-2.5 flex-shrink-0 bg-gray-50">
+            {/* Discount line */}
+            {totalDiscount > 0 && (
+              <div className="flex justify-between text-xs text-green-600 font-medium">
+                <span>Remises</span>
+                <span>-{formatCurrency(totalDiscount)}</span>
+              </div>
+            )}
 
-          <button
-            onClick={() => { if (confirm('Vider le panier ?')) clearCart() }}
-            disabled={items.length === 0}
-            className="w-full py-2 text-sm text-red-400 hover:text-red-600 disabled:opacity-30 flex items-center justify-center gap-1">
-            <Trash2 size={14} /> Vider le panier
-          </button>
+            {/* Total */}
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-bold text-gray-700">TOTAL TTC</span>
+              <span className="text-2xl font-black text-primary tracking-tight">{formatCurrency(totalTtc)}</span>
+            </div>
+
+            {/* Hold / Suspend */}
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={() => { if (on_hold_carts.length > 0) setShowHoldCarts(true) }}
+                onDoubleClick={() => items.length > 0 && holdCart()}
+                title="Double-clic pour mettre en attente"
+                disabled={items.length === 0 && on_hold_carts.length === 0}
+                className="flex items-center justify-center gap-1 py-2 border border-amber-300 text-amber-600 rounded-lg text-xs hover:bg-amber-50 disabled:opacity-30 font-medium">
+                <PauseCircle size={13} />
+                {on_hold_carts.length > 0 ? `Attente (${on_hold_carts.length})` : 'En attente'}
+              </button>
+              <button
+                onClick={() => items.length > 0 && holdCart()}
+                disabled={items.length === 0}
+                className="flex items-center justify-center gap-1 py-2 border border-gray-200 text-gray-500 rounded-lg text-xs hover:bg-gray-100 disabled:opacity-30 font-medium">
+                <PauseCircle size={13} /> Suspendre
+              </button>
+            </div>
+
+            {/* Pay button */}
+            <button
+              onClick={() => setShowPayment(true)}
+              disabled={items.length === 0 || processing}
+              className="w-full py-3.5 bg-primary hover:bg-primary-600 disabled:bg-primary/30 text-white text-base font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+              <Receipt size={20} /> Encaisser
+            </button>
+
+            {/* Clear cart */}
+            <button
+              onClick={async () => { if (await confirm('Vider le panier ?', { danger: true })) clearCart() }}
+              disabled={items.length === 0}
+              className="w-full py-1.5 text-xs text-red-400 hover:text-red-600 disabled:opacity-30 flex items-center justify-center gap-1 transition-colors">
+              <Trash2 size={12} /> Vider le panier
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── Modals ── */}
+      {/* ═══ MODALS ══════════════════════════════════════════════════════════ */}
       {showPayment && (
         <PaymentModal
           total={totalTtc}
@@ -1610,16 +1717,64 @@ export default function PosPage() {
         />
       )}
       {saleReceipt && (
-        <ReceiptModal
-          sale={saleReceipt}
-          onNewSale={() => setSaleReceipt(null)}
-        />
+        <ReceiptModal sale={saleReceipt} onNewSale={() => setSaleReceipt(null)} />
       )}
       {showRecentSales && (
-        <PosRecentSalesModal
-          onClose={() => setShowRecentSales(false)}
-        />
+        <PosRecentSalesModal onClose={() => setShowRecentSales(false)} />
       )}
+    </div>
+  )
+}
+
+// ─── Small helper components (defined after PosPage to access closures) ────────
+
+function SidebarBtn({
+  label, active, onClick, indent = false, count,
+}: { label: string; active: boolean; onClick: () => void; indent?: boolean; count?: number }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left rounded-lg transition-colors flex items-center justify-between gap-1 ${indent ? 'pl-5 pr-2 py-1 text-[11px]' : 'px-2.5 py-2 text-xs font-medium'} ${
+        active
+          ? indent ? 'bg-primary-100 text-primary font-semibold' : 'bg-primary text-white'
+          : indent ? 'text-gray-500 hover:bg-gray-50' : 'text-gray-700 hover:bg-gray-100'
+      }`}>
+      <span className="truncate">{label}</span>
+      {count !== undefined && (
+        <span className={`text-[9px] px-1 rounded-full flex-shrink-0 ${active && !indent ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400'}`}>
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function TabBtn({
+  label, icon, active, badge, onClick,
+}: { label: string; icon: React.ReactNode; active: boolean; badge?: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+        active ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'
+      }`}>
+      {icon}
+      {label}
+      {badge !== undefined && (
+        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${active ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-500'}`}>
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function EmptyState({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full py-16 text-center px-4">
+      {icon}
+      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+      <p className="text-xs text-gray-400">{sub}</p>
     </div>
   )
 }
