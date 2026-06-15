@@ -118,14 +118,23 @@ class DashboardController extends Controller
 
     private function getHourlySales(int $storeId, $date): array
     {
-        return Sale::forStore($storeId)
-            ->completed()
+        $hourExpr = DB::connection()->getDriverName() === 'sqlite'
+            ? "CAST(strftime('%H', created_at) AS INTEGER)"
+            : 'HOUR(created_at)';
+
+        $rows = DB::table('sales')
+            ->where('store_id', $storeId)
+            ->where('status', 'completed')
             ->whereDate('created_at', $date)
-            ->selectRaw('HOUR(created_at) as hour, COUNT(*) as count, SUM(total_ttc) as total')
-            ->groupByRaw('HOUR(created_at)')
+            ->selectRaw("$hourExpr as hour, COUNT(*) as count, SUM(total_ttc) as total")
+            ->groupBy('hour')
             ->orderBy('hour')
-            ->get()
-            ->map(fn($r) => ['hour' => (int)$r->hour, 'count' => (int)$r->count, 'total' => (float)$r->total])
-            ->toArray();
+            ->get();
+
+        return $rows->map(fn($r) => [
+            'hour' => (int) ($r->hour ?? 0),
+            'count' => (int) $r->count,
+            'total' => (float) $r->total,
+        ])->toArray();
     }
 }

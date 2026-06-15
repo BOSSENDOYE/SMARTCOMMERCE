@@ -114,8 +114,12 @@ function CreateTransferModal({ onClose }: { onClose: () => void }) {
       toast.success('Demande de transfert envoyée')
       onClose()
     },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Erreur'),
+    onError: (err: { response?: { data?: { message?: string }; status?: number }; message?: string }) => {
+      const status = err?.response?.status
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Erreur inconnue'
+      console.error('Transfer error:', status, msg, err)
+      toast.error(`Erreur (${status ?? '?'}): ${msg}`)
+    },
   })
 
   const activeStores = stores.filter(s => s.is_active)
