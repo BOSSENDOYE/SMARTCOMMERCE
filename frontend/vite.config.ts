@@ -13,7 +13,7 @@ export default defineConfig({
         name: 'Baobab — SmartCommerce',
         short_name: 'Baobab',
         description: 'Gestion commerciale intelligente pour l\'Afrique',
-        theme_color: '#2563eb',
+        theme_color: '#ff7631',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'any',
@@ -21,7 +21,10 @@ export default defineConfig({
         scope: '/',
         lang: 'fr',
         icons: [
-          { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon.svg',     sizes: 'any',      type: 'image/svg+xml' },
         ],
         shortcuts: [
           { name: 'Caisse POS', short_name: 'POS', url: '/pos', description: 'Ouvrir la caisse' },

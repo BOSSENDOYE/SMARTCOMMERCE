@@ -24,9 +24,11 @@ return new class extends Migration {
             $table->timestamps();
         });
 
-        Schema::table('products', function (Blueprint $table) {
-            $table->decimal('stock_appro', 10, 3)->nullable()->after('max_stock');
-        });
+        if (!Schema::hasColumn('products', 'stock_appro')) {
+            Schema::table('products', function (Blueprint $table) {
+                $table->decimal('stock_appro', 10, 3)->nullable()->after('max_stock');
+            });
+        }
     }
 
     public function down(): void

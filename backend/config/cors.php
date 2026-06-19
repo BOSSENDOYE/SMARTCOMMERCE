@@ -19,7 +19,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [],
+    'allowed_origins' => [
+        'https://baobab.lamadoneadn.com',
+    ],
 
     'allowed_origins_patterns' => [
         '#^http://localhost(:\d+)?$#',

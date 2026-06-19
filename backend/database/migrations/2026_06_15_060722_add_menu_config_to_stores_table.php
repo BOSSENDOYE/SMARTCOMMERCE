@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('stores', 'menu_config')) {
+            return;
+        }
+
         Schema::table('stores', function (Blueprint $table) {
             $table->json('menu_config')->nullable()->after('receipt_footer');
         });

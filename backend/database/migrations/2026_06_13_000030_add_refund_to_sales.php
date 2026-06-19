@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('sales', 'cancellation_reason')) {
+            return;
+        }
+
         Schema::table('sales', function (Blueprint $table) {
             $table->text('cancellation_reason')->nullable()->after('notes');
             $table->foreignId('cancelled_by')->nullable()->after('cancellation_reason')

@@ -1,0 +1,29 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Servir les fichiers et dossiers existants directement
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Toutes les autres routes → index.html (React Router)
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# Cache agressif pour les assets versionnés (Vite ajoute des hash)
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/html                  "access plus 0 seconds"
+    ExpiresByType application/javascript     "access plus 1 year"
+    ExpiresByType text/css                   "access plus 1 year"
+    ExpiresByType image/png                  "access plus 1 year"
+    ExpiresByType image/svg+xml              "access plus 1 year"
+    ExpiresByType image/x-icon              "access plus 1 year"
+    ExpiresByType font/woff2                 "access plus 1 year"
+</IfModule>
+
+# Compression gzip
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+</IfModule>

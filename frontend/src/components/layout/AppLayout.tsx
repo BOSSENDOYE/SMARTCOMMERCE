@@ -494,7 +494,7 @@ export default function AppLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto flex flex-col min-h-0">
+      <main className="flex-1 flex flex-col min-h-0">
         {/* Top bar */}
         <div className="flex-shrink-0 flex items-center justify-end px-4 h-10 bg-white border-b border-gray-100 shadow-sm relative z-40">
           <NotificationBell />

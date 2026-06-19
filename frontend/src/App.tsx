@@ -6,6 +6,7 @@ import { useAuthStore } from './store/auth.store'
 import { ConfirmProvider } from './hooks/useConfirm'
 import { usePreferencesStore } from './store/preferences.store'
 import AppLayout from './components/layout/AppLayout'
+import InstallPWABanner from './components/InstallPWABanner'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import PosPage from './pages/pos/PosPage'
@@ -77,6 +78,7 @@ export default function App() {
     <QueryClientProvider client={qc}>
       <ConfirmProvider>
       <PreferencesBootstrap />
+      <InstallPWABanner />
       <BrowserRouter>
         <Toaster
           position="top-right"

@@ -12,6 +12,10 @@ return new class extends Migration
         // 1) Make product_id nullable on sale_items (currently NOT NULL FK)
         DB::statement('ALTER TABLE sale_items MODIFY product_id BIGINT UNSIGNED NULL');
 
+        if (Schema::hasColumn('sale_items', 'restaurant_item_id')) {
+            return;
+        }
+
         // 2) Add restaurant_item_id nullable FK
         Schema::table('sale_items', function (Blueprint $table) {
             $table->unsignedBigInteger('restaurant_item_id')->nullable()->after('product_id');

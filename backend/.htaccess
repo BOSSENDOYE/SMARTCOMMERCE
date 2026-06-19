@@ -1,0 +1,18 @@
+# Redirige tout le trafic vers public/ (Laravel shared hosting)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Passer les Authorization headers (Bearer token Sanctum)
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Servir les fichiers et dossiers statiques directement
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ public/$1 [L,QSA]
+
+    # Sécurité : bloquer l'accès aux fichiers sensibles
+    RewriteRule ^(\.env|composer\.(json|lock)|artisan|phpunit\.xml)$ - [F,L]
+    RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|tests|vendor)/ - [F,L]
+</IfModule>
