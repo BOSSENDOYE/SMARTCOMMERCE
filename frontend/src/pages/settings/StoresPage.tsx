@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import {
   Store, Plus, X, Check, Edit2, Phone, Mail, MapPin,
   Users, ShoppingBag, Wallet, ToggleLeft, ToggleRight,
-  Building2, AlertCircle, Upload, Camera,
+  Building2, AlertCircle, Upload, Camera, MessageCircle,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -40,6 +40,7 @@ interface StoreData {
   is_central: boolean
   is_active: boolean
   receipt_footer?: string
+  whatsapp_number?: string
   users_count?: number
   clients_count?: number
   stock_value?: number
@@ -117,18 +118,19 @@ function StoreFormModal({ store, onClose }: { store?: StoreData; onClose: () => 
 
   const [form, setForm] = useState({
     organization_id: store?.organization_id ?? ('' as number | ''),
-    name:            store?.name ?? '',
-    code:            store?.code ?? '',
-    business_type:   (store?.business_type ?? 'grande_surface') as BusinessType,
-    address:         store?.address ?? '',
-    phone:           store?.phone ?? '',
-    email:           store?.email ?? '',
-    ninea:           store?.ninea ?? '',
-    rc:              store?.rc ?? '',
-    currency:        store?.currency ?? 'XOF',
-    timezone:        store?.timezone ?? 'Africa/Dakar',
-    is_central:      store?.is_central ?? false,
-    receipt_footer:  store?.receipt_footer ?? '',
+    name:             store?.name ?? '',
+    code:             store?.code ?? '',
+    business_type:    (store?.business_type ?? 'grande_surface') as BusinessType,
+    address:          store?.address ?? '',
+    phone:            store?.phone ?? '',
+    whatsapp_number:  store?.whatsapp_number ?? '',
+    email:            store?.email ?? '',
+    ninea:            store?.ninea ?? '',
+    rc:               store?.rc ?? '',
+    currency:         store?.currency ?? 'XOF',
+    timezone:         store?.timezone ?? 'Africa/Dakar',
+    is_central:       store?.is_central ?? false,
+    receipt_footer:   store?.receipt_footer ?? '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -251,6 +253,18 @@ function StoreFormModal({ store, onClose }: { store?: StoreData; onClose: () => 
                 <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input value={form.email} onChange={set('email')} type="email" className="input pl-8" placeholder="magasin@entreprise.sn" />
               </div>
+            </div>
+          </div>
+
+          {/* WhatsApp */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              WhatsApp <span className="text-red-500">*</span>
+              <span className="ml-1.5 text-xs text-gray-400 font-normal">Requis pour les relances automatiques</span>
+            </label>
+            <div className="relative">
+              <MessageCircle size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-green-500" />
+              <input value={form.whatsapp_number} onChange={set('whatsapp_number')} className="input pl-8" placeholder="+221 77 000 00 00" />
             </div>
           </div>
 

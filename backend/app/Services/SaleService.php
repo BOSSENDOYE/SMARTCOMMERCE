@@ -132,7 +132,10 @@ class SaleService
             }
 
             $totalTtc   = $subtotalHt + $vatAmount - $discountAmount;
-            $paidAmount = collect($payments)->sum('amount');
+            // account_deposit = monnaie déposée sur le compte client, ne compte pas comme paiement de la vente
+            $paidAmount = collect($payments)
+                ->filter(fn($p) => $p['payment_method'] !== 'account_deposit')
+                ->sum('amount');
 
             $sale->update([
                 'subtotal_ht'     => $subtotalHt,
@@ -186,28 +189,72 @@ class SaleService
     {
         if (!$sale->client_id) return;
 
+        $client = $sale->client;
+
+        // ── Paiement depuis le compte (débit compte dépôt) ────────────────────
         $accountAmount = collect($payments)
             ->where('payment_method', 'account')
             ->sum('amount');
 
-        if ($accountAmount <= 0) return;
+        if ($accountAmount > 0) {
+            $before = (float) $client->account_balance;
+            $after  = $before - $accountAmount;
+            $client->update(['account_balance' => $after]);
+            ClientAccountTransaction::create([
+                'client_id'      => $client->id,
+                'sale_id'        => $sale->id,
+                'created_by'     => $userId,
+                'type'           => 'sale_debit',
+                'amount'         => $accountAmount,
+                'balance_before' => $before,
+                'balance_after'  => $after,
+                'note'           => 'Paiement vente ' . $sale->reference,
+            ]);
+            $client = $client->fresh();
+        }
 
-        $client = $sale->client;
-        $before = (float) $client->account_balance;
-        $after  = $before - $accountAmount;
+        // ── Crédit client (client nous doit de l'argent) ──────────────────────
+        $creditAmount = collect($payments)
+            ->where('payment_method', 'credit')
+            ->sum('amount');
 
-        $client->update(['account_balance' => $after]);
+        if ($creditAmount > 0) {
+            $before = (float) ($client->credit_balance ?? 0);
+            $after  = $before + $creditAmount;
+            $client->update(['credit_balance' => $after]);
+            ClientAccountTransaction::create([
+                'client_id'      => $client->id,
+                'sale_id'        => $sale->id,
+                'created_by'     => $userId,
+                'type'           => 'credit_sale',
+                'amount'         => $creditAmount,
+                'balance_before' => $before,
+                'balance_after'  => $after,
+                'note'           => 'Crédit vente ' . $sale->reference,
+            ]);
+            $client = $client->fresh();
+        }
 
-        ClientAccountTransaction::create([
-            'client_id'      => $client->id,
-            'sale_id'        => $sale->id,
-            'created_by'     => $userId,
-            'type'           => 'sale_debit',
-            'amount'         => $accountAmount,
-            'balance_before' => $before,
-            'balance_after'  => $after,
-            'note'           => 'Paiement vente ' . $sale->reference,
-        ]);
+        // ── Dépôt monnaie sur le compte client (overpayment → avoir) ─────────
+        $depositAmount = collect($payments)
+            ->where('payment_method', 'account_deposit')
+            ->sum('amount');
+
+        if ($depositAmount > 0) {
+            $before = (float) $client->account_balance;
+            $after  = $before + $depositAmount;
+            $client->update(['account_balance' => $after]);
+            ClientAccountTransaction::create([
+                'client_id'      => $client->id,
+                'sale_id'        => $sale->id,
+                'created_by'     => $userId,
+                'type'           => 'change_deposit',
+                'amount'         => $depositAmount,
+                'balance_before' => $before,
+                'balance_after'  => $after,
+                'note'           => 'Dépôt monnaie vente ' . $sale->reference,
+            ]);
+        }
     }
 
     private function handleLoyalty(Sale $sale): void

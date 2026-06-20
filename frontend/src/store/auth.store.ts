@@ -14,6 +14,7 @@ export interface AuthUser {
     license_grande_surface: boolean
     license_restaurant: boolean
   }
+  stores?: { id: number; name: string; code: string }[]
   roles: string[]
   permissions: string[]
 }
@@ -23,6 +24,7 @@ interface AuthState {
   token: string | null
   isAuthenticated: boolean
   setAuth: (user: AuthUser, token: string) => void
+  setUser: (user: AuthUser) => void
   clearAuth: () => void
   can: (permission: string) => boolean
   hasRole: (role: string) => boolean
@@ -40,6 +42,8 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem('sc_token', token)
         set({ user, token, isAuthenticated: true })
       },
+
+      setUser: (user) => set({ user }),
 
       clearAuth: () => {
         localStorage.removeItem('sc_token')

@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+﻿import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency } from '../../lib/format'
@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form'
 import {
   Truck, Plus, Search, ChevronRight, ArrowLeft, Edit2,
   Package, FileText, ShoppingCart, CheckCircle, Clock,
-  AlertTriangle, X, Star, Trash2,
+  AlertTriangle, X, Star, Trash2, Upload, Download, CheckCircle2, AlertCircle,
 } from 'lucide-react'
 import { useConfirm } from '../../hooks/useConfirm'
 
@@ -76,6 +76,20 @@ interface Stats {
   active: number
   total_balance_due: number
   avg_delivery_days: number
+}
+
+interface SupplierInvoiceForm {
+  reference: string
+  amount_ht: number
+  vat_rate: number
+  invoice_date: string
+  due_date?: string
+}
+
+interface SupplierPaymentForm {
+  amount: number
+  payment_method: string
+  reference?: string
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -236,15 +250,21 @@ function SupplierFormModal({ supplier, onClose }: { supplier?: Supplier; onClose
 
 function AddInvoiceModal({ supplierId, onClose }: { supplierId: number; onClose: () => void }) {
   const qc = useQueryClient()
-  const { register, handleSubmit, watch } = useForm({
-    defaultValues: { vat_rate: 18, invoice_date: new Date().toISOString().slice(0, 10) },
+  const { register, handleSubmit, watch } = useForm<SupplierInvoiceForm>({
+    defaultValues: {
+      reference: '',
+      amount_ht: 0,
+      vat_rate: 18,
+      invoice_date: new Date().toISOString().slice(0, 10),
+      due_date: '',
+    },
   })
   const amountHt = Number(watch('amount_ht') || 0)
   const vatRate  = Number(watch('vat_rate') || 0)
   const computed  = (amountHt * (1 + vatRate / 100)).toFixed(2)
 
   const mut = useMutation({
-    mutationFn: (d: Record<string, unknown>) =>
+    mutationFn: (d: SupplierInvoiceForm) =>
       api.post(`/suppliers/${supplierId}/invoices`, {
         ...d,
         vat_amount: ((amountHt * vatRate) / 100).toFixed(2),
@@ -267,7 +287,7 @@ function AddInvoiceModal({ supplierId, onClose }: { supplierId: number; onClose:
           <h2 className="text-xl font-bold">Nouvelle facture</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
-        <form onSubmit={handleSubmit(d => mut.mutate(d as Record<string, unknown>))} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(d => mut.mutate(d))} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">N° facture *</label>
             <input {...register('reference', { required: true })} className="input" placeholder="FACT-2026-001" />
@@ -312,15 +332,16 @@ function PayInvoiceModal({ invoice, supplierId, onClose }: {
   invoice: SupplierInvoice; supplierId: number; onClose: () => void
 }) {
   const qc = useQueryClient()
-  const { register, handleSubmit } = useForm({
+  const { register, handleSubmit } = useForm<SupplierPaymentForm>({
     defaultValues: {
       amount: invoice.balance_due,
       payment_method: 'cash',
+      reference: '',
     },
   })
 
   const mut = useMutation({
-    mutationFn: (d: Record<string, unknown>) =>
+    mutationFn: (d: SupplierPaymentForm) =>
       api.post(`/suppliers/${supplierId}/invoices/${invoice.id}/pay`, d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['supplier-invoices', supplierId] })
@@ -340,7 +361,7 @@ function PayInvoiceModal({ invoice, supplierId, onClose }: {
           <h2 className="text-xl font-bold">Enregistrer un paiement</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
-        <form onSubmit={handleSubmit(d => mut.mutate(d as Record<string, unknown>))} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(d => mut.mutate(d))} className="p-6 space-y-4">
           <div className="bg-gray-50 rounded-xl p-3 text-sm space-y-1">
             <div className="flex justify-between"><span className="text-gray-500">Facture</span><span className="font-medium">{invoice.reference}</span></div>
             <div className="flex justify-between"><span className="text-gray-500">Total TTC</span><span className="font-medium">{formatCurrency(invoice.amount_ttc)}</span></div>
@@ -822,6 +843,282 @@ function SupplierDetail({ supplierId, onBack }: { supplierId: number; onBack: ()
   )
 }
 
+// ─── Import Fournisseurs Modal ────────────────────────────────────────────────
+
+interface SupplierImportRow {
+  row: number
+  action: 'create' | 'update'
+  existing_id?: number
+  raison_sociale: string
+  ninea?: string
+  rc?: string
+  contact?: string
+  telephone?: string
+  email?: string
+  adresse?: string
+  conditions: string
+  delai: number
+  notes?: string
+  solde_du: number
+  errors: string[]
+  warnings: string[]
+  status: 'ok' | 'error'
+}
+
+interface SupplierPreviewResult {
+  rows: SupplierImportRow[]
+  total: number
+  ok: number
+  errors: number
+  creates: number
+  updates: number
+}
+
+function ImportSuppliersModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
+  const [preview, setPreview] = useState<SupplierPreviewResult | null>(null)
+  const [result, setResult] = useState<{ created: number; updated: number; skipped: number; errors: string[] } | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  const previewMutation = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      return api.post<SupplierPreviewResult>('/suppliers/import/preview', fd)
+    },
+    onSuccess: (res) => {
+      setPreview(res.data)
+      setStep('preview')
+    },
+    onError: (err: unknown) => {
+      const data = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
+      const fieldErrors: string[] = data?.errors ? (Object.values(data.errors).flat() as string[]) : []
+      toast.error(fieldErrors[0] ?? data?.message ?? 'Erreur lors de la lecture du fichier')
+    },
+  })
+
+  const confirmMutation = useMutation({
+    mutationFn: () => {
+      const okRows = preview!.rows.filter(r => r.status === 'ok')
+      return api.post('/suppliers/import/confirm', { rows: okRows })
+    },
+    onSuccess: (res) => {
+      setResult(res.data)
+      setStep('done')
+      qc.invalidateQueries({ queryKey: ['suppliers'] })
+      qc.invalidateQueries({ queryKey: ['suppliers-stats'] })
+    },
+    onError: (err: unknown) => {
+      const data = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
+      const fieldErrors: string[] = data?.errors ? (Object.values(data.errors).flat() as string[]) : []
+      toast.error(fieldErrors[0] ?? data?.message ?? "Erreur lors de l'import")
+    },
+  })
+
+  const handleFile = (file: File) => {
+    if (!file) return
+    previewMutation.mutate(file)
+  }
+
+  const downloadTemplate = async () => {
+    try {
+      const res = await api.get('/suppliers/import-template', { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'modele_import_fournisseurs.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Erreur téléchargement modèle')
+    }
+  }
+
+  const COND_LABELS: Record<string, string> = {
+    immediate: 'Comptant',
+    '30_days': '30 jours',
+    '45_days': '45 jours',
+    '60_days': '60 jours',
+    '90_days': '90 jours',
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="p-6 border-b flex items-center justify-between flex-shrink-0">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <Upload size={20} className="text-green-600" />
+            Import fournisseurs
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Step: Upload */}
+          {step === 'upload' && (
+            <div className="space-y-5">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex gap-3">
+                <AlertCircle size={18} className="text-green-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-green-800">
+                  <p className="font-medium mb-1">Colonnes du fichier</p>
+                  <p>
+                    <strong>raison_sociale *</strong>, ninea, rc, contact, telephone, email, adresse,{' '}
+                    conditions_paiement (immediate/30_days/45_days/60_days/90_days),{' '}
+                    delai_livraison_jours, notes, solde_du
+                  </p>
+                  <p className="mt-1 text-green-700">
+                    Les fournisseurs existants sont identifiés par leur téléphone (ou raison sociale) et seront mis à jour.
+                  </p>
+                </div>
+              </div>
+
+              <button onClick={downloadTemplate} className="flex items-center gap-2 text-sm text-green-700 hover:underline font-medium">
+                <Download size={16} /> Télécharger le modèle Excel
+              </button>
+
+              {/* Drop zone */}
+              <div
+                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+                onClick={() => fileRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${
+                  dragging ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-400 hover:bg-gray-50'
+                }`}
+              >
+                <Upload size={32} className="mx-auto text-gray-400 mb-3" />
+                <p className="font-medium text-gray-700">Glissez votre fichier ici</p>
+                <p className="text-sm text-gray-400 mt-1">ou cliquez pour sélectionner</p>
+                <p className="text-xs text-gray-400 mt-2">CSV, XLS, XLSX — max 10 Mo</p>
+                <input ref={fileRef} type="file" accept=".csv,.xls,.xlsx" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+              </div>
+
+              {previewMutation.isPending && (
+                <div className="text-center text-sm text-gray-500 animate-pulse">Analyse du fichier en cours...</div>
+              )}
+            </div>
+          )}
+
+          {/* Step: Preview */}
+          {step === 'preview' && preview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-3">
+                {[
+                  { label: 'Total lignes',      value: preview.total,   cls: 'bg-gray-100 text-gray-700' },
+                  { label: 'Valides',            value: preview.ok,      cls: 'bg-green-100 text-green-700' },
+                  { label: 'À créer',            value: preview.creates, cls: 'bg-blue-100 text-blue-700' },
+                  { label: 'À mettre à jour',    value: preview.updates, cls: 'bg-yellow-100 text-yellow-700' },
+                ].map(s => (
+                  <div key={s.label} className={`rounded-xl p-3 text-center ${s.cls}`}>
+                    <p className="text-2xl font-bold">{s.value}</p>
+                    <p className="text-xs mt-0.5">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {preview.errors > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex gap-2">
+                  <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>{preview.errors} ligne(s) avec erreur seront ignorées.</span>
+                </div>
+              )}
+
+              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-600 uppercase text-[10px]">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Ligne</th>
+                      <th className="px-3 py-2 text-left">Action</th>
+                      <th className="px-3 py-2 text-left">Raison sociale</th>
+                      <th className="px-3 py-2 text-left">Téléphone</th>
+                      <th className="px-3 py-2 text-left">Conditions</th>
+                      <th className="px-3 py-2 text-right">Solde dû</th>
+                      <th className="px-3 py-2 text-left">Alertes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {preview.rows.map(r => (
+                      <tr key={r.row} className={r.status === 'error' ? 'bg-red-50' : 'hover:bg-gray-50'}>
+                        <td className="px-3 py-2 text-gray-400">{r.row}</td>
+                        <td className="px-3 py-2">
+                          {r.status === 'error'
+                            ? <span className="text-red-600 font-medium">Erreur</span>
+                            : r.action === 'update'
+                              ? <span className="text-yellow-600 font-medium">Màj</span>
+                              : <span className="text-green-600 font-medium">Créer</span>}
+                        </td>
+                        <td className="px-3 py-2 font-medium text-gray-800">{r.raison_sociale || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-3 py-2 text-gray-600">{r.telephone || '—'}</td>
+                        <td className="px-3 py-2 text-gray-600">{COND_LABELS[r.conditions] ?? r.conditions}</td>
+                        <td className="px-3 py-2 text-right">{r.solde_du > 0 ? formatCurrency(r.solde_du) : '—'}</td>
+                        <td className="px-3 py-2">
+                          {r.errors.map((e, i) => <p key={i} className="text-red-600">{e}</p>)}
+                          {r.warnings.map((w, i) => <p key={i} className="text-yellow-600">{w}</p>)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Step: Done */}
+          {step === 'done' && result && (
+            <div className="text-center py-8 space-y-4">
+              <CheckCircle2 size={52} className="mx-auto text-green-500" />
+              <h3 className="text-xl font-bold text-gray-800">Import terminé</h3>
+              <div className="grid grid-cols-3 gap-4 max-w-sm mx-auto">
+                <div className="bg-green-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-green-700">{result.created}</p>
+                  <p className="text-xs text-green-600">Créés</p>
+                </div>
+                <div className="bg-yellow-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-yellow-700">{result.updated}</p>
+                  <p className="text-xs text-yellow-600">Mis à jour</p>
+                </div>
+                <div className="bg-gray-100 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-gray-600">{result.skipped}</p>
+                  <p className="text-xs text-gray-500">Ignorés</p>
+                </div>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="text-left bg-red-50 rounded-xl p-3 max-h-32 overflow-y-auto">
+                  {result.errors.map((e, i) => <p key={i} className="text-xs text-red-600">{e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t flex justify-between flex-shrink-0">
+          <button onClick={onClose} className="btn-secondary">
+            {step === 'done' ? 'Fermer' : 'Annuler'}
+          </button>
+          {step === 'preview' && (
+            <div className="flex gap-3">
+              <button onClick={() => { setStep('upload'); setPreview(null) }} className="btn-secondary">
+                Changer de fichier
+              </button>
+              <button
+                onClick={() => confirmMutation.mutate()}
+                disabled={confirmMutation.isPending || preview!.ok === 0}
+                className="btn-primary disabled:opacity-50 flex items-center gap-2">
+                {confirmMutation.isPending ? 'Import en cours...' : `Importer ${preview!.ok} fournisseur(s)`}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SuppliersPage() {
@@ -829,6 +1126,7 @@ export default function SuppliersPage() {
   const [search, setSearch]         = useState('')
   const [filter, setFilter]         = useState<'all' | 'active' | 'inactive'>('all')
   const [showCreate, setShowCreate] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ['suppliers-stats'],
@@ -853,9 +1151,14 @@ export default function SuppliersPage() {
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Truck size={24} /> Fournisseurs
         </h1>
-        <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
-          <Plus size={18} /> Nouveau fournisseur
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowImport(true)} className="btn-secondary flex items-center gap-2">
+            <Upload size={18} /> Importer
+          </button>
+          <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
+            <Plus size={18} /> Nouveau fournisseur
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -981,6 +1284,7 @@ export default function SuppliersPage() {
       </div>
 
       {showCreate && <SupplierFormModal onClose={() => setShowCreate(false)} />}
+      {showImport && <ImportSuppliersModal onClose={() => setShowImport(false)} />}
     </div>
   )
 }

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Banknote, Smartphone, CreditCard, Wallet, ShoppingBag,
-  Check, TrendingDown, X, Zap,
+  Check, TrendingDown, X, Zap, ArrowDownToLine, AlertCircle,
 } from 'lucide-react'
 import { formatCurrency } from '../lib/format'
 
@@ -80,6 +80,15 @@ const ALL_METHODS: MethodConfig[] = [
     badge: 'bg-amber-100 text-amber-700',
     textColor: 'text-amber-600',
   },
+  // account_deposit = dépôt monnaie sur compte — n'apparaît pas dans la grille, seulement dans les entrées
+  {
+    key: 'account_deposit', label: 'Dépôt compte', shortLabel: 'Dépôt',
+    icon: <ArrowDownToLine size={22} />,
+    gradient: 'from-teal-500 to-cyan-600',
+    ring: 'ring-teal-400',
+    badge: 'bg-teal-100 text-teal-700',
+    textColor: 'text-teal-600',
+  },
 ]
 
 // ─── Quick amount chips ───────────────────────────────────────────────────────
@@ -120,6 +129,10 @@ export interface PaymentPanelProps {
   compact?: boolean
   /** Don't show "credit" method (some contexts don't need it) */
   hideCredit?: boolean
+  /** Called when credit is attempted without a client — parent must handle selection */
+  onCreditWithoutClient?: () => void
+  /** Called when user wants to deposit change but no client is selected */
+  onDepositWithoutClient?: () => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -132,33 +145,49 @@ export default function PaymentPanel({
   onChange,
   compact = false,
   hideCredit = false,
+  onCreditWithoutClient,
+  onDepositWithoutClient,
 }: PaymentPanelProps) {
 
-  const hasClient = clientAccountBalance !== undefined
+  // hasClient = true dès qu'un client est sélectionné (même si son account_balance est null/0)
+  const hasClient = clientAccountBalance !== undefined || (clientName !== undefined && clientName !== '')
+  const [creditWarning, setCreditWarning] = useState(false)
 
+  // Méthodes affichées dans la grille (account_deposit n'est jamais dans la grille)
   const methods = ALL_METHODS.filter(m => {
+    if (m.key === 'account_deposit') return false
     if (m.key === 'account' && !hasClient) return false
     if (m.key === 'credit' && hideCredit) return false
     return true
   })
 
-  const totalPaid = value.reduce((s, p) => s + (p.amount || 0), 0)
-  const remaining = Math.max(0, total - totalPaid)
-  const change    = Math.max(0, totalPaid - total)
-  const progress  = Math.min(100, (totalPaid / total) * 100)
-  const isValid   = totalPaid >= total || value.some(p => p.method === 'credit')
+  // Calculs — account_deposit ne compte pas comme paiement de la vente
+  const totalPaid = value
+    .filter(p => p.method !== 'account_deposit')
+    .reduce((s, p) => s + (p.amount || 0), 0)
+  const remaining  = Math.max(0, total - totalPaid)
+  const change     = Math.max(0, totalPaid - total)
+  const progress   = Math.min(100, (totalPaid / total) * 100)
+  const hasCredit  = value.some(p => p.method === 'credit')
+  const hasDeposit = value.some(p => p.method === 'account_deposit')
+  const isValid    = (totalPaid >= total || hasCredit) && !(hasCredit && !hasClient)
 
-  // Select a method (toggle)
+  // Sélection/désélection d'un mode de paiement
   const toggleMethod = (key: string) => {
+    if (key === 'credit' && !hasClient) {
+      setCreditWarning(true)
+      setTimeout(() => setCreditWarning(false), 3500)
+      onCreditWithoutClient?.()
+      return
+    }
     const exists = value.find(p => p.method === key)
     if (exists) {
-      // Remove
       onChange(value.filter(p => p.method !== key))
     } else {
-      // Add with remaining amount
-      const rem = Math.max(0, total - value.filter(p => p.method !== 'credit').reduce((s, p) => s + p.amount, 0))
+      const rem = Math.max(0, total - value
+        .filter(p => p.method !== 'credit' && p.method !== 'account_deposit')
+        .reduce((s, p) => s + p.amount, 0))
       if (key === 'credit') {
-        // credit = remaining total (no manual amount)
         onChange([...value, { method: 'credit', amount: remaining > 0 ? remaining : total }])
       } else if (key === 'account' && clientAccountBalance !== undefined) {
         const autoAmt = Math.min(Math.max(clientAccountBalance, 0), rem)
@@ -174,6 +203,16 @@ export default function PaymentPanel({
   }
 
   const isSelected = (key: string) => value.some(p => p.method === key)
+
+  // Déposer la monnaie sur le compte client
+  const handleDepositChange = () => {
+    if (!hasClient || change <= 0) return
+    // Réduire espèces pour correspondre exactement au total, ajouter dépôt
+    const updated = value
+      .map(p => p.method === 'cash' ? { ...p, amount: Math.max(0, p.amount - change) } : p)
+      .filter(p => p.method !== 'account_deposit')
+    onChange([...updated, { method: 'account_deposit', amount: change }])
+  }
 
   // Cols: 3 when < 6 methods, else 4
   const colClass = methods.length <= 6 ? 'grid-cols-3' : 'grid-cols-4'
@@ -238,6 +277,14 @@ export default function PaymentPanel({
         })}
       </div>
 
+      {/* ── Avertissement crédit sans client ── */}
+      {creditWarning && (
+        <div className="flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 animate-pulse">
+          <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-red-500" />
+          <span><strong>Client requis !</strong> Sélectionnez d'abord un client pour utiliser le crédit. Le client sera débité et son solde mis à jour.</span>
+        </div>
+      )}
+
       {/* ── Amount inputs for selected methods ── */}
       {value.length > 0 && (
         <div className="space-y-2">
@@ -246,19 +293,20 @@ export default function PaymentPanel({
             if (!m) return null
             const isCredit  = p.method === 'credit'
             const isAccount = p.method === 'account'
+            const isDeposit = p.method === 'account_deposit'
             const chips = p.method === 'cash' ? quickChips(total, p.amount) : []
 
             return (
-              <div key={p.method} className={`rounded-xl border-2 p-3 space-y-2 transition-all ${m.ring.replace('ring-', 'border-')}`}
-                style={{ borderColor: 'transparent' }}
-              >
+              <div key={p.method} className={`rounded-xl border-2 p-3 space-y-2 transition-all ${
+                isDeposit ? 'border-teal-200 bg-teal-50/40' :
+                isCredit  ? 'border-amber-200 bg-amber-50/40' :
+                'border-transparent'
+              }`}>
                 <div className="flex items-center gap-2">
-                  {/* Method badge */}
                   <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${m.badge}`}>
                     {m.icon} {m.label}
                   </span>
                   <div className="flex-1" />
-                  {/* Remove */}
                   <button
                     type="button"
                     onClick={() => onChange(value.filter(x => x.method !== p.method))}
@@ -268,12 +316,28 @@ export default function PaymentPanel({
                   </button>
                 </div>
 
-                {isCredit ? (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-lg border border-amber-200">
-                    <ShoppingBag size={14} className="text-amber-500" />
-                    <span className="text-sm text-amber-700">
-                      <strong>{formatCurrency(p.amount)}</strong> sera porté au crédit du client
+                {isDeposit ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-teal-50 rounded-lg border border-teal-200">
+                    <ArrowDownToLine size={14} className="text-teal-600" />
+                    <span className="text-sm text-teal-700">
+                      <strong>{formatCurrency(p.amount)}</strong> déposé sur le compte de{' '}
+                      <strong>{clientName ?? 'ce client'}</strong>
                     </span>
+                  </div>
+                ) : isCredit ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-lg border border-amber-200">
+                      <ShoppingBag size={14} className="text-amber-500" />
+                      <span className="text-sm text-amber-700">
+                        <strong>{formatCurrency(p.amount)}</strong> porté au crédit de{' '}
+                        <strong>{clientName ?? '?'}</strong>
+                      </span>
+                    </div>
+                    {!hasClient && (
+                      <div className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 px-2 py-1.5 rounded-lg border border-red-200">
+                        <AlertCircle size={11} /> Client obligatoire pour le crédit
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -282,14 +346,15 @@ export default function PaymentPanel({
                         type="number"
                         value={p.amount || ''}
                         onChange={e => updateAmount(p.method, parseFloat(e.target.value) || 0)}
-                        placeholder="Montant"
+                        placeholder="Montant reçu"
                         min={0}
                         step={100}
+                        autoFocus={p.method === 'cash' && value.length === 1}
                         className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/30 bg-gray-50"
                       />
                       <span className="text-xs text-gray-400 font-medium">FCFA</span>
                     </div>
-                    {/* Quick chips for cash */}
+                    {/* Quick chips pour espèces */}
                     {chips.length > 0 && (
                       <div className="flex gap-1.5 flex-wrap">
                         {chips.map(c => (
@@ -309,7 +374,7 @@ export default function PaymentPanel({
                         ))}
                       </div>
                     )}
-                    {/* Account info */}
+                    {/* Info solde compte */}
                     {isAccount && clientAccountBalance !== undefined && (
                       <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg ${
                         clientAccountBalance >= p.amount
@@ -317,8 +382,8 @@ export default function PaymentPanel({
                           : 'text-red-600 bg-red-50'
                       }`}>
                         <Wallet size={11} />
-                        Solde compte : {formatCurrency(clientAccountBalance)}
-                        {clientAccountBalance < p.amount && ' — solde insuffisant, le reste sera en dette'}
+                        Solde disponible : {formatCurrency(clientAccountBalance)}
+                        {clientAccountBalance < p.amount && ' — insuffisant, le reste en dette'}
                       </div>
                     )}
                   </>
@@ -347,31 +412,95 @@ export default function PaymentPanel({
             <span className="font-bold text-gray-800 font-mono">{formatCurrency(total)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Total encaissé</span>
+            <span className="text-gray-500">Montant reçu</span>
             <span className={`font-bold font-mono ${totalPaid >= total ? 'text-emerald-600' : 'text-red-500'}`}>
               {formatCurrency(totalPaid)}
             </span>
           </div>
 
-          {/* Remaining or change */}
-          {change > 0 ? (
-            <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-100">
-              <span className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5">
-                <Check size={14} /> Monnaie à rendre
-              </span>
-              <span className="text-xl font-bold text-emerald-600 font-mono">{formatCurrency(change)}</span>
+          {/* Cas 1: Client paie plus → monnaie à rendre */}
+          {change > 0 && !hasDeposit && (
+            <div className="pt-2 mt-1 border-t border-gray-100 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5">
+                  <Check size={14} /> Monnaie à rendre
+                </span>
+                <span className="text-xl font-bold text-emerald-600 font-mono">{formatCurrency(change)}</span>
+              </div>
+              {/* Déposer si client déjà sélectionné */}
+              {hasClient && (
+                <button
+                  type="button"
+                  onClick={handleDepositChange}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl text-xs font-semibold text-teal-700 transition-colors"
+                >
+                  <ArrowDownToLine size={13} />
+                  Déposer {formatCurrency(change)} sur le compte de {clientName ?? 'ce client'}
+                </button>
+              )}
+              {/* Déposer si aucun client — proposer d'en choisir/créer un */}
+              {!hasClient && onDepositWithoutClient && (
+                <button
+                  type="button"
+                  onClick={onDepositWithoutClient}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-700 transition-colors"
+                >
+                  <ArrowDownToLine size={13} />
+                  Garder {formatCurrency(change)} sur un compte client
+                </button>
+              )}
             </div>
-          ) : remaining > 0 && !value.some(p => p.method === 'credit') ? (
-            <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-100">
-              <span className="text-sm font-semibold text-red-600 flex items-center gap-1.5">
-                <TrendingDown size={14} /> Reste à payer
+          )}
+
+          {/* Cas 2: Dépôt monnaie effectué */}
+          {hasDeposit && (
+            <div className="flex items-center justify-center gap-2 pt-2 mt-1 border-t border-gray-100">
+              <ArrowDownToLine size={16} className="text-teal-600" />
+              <span className="text-sm font-semibold text-teal-700">
+                {formatCurrency(value.find(p => p.method === 'account_deposit')?.amount ?? 0)} déposé · Rendu : 0
               </span>
-              <span className="text-xl font-bold text-red-600 font-mono">{formatCurrency(remaining)}</span>
             </div>
-          ) : isValid && (
+          )}
+
+          {/* Cas 3: Reste à payer → proposer crédit */}
+          {remaining > 0 && !hasCredit && !hasDeposit && (
+            <div className="pt-2 mt-1 border-t border-gray-100 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-semibold text-red-600 flex items-center gap-1.5">
+                  <TrendingDown size={14} /> Reste à régler
+                </span>
+                <span className="text-xl font-bold text-red-600 font-mono">{formatCurrency(remaining)}</span>
+              </div>
+              {/* Bouton crédit automatique */}
+              {!hideCredit && (
+                <button
+                  type="button"
+                  onClick={() => toggleMethod('credit')}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-xs font-semibold text-amber-700 transition-colors"
+                >
+                  <ShoppingBag size={13} />
+                  Mettre {formatCurrency(remaining)} en crédit
+                  {!hasClient && <span className="text-red-500 ml-1">(client requis)</span>}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Crédit sans client — erreur */}
+          {hasCredit && !hasClient && (
+            <div className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-200 mt-1">
+              <AlertCircle size={12} />
+              <span>Sélectionnez un client avant de valider le crédit</span>
+            </div>
+          )}
+
+          {/* Paiement complet */}
+          {isValid && change <= 0 && !hasDeposit && (
             <div className="flex items-center justify-center gap-2 pt-2 mt-1 border-t border-gray-100">
               <Check size={16} className="text-emerald-500" />
-              <span className="text-sm font-semibold text-emerald-600">Paiement complet</span>
+              <span className="text-sm font-semibold text-emerald-600">
+                {hasCredit ? `Paiement + crédit de ${formatCurrency(value.find(p => p.method === 'credit')?.amount ?? 0)}` : 'Paiement complet'}
+              </span>
             </div>
           )}
         </div>

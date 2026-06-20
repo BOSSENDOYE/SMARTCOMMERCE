@@ -16,17 +16,37 @@ class SaleController extends Controller
     {
         $storeId = $request->user()->store_id;
 
-        $sales = Sale::forStore($storeId)
-            ->with(['user', 'client', 'ticket', 'payments'])
-            ->when($request->date_from,   fn($q) => $q->whereDate('created_at', '>=', $request->date_from))
-            ->when($request->date_to,     fn($q) => $q->whereDate('created_at', '<=', $request->date_to))
-            ->when($request->status,      fn($q) => $q->where('status', $request->status))
-            ->when($request->channel,     fn($q) => $q->where('channel', $request->channel))
-            ->when($request->cashier_id,  fn($q) => $q->where('user_id', $request->cashier_id))
+        $baseQuery = fn($q) => $q
+            ->forStore($storeId)
+            ->when($request->date_from,  fn($q) => $q->whereDate('created_at', '>=', $request->date_from))
+            ->when($request->date_to,    fn($q) => $q->whereDate('created_at', '<=', $request->date_to))
+            ->when($request->status,     fn($q) => $q->where('status', $request->status))
+            ->when($request->channel,    fn($q) => $q->where('channel', $request->channel))
+            ->when($request->cashier_id, fn($q) => $q->where('user_id', $request->cashier_id));
+
+        $sales = $baseQuery(Sale::with(['user', 'client', 'ticket', 'payments']))
             ->orderByDesc('created_at')
             ->paginate($request->per_page ?? 30);
 
-        return response()->json($sales);
+        $totals = $baseQuery(Sale::query())
+            ->selectRaw("
+                COUNT(*) as total_count,
+                SUM(CASE WHEN status = 'completed' THEN total_ttc ELSE 0 END) as total_ttc,
+                SUM(CASE WHEN status = 'completed' THEN paid_amount ELSE 0 END) as paid_amount,
+                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
+                COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_count
+            ")
+            ->first();
+
+        return response()->json(array_merge($sales->toArray(), [
+            'totals' => [
+                'count'           => (int)   ($totals->total_count     ?? 0),
+                'total_ttc'       => (float) ($totals->total_ttc       ?? 0),
+                'paid_amount'     => (float) ($totals->paid_amount     ?? 0),
+                'completed_count' => (int)   ($totals->completed_count ?? 0),
+                'cancelled_count' => (int)   ($totals->cancelled_count ?? 0),
+            ],
+        ]));
     }
 
     public function store(Request $request)
@@ -42,7 +62,11 @@ class SaleController extends Controller
             'payments.*.payment_method' => 'required|string',
             'payments.*.amount' => 'required|numeric|min:0',
             'client_id' => 'nullable|exists:clients,id',
-            'cash_session_id' => 'nullable|exists:cash_sessions,id',
+            'cash_session_id' => ['nullable', 'exists:cash_sessions,id', function ($attribute, $value, $fail) {
+                if ($value && \App\Models\CashSession::where('id', $value)->value('status') !== 'open') {
+                    $fail('La session de caisse est fermée. Ouvrez une nouvelle session.');
+                }
+            }],
             'offline_id' => 'nullable|string|max:100',
             'channel' => 'nullable|in:pos,takeaway,delivery,online',
         ]);

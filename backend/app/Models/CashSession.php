@@ -22,6 +22,7 @@ class CashSession extends Model
     public function store() { return $this->belongsTo(Store::class); }
     public function workstation() { return $this->belongsTo(Workstation::class); }
     public function user() { return $this->belongsTo(User::class); }
+    public function closedByUser() { return $this->belongsTo(User::class, 'closed_by'); }
     public function sales() { return $this->hasMany(Sale::class); }
     public function movements() { return $this->hasMany(CashSessionMovement::class); }
 }

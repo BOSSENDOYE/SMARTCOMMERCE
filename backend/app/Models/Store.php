@@ -11,7 +11,7 @@ class Store extends Model
 
     protected $fillable = [
         'organization_id',
-        'name', 'code', 'business_type', 'address', 'phone', 'email',
+        'name', 'code', 'business_type', 'address', 'phone', 'whatsapp_number', 'email',
         'ninea', 'rc', 'logo', 'currency', 'timezone',
         'license_grande_surface', 'license_restaurant',
         'receipt_footer', 'is_active', 'is_central', 'menu_config',

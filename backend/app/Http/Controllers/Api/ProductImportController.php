@@ -11,6 +11,7 @@ use App\Models\StockLevel;
 use App\Services\AuditService;
 use App\Services\StockService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -111,8 +112,9 @@ class ProductImportController extends Controller
             return response()->json(['message' => 'Le fichier est vide ou ne contient pas de données.'], 422);
         }
 
-        // Normalize header row
-        $rawHeaders = array_map(fn($h) => strtolower(trim(preg_replace('/[^a-z0-9_]/i', '', str_replace([' ', '*', '(', ')'], ['_', '', '', ''], strtolower($h ?? ''))))), $rows[0]);
+        // Normalize header row. The generated template contains labels like "nom *";
+        // these must resolve to "nom", not "nom_".
+        $rawHeaders = array_map(fn($h) => $this->normalizeHeader($h), $rows[0]);
         $headerMap  = array_flip($rawHeaders);
 
         $col = fn(string $key): ?int => $headerMap[$key] ?? null;
@@ -134,12 +136,12 @@ class ProductImportController extends Controller
             $categorie   = $this->cell($row, $col('categorie'), '');
             $marque      = $this->cell($row, $col('marque'), '');
             $unite       = $this->cell($row, $col('unite'), '');
-            $prixVente   = floatval($this->cell($row, $col('prix_vente_ttc'), 0));
+            $prixVente   = $this->number($this->cell($row, $col('prix_vente_ttc'), 0));
             $tvaCols     = $col('tva_0_ou_18') ?? $col('tva') ?? $col('tva0_ou_18');
-            $tva         = intval($this->cell($row, $tvaCols, 18));
-            $prixAchat   = floatval($this->cell($row, $col('prix_achat_ht'), 0));
-            $stockInit   = floatval($this->cell($row, $col('stock_initial'), 0));
-            $stockMin    = floatval($this->cell($row, $col('stock_min'), 0));
+            $tva         = (int) $this->number($this->cell($row, $tvaCols, 0));
+            $prixAchat   = $this->number($this->cell($row, $col('prix_achat_ht'), 0));
+            $stockInit   = $this->number($this->cell($row, $col('stock_initial'), 0));
+            $stockMin    = $this->number($this->cell($row, $col('stock_min'), 0));
             $description = $this->cell($row, $col('description'), '');
 
             // Skip totally empty rows
@@ -154,8 +156,8 @@ class ProductImportController extends Controller
             if ($prixVente <= 0) $errors[] = 'Prix vente TTC invalide ou manquant';
             if ($prixAchat < 0) $errors[] = 'Prix achat HT invalide';
             if (!in_array($tva, [0, 18])) {
-                $warnings[] = 'TVA invalide, 18% sera appliqué';
-                $tva = 18;
+                $warnings[] = 'TVA invalide, 0% sera appliqué';
+                $tva = 0;
             }
 
             if ($codeInterne !== '' && isset($existingCodes[$codeInterne])) {
@@ -219,6 +221,18 @@ class ProductImportController extends Controller
 
     public function confirm(Request $request)
     {
+        $rows = collect($request->input('rows', []))
+            ->map(function (array $row) {
+                foreach (['prix_vente_ttc', 'prix_achat_ht', 'stock_initial', 'stock_min', 'tva'] as $field) {
+                    $row[$field] = $this->number((string) ($row[$field] ?? 0));
+                }
+
+                return $row;
+            })
+            ->all();
+
+        $request->merge(['rows' => $rows]);
+
         $request->validate([
             'rows'                  => 'required|array|min:1',
             'rows.*.nom'            => 'required|string',
@@ -253,7 +267,10 @@ class ProductImportController extends Controller
                 // Auto-create category
                 $categoryId = $row['categorie_id'] ?? null;
                 if (!$categoryId && !empty($row['categorie'])) {
-                    $cat        = Category::firstOrCreate(['name' => $row['categorie']], ['type' => 'common']);
+                    $cat        = Category::firstOrCreate(
+                        ['name' => $row['categorie']],
+                        ['slug' => $this->uniqueCategorySlug($row['categorie']), 'type' => 'common']
+                    );
                     $categoryId = $cat->id;
                     $categories[$row['categorie']] = $categoryId;
                 }
@@ -281,7 +298,7 @@ class ProductImportController extends Controller
                     'unit_id'           => $row['unite_id'] ?? null,
                     'sale_price_ttc'    => $row['prix_vente_ttc'],
                     'purchase_price_ht' => $row['prix_achat_ht'],
-                    'vat_rate'          => $row['tva'] ?? 18,
+                    'vat_rate'          => $row['tva'] ?? 0,
                     'alert_stock'       => $row['stock_min'] ?? 0,
                     'min_stock'         => $row['stock_min'] ?? 0,
                     'is_active'         => true,
@@ -352,5 +369,44 @@ class ProductImportController extends Controller
         if ($idx === null) return (string) $default;
         $val = $row[$idx] ?? $default;
         return trim((string) ($val ?? $default));
+    }
+
+    private function normalizeHeader(mixed $header): string
+    {
+        $header = Str::ascii(strtolower((string) ($header ?? '')));
+        $header = preg_replace('/[^a-z0-9]+/', '_', $header) ?? '';
+        $header = preg_replace('/_+/', '_', $header) ?? '';
+
+        return trim($header, '_');
+    }
+
+    private function number(string $value): float
+    {
+        $value = trim(str_replace(["\xc2\xa0", ' '], '', $value));
+        if ($value === '') {
+            return 0.0;
+        }
+
+        if (str_contains($value, ',') && str_contains($value, '.')) {
+            $value = str_replace(',', '', $value);
+        } elseif (str_contains($value, ',')) {
+            $value = str_replace(',', '.', $value);
+        }
+
+        return (float) $value;
+    }
+
+    private function uniqueCategorySlug(string $name): string
+    {
+        $base = Str::slug($name) ?: 'categorie';
+        $slug = $base;
+        $i = 2;
+
+        while (Category::where('slug', $slug)->exists()) {
+            $slug = "{$base}-{$i}";
+            $i++;
+        }
+
+        return $slug;
     }
 }

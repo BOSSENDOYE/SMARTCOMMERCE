@@ -13,6 +13,7 @@ import {
   Smartphone, ShoppingBag, PauseCircle, PlayCircle, UserPlus, X, Check,
   Wifi, WifiOff, Receipt, ChevronRight, Lock, Unlock, ArrowLeft,
   DollarSign, Tag, Users, Printer, Clock, Ban, RotateCcw, Edit2, Eye,
+  History, TrendingUp, Calendar, User, AlertTriangle, CheckCircle2, Loader2,
 } from 'lucide-react'
 import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
 import { useThermalPrinter } from '../../hooks/useThermalPrinter'
@@ -140,6 +141,337 @@ function OpenSessionModal({ onOpened }: { onOpened: (session: CashSession) => vo
   )
 }
 
+// ─── Sessions History Modal ───────────────────────────────────────────────────
+
+interface CashSessionRow {
+  id: number
+  status: 'open' | 'closed'
+  opening_balance: number
+  closing_balance_expected?: number
+  closing_balance_actual?: number
+  closing_balance_variance?: number
+  opened_at: string
+  closed_at?: string
+  user?: { id: number; name: string }
+  closedByUser?: { id: number; name: string }
+  sales_count: number
+  total_sales: number
+}
+
+interface CashSessionDetail {
+  session: CashSessionRow
+  sales: Array<{ id: number; reference: string; total_ttc: number; paid_amount: number; created_at: string; channel: string }>
+  payment_breakdown: Record<string, number>
+  movements: Array<{ id: number; type: string; amount: number; motive: string; created_at: string }>
+  stats: { total_sales: number; total_ttc: number; cash_expected: number; cash_actual: number; cash_variance: number }
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: 'Espèces', card: 'Carte', wave: 'Wave', orange_money: 'Orange Money',
+  free_money: 'Free Money', credit: 'Crédit client', account: 'Compte client',
+  account_deposit: 'Dépôt compte', check: 'Chèque', voucher: 'Bon d\'achat',
+  loyalty_points: 'Points fidélité',
+}
+
+const CHANNEL_LABELS: Record<string, string> = {
+  pos: 'Caisse', takeaway: 'Emporter', delivery: 'Livraison', online: 'En ligne',
+}
+
+function SessionsHistoryModal({ onClose }: { onClose: () => void }) {
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [detailTab, setDetailTab] = useState<'sales' | 'payments' | 'movements'>('sales')
+
+  const { data: sessionsData, isLoading } = useQuery({
+    queryKey: ['cash-sessions-history'],
+    queryFn: () => api.get('/cash-sessions').then(r => r.data),
+    staleTime: 30_000,
+  })
+
+  const { data: detail, isLoading: loadingDetail } = useQuery<CashSessionDetail>({
+    queryKey: ['cash-session-detail', selectedId],
+    queryFn: () => api.get(`/cash-sessions/${selectedId}`).then(r => r.data),
+    enabled: !!selectedId,
+    staleTime: 30_000,
+  })
+
+  const sessions: CashSessionRow[] = sessionsData?.data ?? []
+
+  const formatDuration = (opened: string, closed?: string) => {
+    const start = new Date(opened)
+    const end = closed ? new Date(closed) : new Date()
+    const diff = Math.floor((end.getTime() - start.getTime()) / 60000)
+    if (diff < 60) return `${diff} min`
+    return `${Math.floor(diff / 60)}h${String(diff % 60).padStart(2, '0')}`
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col" style={{ maxHeight: '92vh' }}>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b bg-gray-50 flex-shrink-0">
+          {selectedId && (
+            <button onClick={() => { setSelectedId(null); setDetailTab('sales') }}
+              className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500">
+              <ArrowLeft size={15} />
+            </button>
+          )}
+          <History size={18} className="text-primary" />
+          <h2 className="font-bold text-gray-900 flex-1">
+            {selectedId && detail ? `Session du ${new Date(detail.session.opened_at).toLocaleDateString('fr-FR')}` : 'Historique des sessions'}
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+
+          {/* ── Session list ── */}
+          {!selectedId && (
+            isLoading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 size={24} className="animate-spin text-primary" />
+              </div>
+            ) : sessions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+                <History size={40} className="mb-3" />
+                <p>Aucune session enregistrée</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <th className="text-left px-4 py-3">Caissier</th>
+                      <th className="text-left px-4 py-3">Ouverture</th>
+                      <th className="text-left px-4 py-3">Durée</th>
+                      <th className="text-right px-4 py-3">Fond caisse</th>
+                      <th className="text-right px-4 py-3">Ventes</th>
+                      <th className="text-right px-4 py-3">CA total</th>
+                      <th className="text-right px-4 py-3">Écart caisse</th>
+                      <th className="text-center px-4 py-3">Statut</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {sessions.map((s: CashSessionRow) => (
+                      <tr key={s.id} className="hover:bg-primary-50/30 transition-colors group">
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-gray-900">{s.user?.name ?? '—'}</p>
+                          {s.status === 'closed' && s.closedByUser && s.closedByUser.id !== s.user?.id && (
+                            <p className="text-xs text-gray-400">Clôturé par {s.closedByUser.name}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">
+                          {new Date(s.opened_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {formatDuration(s.opened_at, s.closed_at)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-700 font-mono text-xs">
+                          {formatCurrency(s.opening_balance)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="font-semibold text-gray-900">{s.sales_count}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-600">
+                          {formatCurrency(s.total_sales)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-xs font-semibold">
+                          {s.closing_balance_variance != null ? (
+                            <span className={Math.abs(s.closing_balance_variance) > 0 ? 'text-red-600' : 'text-emerald-600'}>
+                              {s.closing_balance_variance >= 0 ? '+' : ''}{formatCurrency(s.closing_balance_variance)}
+                            </span>
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {s.status === 'open' ? (
+                            <span className="badge-success text-xs">En cours</span>
+                          ) : (
+                            <span className="badge-gray text-xs">Clôturée</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={() => setSelectedId(s.id)}
+                            className="text-xs text-primary font-semibold hover:underline opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 ml-auto">
+                            Détails <ChevronRight size={12} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+
+          {/* ── Session detail ── */}
+          {selectedId && (
+            loadingDetail ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 size={24} className="animate-spin text-primary" />
+              </div>
+            ) : detail ? (
+              <div className="p-5 space-y-5">
+
+                {/* Stats cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-gray-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide">Fond initial</p>
+                    <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(detail.session.opening_balance)}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-emerald-600 uppercase tracking-wide">CA total</p>
+                    <p className="text-lg font-bold text-emerald-700 mt-0.5">{formatCurrency(detail.stats.total_ttc)}</p>
+                    <p className="text-xs text-emerald-500">{detail.stats.total_sales} vente(s)</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide">Espèces attendues</p>
+                    <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(detail.stats.cash_expected)}</p>
+                  </div>
+                  <div className={`rounded-xl p-3 text-center ${Math.abs(detail.stats.cash_variance) > 0 ? 'bg-red-50' : 'bg-emerald-50'}`}>
+                    <p className={`text-xs uppercase tracking-wide ${Math.abs(detail.stats.cash_variance) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>Écart caisse</p>
+                    <p className={`text-lg font-bold mt-0.5 ${Math.abs(detail.stats.cash_variance) > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                      {detail.stats.cash_variance >= 0 ? '+' : ''}{formatCurrency(detail.stats.cash_variance)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+                  {(['sales', 'payments', 'movements'] as const).map(tab => (
+                    <button key={tab} onClick={() => setDetailTab(tab)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${detailTab === tab ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                      {tab === 'sales' ? `Ventes (${detail.sales.length})` : tab === 'payments' ? 'Paiements' : `Mouvements (${detail.movements.length})`}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Sales tab */}
+                {detailTab === 'sales' && (
+                  detail.sales.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-gray-400">Aucune vente dans cette session</div>
+                  ) : (
+                    <div className="border rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase">
+                            <th className="text-left px-4 py-2.5">Référence</th>
+                            <th className="text-left px-4 py-2.5">Canal</th>
+                            <th className="text-left px-4 py-2.5">Heure</th>
+                            <th className="text-right px-4 py-2.5">Montant TTC</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {detail.sales.map(sale => (
+                            <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-2.5 font-mono text-xs font-semibold text-primary-600">{sale.reference}</td>
+                              <td className="px-4 py-2.5 text-xs text-gray-500">{CHANNEL_LABELS[sale.channel] ?? sale.channel}</td>
+                              <td className="px-4 py-2.5 text-xs text-gray-400">
+                                {new Date(sale.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{formatCurrency(sale.total_ttc)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-50 border-t text-xs font-bold">
+                            <td colSpan={3} className="px-4 py-2.5 text-gray-600">Total</td>
+                            <td className="px-4 py-2.5 text-right text-emerald-700">{formatCurrency(detail.stats.total_ttc)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )
+                )}
+
+                {/* Payments tab */}
+                {detailTab === 'payments' && (
+                  Object.keys(detail.payment_breakdown).length === 0 ? (
+                    <div className="py-10 text-center text-sm text-gray-400">Aucun paiement enregistré</div>
+                  ) : (
+                    <div className="border rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase">
+                            <th className="text-left px-4 py-2.5">Mode de paiement</th>
+                            <th className="text-right px-4 py-2.5">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {Object.entries(detail.payment_breakdown).map(([method, total]) => (
+                            <tr key={method} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 font-medium text-gray-800">
+                                {PAYMENT_LABELS[method] ?? method}
+                              </td>
+                              <td className="px-4 py-3 text-right font-bold text-gray-900">{formatCurrency(total as number)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-50 border-t text-xs font-bold">
+                            <td className="px-4 py-2.5 text-gray-600">Total encaissé</td>
+                            <td className="px-4 py-2.5 text-right text-emerald-700">
+                              {formatCurrency(Object.values(detail.payment_breakdown).reduce((s, v) => s + (v as number), 0))}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )
+                )}
+
+                {/* Movements tab */}
+                {detailTab === 'movements' && (
+                  detail.movements.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-gray-400">Aucun mouvement de caisse</div>
+                  ) : (
+                    <div className="border rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase">
+                            <th className="text-left px-4 py-2.5">Type</th>
+                            <th className="text-left px-4 py-2.5">Motif</th>
+                            <th className="text-left px-4 py-2.5">Heure</th>
+                            <th className="text-right px-4 py-2.5">Montant</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {detail.movements.map(m => (
+                            <tr key={m.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-2.5">
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                  m.type === 'deposit' ? 'bg-emerald-100 text-emerald-700' :
+                                  m.type === 'withdrawal' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {m.type === 'deposit' ? 'Dépôt' : m.type === 'withdrawal' ? 'Retrait' : 'Dépense'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-gray-700 text-sm">{m.motive}</td>
+                              <td className="px-4 py-2.5 text-xs text-gray-400">
+                                {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td className={`px-4 py-2.5 text-right font-semibold ${m.type === 'deposit' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {m.type === 'deposit' ? '+' : '−'}{formatCurrency(m.amount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                )}
+              </div>
+            ) : null
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Close Session Modal ──────────────────────────────────────────────────────
 
 function CloseSessionModal({ session, onClose }: { session: CashSession; onClose: () => void }) {
@@ -156,7 +488,7 @@ function CloseSessionModal({ session, onClose }: { session: CashSession; onClose
       setCashSession(null)
       toast.success('Session clôturée avec succès')
     },
-    onError: () => toast.error('Erreur lors de la clôture'),
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Erreur lors de la clôture'),
   })
 
   const zr = report ? (report.z_report as {
@@ -183,7 +515,7 @@ function CloseSessionModal({ session, onClose }: { session: CashSession; onClose
             <hr />
             <p className="font-semibold text-gray-700">Ventilation paiements</p>
             {Object.entries(zr.payment_breakdown ?? {}).map(([m, t]) => {
-              const label = PAYMENT_METHODS.find(p => p.key === m)?.label ?? m
+              const label = ({ cash: 'Espèces', wave: 'Wave', orange_money: 'Orange Money', free_money: 'Free Money', card: 'Carte', credit: 'Crédit client', account: 'Compte client', account_deposit: 'Dépôt compte' } as Record<string, string>)[m] ?? m
               return <div key={m} className="flex justify-between"><span className="text-gray-500">{label}</span><span>{formatCurrency(t as number)}</span></div>
             })}
             <hr />
@@ -245,60 +577,170 @@ function ClientSearchModal({ onSelect, onClose }: {
   onSelect: (client: Client) => void
   onClose: () => void
 }) {
-  const [q, setQ] = useState('')
-  const { data: results = [], isFetching } = useQuery<Client[]>({
-    queryKey: ['clients-search', q],
-    queryFn: () => q.length >= 2 ? api.get('/clients/search', { params: { q } }).then(r => r.data) : Promise.resolve([]),
-    enabled: q.length >= 2,
-  })
+  const [q, setQ]             = useState('')
+  const [results, setResults]   = useState<Client[]>([])
+  const [loading, setLoading]   = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newName, setNewName]   = useState('')
+  const [newPhone, setNewPhone] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    if (q.length < 2) { setResults([]); setLoading(false); return }
+    setLoading(true)
+    const t = setTimeout(() => {
+      api.get('/clients/search', { params: { q } })
+        .then(r => {
+          const data = Array.isArray(r.data) ? r.data : (r.data?.data ?? [])
+          setResults(data)
+        })
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [q])
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return
+    setCreating(true)
+    try {
+      const res = await api.post('/clients', { name: newName.trim(), phone: newPhone.trim() || undefined })
+      const created: Client = res.data
+      onSelect(created)
+    } catch {
+      toast.error('Impossible de créer le client')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  if (showCreate) {
+    return (
+      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="p-5 border-b flex items-center justify-between">
+            <h2 className="text-base font-bold flex items-center gap-2 text-gray-800">
+              <UserPlus size={17} className="text-primary" /> Nouveau client
+            </h2>
+            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+          </div>
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Nom <span className="text-red-500">*</span>
+              </label>
+              <input
+                autoFocus
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                placeholder="Nom du client"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Téléphone</label>
+              <input
+                value={newPhone}
+                onChange={e => setNewPhone(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                placeholder="Numéro de téléphone (optionnel)"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          </div>
+          <div className="p-4 border-t flex gap-2">
+            <button onClick={() => setShowCreate(false)}
+              className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              Retour
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={!newName.trim() || creating}
+              className="flex-1 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-600 disabled:opacity-40 transition-colors">
+              {creating ? 'Création...' : 'Créer et sélectionner'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="p-6 border-b flex items-center justify-between">
-          <h2 className="text-lg font-bold flex items-center gap-2"><Users size={18} /> Rechercher un client</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        <div className="p-5 border-b flex items-center justify-between">
+          <h2 className="text-base font-bold flex items-center gap-2 text-gray-800">
+            <Users size={17} className="text-primary" /> Rechercher un client
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
         <div className="p-4">
           <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={15} />
             <input
               autoFocus
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder="Nom ou numéro de téléphone..."
-              className="input pl-10"
+              placeholder="Nom ou numéro de téléphone…"
+              className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            {loading && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            )}
           </div>
         </div>
         <div className="max-h-64 overflow-y-auto divide-y">
-          {q.length >= 2 && !isFetching && results.length === 0 && (
-            <p className="px-4 py-6 text-center text-gray-400 text-sm">Aucun client trouvé</p>
+          {q.length >= 2 && !loading && results.length === 0 && (
+            <div className="px-4 py-6 text-center">
+              <p className="text-gray-400 text-sm mb-3">Aucun client trouvé pour «{q}»</p>
+              <button
+                onClick={() => { setNewName(q); setShowCreate(true) }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-primary-600 transition-colors"
+              >
+                <UserPlus size={13} /> Créer «{q}» comme nouveau client
+              </button>
+            </div>
+          )}
+          {q.length < 2 && (
+            <p className="px-4 py-4 text-center text-gray-400 text-xs">Saisissez au moins 2 caractères</p>
           )}
           {results.map(c => (
             <button key={c.id} onClick={() => onSelect(c)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-primary-50 text-left">
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-primary-50 text-left transition-colors">
               <div>
-                <p className="text-sm font-medium text-gray-900">{c.name}</p>
+                <p className="text-sm font-semibold text-gray-900">{c.name}</p>
                 {c.phone && <p className="text-xs text-gray-400">{c.phone}</p>}
               </div>
-              <div className="flex flex-col items-end gap-0.5">
+              <div className="flex flex-col items-end gap-1">
                 {c.credit_balance != null && c.credit_balance > 0 && (
-                  <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                    Dette {formatCurrency(c.credit_balance)}
+                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    Doit : {formatCurrency(c.credit_balance)}
                   </span>
                 )}
                 {c.account_balance != null && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${(c.account_balance ?? 0) >= 0 ? 'text-indigo-600 bg-indigo-50' : 'text-red-600 bg-red-50'}`}>
-                    Compte {(c.account_balance ?? 0) >= 0 ? '+' : ''}{formatCurrency(c.account_balance ?? 0)}
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                    (c.account_balance ?? 0) >= 0
+                      ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                      : 'text-red-600 bg-red-50 border-red-200'
+                  }`}>
+                    Compte : {(c.account_balance ?? 0) >= 0 ? '+' : ''}{formatCurrency(c.account_balance ?? 0)}
                   </span>
                 )}
               </div>
             </button>
           ))}
         </div>
-        <div className="p-4 border-t">
-          <button onClick={onClose} className="w-full btn-secondary text-sm">Continuer sans client</button>
+        <div className="p-4 border-t flex gap-2">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 px-4 py-2 border border-primary text-primary rounded-xl text-xs font-semibold hover:bg-primary-50 transition-colors">
+            <UserPlus size={13} /> Nouveau client
+          </button>
+          <button onClick={onClose}
+            className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            Continuer sans client
+          </button>
         </div>
       </div>
     </div>
@@ -348,21 +790,28 @@ function HoldCartsModal({ carts, onRecall, onClose }: {
 
 // ─── Payment Modal ────────────────────────────────────────────────────────────
 
-function PaymentModal({ total, clientAccountBalance, clientName, onClose, onConfirm, processing }: {
+function PaymentModal({ total, clientAccountBalance, clientName, clientId, onClose, onConfirm, processing, onNeedClient, initialPayments, onNeedClientForDeposit }: {
   total: number
   clientAccountBalance?: number
   clientName?: string
+  clientId?: number | null
   onClose: () => void
   onConfirm: (payments: { payment_method: string; amount: number }[]) => void
   processing: boolean
+  onNeedClient?: () => void
+  initialPayments?: PaymentEntry[]
+  onNeedClientForDeposit?: (payments: PaymentEntry[]) => void
 }) {
-  const [payments, setPayments] = useState<PaymentEntry[]>([
-    { method: 'cash', amount: total }
-  ])
+  const [payments, setPayments] = useState<PaymentEntry[]>(
+    initialPayments ?? [{ method: 'cash', amount: 0 }]
+  )
 
-  const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
-  const hasCredit = payments.some(p => p.method === 'credit')
-  const ready = totalPaid >= total || hasCredit
+  const hasClient  = clientAccountBalance !== undefined
+  const hasCredit  = payments.some(p => p.method === 'credit')
+  const totalPaid  = payments
+    .filter(p => p.method !== 'account_deposit')
+    .reduce((s, p) => s + (p.amount || 0), 0)
+  const ready = (totalPaid >= total || hasCredit) && !(hasCredit && !hasClient)
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -373,8 +822,23 @@ function PaymentModal({ total, clientAccountBalance, clientName, onClose, onConf
           <div>
             <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-1">Encaissement</p>
             <p className="text-white text-3xl font-bold font-mono">{formatCurrency(total)}</p>
-            {clientName && (
-              <p className="text-gray-400 text-xs mt-1">Client : {clientName}</p>
+            {clientName ? (
+              <p className="text-indigo-300 text-xs mt-1 flex items-center gap-1">
+                <UserPlus size={10} /> {clientName}
+                {clientAccountBalance !== undefined && clientAccountBalance !== 0 && (
+                  <span className={`ml-1 ${clientAccountBalance > 0 ? 'text-teal-300' : 'text-amber-300'}`}>
+                    (compte : {clientAccountBalance > 0 ? '+' : ''}{formatCurrency(clientAccountBalance)})
+                  </span>
+                )}
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={onNeedClient}
+                className="text-gray-400 hover:text-white text-xs mt-1 flex items-center gap-1 transition-colors underline underline-offset-2"
+              >
+                <UserPlus size={10} /> Associer un client
+              </button>
             )}
           </div>
           <button onClick={onClose}
@@ -391,6 +855,8 @@ function PaymentModal({ total, clientAccountBalance, clientName, onClose, onConf
             value={payments}
             onChange={setPayments}
             compact={false}
+            onCreditWithoutClient={onNeedClient}
+            onDepositWithoutClient={onNeedClientForDeposit ? () => onNeedClientForDeposit(payments) : undefined}
           />
         </div>
 
@@ -403,7 +869,7 @@ function PaymentModal({ total, clientAccountBalance, clientName, onClose, onConf
             onClick={() => onConfirm(payments.map(p => ({
               payment_method: p.method,
               amount: p.method === 'credit'
-                ? total - payments.filter(x => x.method !== 'credit').reduce((s, x) => s + x.amount, 0)
+                ? total - payments.filter(x => x.method !== 'credit' && x.method !== 'account_deposit').reduce((s, x) => s + x.amount, 0)
                 : p.amount,
             })))}
             disabled={!ready || processing}
@@ -487,7 +953,7 @@ function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =>
           ['Date',       `${dateStr}  ${timeStr}`],
           sale.user?.name   ? ['Caissier', sale.user.name]   : null,
           sale.client?.name ? ['Client',   sale.client.name]  : null,
-        ] as ([string, string] | null)[]).filter(Boolean).map(([k, v]) => (
+        ] as ([string, string] | null)[]).filter((x): x is [string, string] => x !== null).map(([k, v]) => (
           <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 4 }}>
             <span style={{ color: '#555' }}>{k}</span>
             <span style={{ fontWeight: 'bold', textAlign: 'right' }}>{v}</span>
@@ -1020,7 +1486,11 @@ export default function PosPage() {
   const [showPayment, setShowPayment]       = useState(false)
   const [processing, setProcessing]         = useState(false)
   const [showCloseSession, setShowCloseSession] = useState(false)
+  const [showSessions, setShowSessions]         = useState(false)
   const [showClientSearch, setShowClientSearch] = useState(false)
+  const [clientSearchFromPayment, setClientSearchFromPayment] = useState(false)
+  const [savedPayments, setSavedPayments]   = useState<PaymentEntry[] | null>(null)
+  const [pendingDeposit, setPendingDeposit] = useState(false)
   const [showHoldCarts, setShowHoldCarts]   = useState(false)
   const [showRecentSales, setShowRecentSales] = useState(false)
   const [session, setSession]               = useState<CashSession | null>(null)
@@ -1057,6 +1527,15 @@ export default function PosPage() {
       .catch(() => {})
       .finally(() => setSessionLoading(false))
   }, [setCashSession])
+
+  // ── Active inventory check (sales blocking) ───────────────────────────────
+  const { data: activeInventory } = useQuery({
+    queryKey: ['inventory-active-pos'],
+    queryFn:  () => api.get('/inventory-sessions/active').then(r => r.data),
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  })
+  const salesBlocked = activeInventory?.active && activeInventory?.sales_blocked
 
   // ── Categories tree ───────────────────────────────────────────────────────
   const { data: categoryTree = [] } = useQuery<CategoryTree[]>({
@@ -1333,6 +1812,7 @@ export default function PosPage() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+  // NOTE: ActiveInventoryBanner is rendered inside the main layout below
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gray-100">
 
@@ -1393,6 +1873,10 @@ export default function PosPage() {
           <DollarSign size={12} />
           <span>Ouverture {formatCurrency(session.opening_balance)}</span>
         </div>
+        <button onClick={() => setShowSessions(true)}
+          className="flex items-center gap-1 text-xs text-gray-600 border border-gray-200 px-2 py-1.5 rounded-lg hover:bg-gray-100 flex-shrink-0">
+          <History size={12} /> <span className="hidden sm:inline">Sessions</span>
+        </button>
         <button onClick={() => setShowRecentSales(true)}
           className="flex items-center gap-1 text-xs text-indigo-600 border border-indigo-200 px-2 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 flex-shrink-0">
           <Clock size={12} /> <span className="hidden sm:inline">Ventes</span>
@@ -1667,12 +2151,31 @@ export default function PosPage() {
               </button>
             </div>
 
+            {/* Inventory block banner */}
+            {salesBlocked && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
+                <AlertTriangle size={13} className="flex-shrink-0" />
+                Ventes bloquées — inventaire en cours
+              </div>
+            )}
+
             {/* Pay button */}
             <button
-              onClick={() => setShowPayment(true)}
+              onClick={() => {
+                if (salesBlocked) {
+                  toast.error('Les ventes sont bloquées pendant l\'inventaire en cours.')
+                  return
+                }
+                setShowPayment(true)
+              }}
               disabled={items.length === 0 || processing}
-              className="w-full py-3.5 bg-primary hover:bg-primary-600 disabled:bg-primary/30 text-white text-base font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
-              <Receipt size={20} /> Encaisser
+              className={`w-full py-3.5 text-white text-base font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg ${
+                salesBlocked
+                  ? 'bg-red-400 hover:bg-red-500 shadow-red-200/50'
+                  : 'bg-primary hover:bg-primary-600 disabled:bg-primary/30 shadow-primary/20'
+              }`}>
+              {salesBlocked ? <AlertTriangle size={20} /> : <Receipt size={20} />}
+              {salesBlocked ? 'Ventes bloquées' : 'Encaisser'}
             </button>
 
             {/* Clear cart */}
@@ -1690,17 +2193,65 @@ export default function PosPage() {
       {showPayment && (
         <PaymentModal
           total={totalTtc}
-          clientAccountBalance={client_account_balance ?? undefined}
+          clientAccountBalance={client_name != null ? (client_account_balance ?? 0) : undefined}
           clientName={client_name ?? undefined}
-          onClose={() => setShowPayment(false)}
+          clientId={client_id}
+          onClose={() => {
+            setShowPayment(false)
+            setSavedPayments(null)
+            setPendingDeposit(false)
+          }}
           onConfirm={handleSaleConfirm}
           processing={processing}
+          initialPayments={savedPayments ?? undefined}
+          onNeedClient={() => {
+            setShowPayment(false)
+            setClientSearchFromPayment(true)
+            setShowClientSearch(true)
+          }}
+          onNeedClientForDeposit={(pmts) => {
+            setSavedPayments(pmts)
+            setPendingDeposit(true)
+            setShowPayment(false)
+            setClientSearchFromPayment(true)
+            setShowClientSearch(true)
+          }}
         />
       )}
       {showClientSearch && (
         <ClientSearchModal
-          onSelect={(c) => { setClient(c.id, c.name, c.account_balance ?? null); setShowClientSearch(false) }}
-          onClose={() => setShowClientSearch(false)}
+          onSelect={(c) => {
+            setClient(c.id, c.name, c.account_balance ?? 0)
+            setShowClientSearch(false)
+            if (clientSearchFromPayment) {
+              setClientSearchFromPayment(false)
+              if (pendingDeposit && savedPayments) {
+                // Calculer la monnaie sur la base des paiements sauvegardés
+                const paidSoFar = savedPayments
+                  .filter(p => p.method !== 'account_deposit')
+                  .reduce((s, p) => s + p.amount, 0)
+                const change = Math.max(0, paidSoFar - totalTtc)
+                if (change > 0) {
+                  // Réduire les espèces du montant de la monnaie et ajouter le dépôt
+                  const withDeposit: PaymentEntry[] = [
+                    ...savedPayments
+                      .map(p => p.method === 'cash' ? { ...p, amount: Math.max(0, p.amount - change) } : p)
+                      .filter(p => p.method !== 'account_deposit'),
+                    { method: 'account_deposit', amount: change },
+                  ]
+                  setSavedPayments(withDeposit)
+                }
+              }
+              setPendingDeposit(false)
+              setShowPayment(true)
+            }
+          }}
+          onClose={() => {
+            setShowClientSearch(false)
+            setClientSearchFromPayment(false)
+            setPendingDeposit(false)
+            setSavedPayments(null)
+          }}
         />
       )}
       {showHoldCarts && (
@@ -1709,6 +2260,9 @@ export default function PosPage() {
           onRecall={recallCart}
           onClose={() => setShowHoldCarts(false)}
         />
+      )}
+      {showSessions && (
+        <SessionsHistoryModal onClose={() => setShowSessions(false)} />
       )}
       {showCloseSession && (
         <CloseSessionModal

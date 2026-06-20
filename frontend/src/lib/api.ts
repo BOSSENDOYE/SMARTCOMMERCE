@@ -13,6 +13,13 @@ const api = axios.create({
 
 // Request interceptor — attach token + store context
 api.interceptors.request.use((config) => {
+  // For FormData (file uploads), remove Content-Type so Axios doesn't serialize it as JSON.
+  // Axios v1.x converts FormData to JSON when Content-Type is application/json.
+  // Removing it lets the browser set the correct multipart/form-data; boundary=... header.
+  if (config.data instanceof FormData) {
+    config.headers.delete('Content-Type')
+  }
+
   const token = localStorage.getItem('sc_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`

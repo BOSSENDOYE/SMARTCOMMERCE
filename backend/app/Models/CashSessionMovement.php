@@ -9,6 +9,8 @@ class CashSessionMovement extends Model
 {
     protected $table = 'cash_session_movements';
 
+    const UPDATED_AT = null;
+
     protected $fillable = [
         'cash_session_id', 'user_id', 'supervisor_id',
         'type', 'amount', 'motive', 'receipt_ref',

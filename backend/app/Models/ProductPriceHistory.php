@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProductPriceHistory extends Model
 {
+    const UPDATED_AT = null;
+
     protected $fillable = [
         'product_id', 'old_price', 'new_price', 'type', 'changed_by',
     ];

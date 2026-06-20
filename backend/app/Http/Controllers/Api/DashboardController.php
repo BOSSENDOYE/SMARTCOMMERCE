@@ -5,11 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Sale;
 use App\Models\SalePayment;
-use App\Models\Product;
-use App\Models\StockLevel;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
@@ -18,39 +17,33 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         $storeId = $request->user()->store_id;
-        $today = today();
-        $yesterday = today()->subDay();
-        $monthStart = today()->startOfMonth();
-        $yearStart = today()->startOfYear();
 
-        $todaySales = $this->getSalesStats($storeId, $today, $today);
-        $yesterdaySales = $this->getSalesStats($storeId, $yesterday, $yesterday);
-        $monthSales = $this->getSalesStats($storeId, $monthStart, $today);
-        $yearSales = $this->getSalesStats($storeId, $yearStart, $today);
+        // Cache 30 secondes — assez court pour rester live, assez long pour éviter les requêtes répétées
+        $data = Cache::remember("dashboard_{$storeId}", 30, function () use ($storeId) {
+            $today      = today();
+            $yesterday  = today()->subDay();
+            $monthStart = today()->startOfMonth();
+            $weekStart  = today()->subDays(6);
 
-        $stockAlerts = $this->stockService->getLowStockProducts($storeId)->count();
-        $expiringAlerts = $this->stockService->getExpiringProducts($storeId, 30)->count();
+            return [
+                'sales' => [
+                    'today'     => $this->getSalesStats($storeId, $today, $today),
+                    'yesterday' => $this->getSalesStats($storeId, $yesterday, $yesterday),
+                    'month'     => $this->getSalesStats($storeId, $monthStart, $today),
+                ],
+                'alerts' => [
+                    'low_stock_count'     => $this->stockService->getLowStockProducts($storeId)->count(),
+                    'expiring_soon_count' => $this->stockService->getExpiringProducts($storeId, 30)->count(),
+                ],
+                'top_products'      => $this->getTopProducts($storeId, $today, $today, 8),
+                'payment_breakdown' => $this->getPaymentBreakdown($storeId, $today, $today),
+                'hourly_sales'      => $this->getHourlySales($storeId, $today),
+                'week_sales'        => $this->getWeekSales($storeId, $weekStart, $today),
+                'stock_value'       => $this->stockService->getStockValue($storeId),
+            ];
+        });
 
-        $topProducts = $this->getTopProducts($storeId, $today, $today, 10);
-        $paymentBreakdown = $this->getPaymentBreakdown($storeId, $today, $today);
-        $hourlySales = $this->getHourlySales($storeId, $today);
-
-        return response()->json([
-            'sales' => [
-                'today' => $todaySales,
-                'yesterday' => $yesterdaySales,
-                'month' => $monthSales,
-                'year' => $yearSales,
-            ],
-            'alerts' => [
-                'low_stock_count' => $stockAlerts,
-                'expiring_soon_count' => $expiringAlerts,
-            ],
-            'top_products' => $topProducts,
-            'payment_breakdown' => $paymentBreakdown,
-            'hourly_sales' => $hourlySales,
-            'stock_value' => $this->stockService->getStockValue($storeId),
-        ]);
+        return response()->json($data);
     }
 
     private function getSalesStats(int $storeId, $from, $to): array
@@ -118,9 +111,12 @@ class DashboardController extends Controller
 
     private function getHourlySales(int $storeId, $date): array
     {
-        $hourExpr = DB::connection()->getDriverName() === 'sqlite'
-            ? "CAST(strftime('%H', created_at) AS INTEGER)"
-            : 'HOUR(created_at)';
+        $driver = DB::connection()->getDriverName();
+        $hourExpr = match ($driver) {
+            'sqlite' => "CAST(strftime('%H', created_at) AS INTEGER)",
+            'pgsql'  => "EXTRACT(HOUR FROM created_at)::integer",
+            default  => 'HOUR(created_at)',
+        };
 
         $rows = DB::table('sales')
             ->where('store_id', $storeId)
@@ -131,10 +127,46 @@ class DashboardController extends Controller
             ->orderBy('hour')
             ->get();
 
-        return $rows->map(fn($r) => [
-            'hour' => (int) ($r->hour ?? 0),
-            'count' => (int) $r->count,
-            'total' => (float) $r->total,
-        ])->toArray();
+        // Remplir toutes les heures de 7h à 22h pour un graphique continu
+        $byHour = $rows->keyBy('hour');
+        return collect(range(7, 22))->map(fn($h) => [
+            'hour'  => $h,
+            'count' => (int)  ($byHour[$h]->count ?? 0),
+            'total' => (float)($byHour[$h]->total ?? 0),
+        ])->values()->toArray();
+    }
+
+    private function getWeekSales(int $storeId, $from, $to): array
+    {
+        $driver = DB::connection()->getDriverName();
+        $dateExpr = match ($driver) {
+            'sqlite' => "date(created_at)",
+            'pgsql'  => "created_at::date",
+            default  => 'DATE(created_at)',
+        };
+
+        $rows = DB::table('sales')
+            ->where('store_id', $storeId)
+            ->where('status', 'completed')
+            ->whereDate('created_at', '>=', $from)
+            ->whereDate('created_at', '<=', $to)
+            ->selectRaw("$dateExpr as day, COUNT(*) as count, SUM(total_ttc) as total")
+            ->groupBy('day')
+            ->orderBy('day')
+            ->get()
+            ->keyBy('day');
+
+        // 7 derniers jours avec toutes les dates
+        $days = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $d   = today()->subDays($i)->toDateString();
+            $row = $rows[$d] ?? null;
+            $days[] = [
+                'day'   => today()->subDays($i)->locale('fr')->isoFormat('ddd'),
+                'total' => (float)($row?->total ?? 0),
+                'count' => (int)($row?->count ?? 0),
+            ];
+        }
+        return $days;
     }
 }

@@ -21,6 +21,7 @@ return [
 
     'allowed_origins' => [
         'https://baobab.lamadoneadn.com',
+        'https://gestion.gymaluxe.com',
     ],
 
     'allowed_origins_patterns' => [

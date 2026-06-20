@@ -2,40 +2,50 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        // ── order_items: rendre product_id nullable + ajouter restaurant_item_id ──
-        DB::statement('ALTER TABLE order_items DROP FOREIGN KEY order_items_product_id_foreign');
-        DB::statement('ALTER TABLE order_items MODIFY COLUMN product_id BIGINT UNSIGNED NULL');
-        DB::statement('ALTER TABLE order_items ADD CONSTRAINT order_items_product_id_foreign FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL');
-
+        // ── order_items : product_id nullable + restaurant_item_id ──────────
         Schema::table('order_items', function (Blueprint $table) {
-            $table->foreignId('restaurant_item_id')
-                  ->nullable()
-                  ->after('product_id')
-                  ->constrained('restaurant_items')
-                  ->nullOnDelete();
+            // Supprimer la contrainte FK avant de modifier la colonne
+            $table->dropForeign(['product_id']);
+            // Rendre nullable (Blueprint cross-database)
+            $table->unsignedBigInteger('product_id')->nullable()->change();
+            // Remettre la FK avec nullOnDelete
+            $table->foreign('product_id')->references('id')->on('products')->nullOnDelete();
         });
 
-        // ── recipe_ingredients: rendre product_id nullable + ajouter restaurant_item_id ──
-        DB::statement('ALTER TABLE recipe_ingredients DROP FOREIGN KEY recipe_ingredients_product_id_foreign');
-        DB::statement('ALTER TABLE recipe_ingredients DROP INDEX recipe_ingredients_product_id_ingredient_id_unique');
-        DB::statement('ALTER TABLE recipe_ingredients MODIFY COLUMN product_id BIGINT UNSIGNED NULL');
-        DB::statement('ALTER TABLE recipe_ingredients ADD CONSTRAINT recipe_ingredients_product_id_foreign FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL');
+        if (!Schema::hasColumn('order_items', 'restaurant_item_id')) {
+            Schema::table('order_items', function (Blueprint $table) {
+                $table->foreignId('restaurant_item_id')
+                      ->nullable()
+                      ->after('product_id')
+                      ->constrained('restaurant_items')
+                      ->nullOnDelete();
+            });
+        }
 
+        // ── recipe_ingredients : product_id nullable + restaurant_item_id ───
         Schema::table('recipe_ingredients', function (Blueprint $table) {
-            $table->foreignId('restaurant_item_id')
-                  ->nullable()
-                  ->after('product_id')
-                  ->constrained('restaurant_items')
-                  ->nullOnDelete();
-            $table->unique(['restaurant_item_id', 'ingredient_id']);
+            $table->dropUnique(['product_id', 'ingredient_id']);
+            $table->dropForeign(['product_id']);
+            $table->unsignedBigInteger('product_id')->nullable()->change();
+            $table->foreign('product_id')->references('id')->on('products')->nullOnDelete();
         });
+
+        if (!Schema::hasColumn('recipe_ingredients', 'restaurant_item_id')) {
+            Schema::table('recipe_ingredients', function (Blueprint $table) {
+                $table->foreignId('restaurant_item_id')
+                      ->nullable()
+                      ->after('product_id')
+                      ->constrained('restaurant_items')
+                      ->nullOnDelete();
+                $table->unique(['restaurant_item_id', 'ingredient_id']);
+            });
+        }
     }
 
     public function down(): void
@@ -44,18 +54,18 @@ return new class extends Migration
             $table->dropUnique(['restaurant_item_id', 'ingredient_id']);
             $table->dropForeign(['restaurant_item_id']);
             $table->dropColumn('restaurant_item_id');
+            $table->dropForeign(['product_id']);
+            $table->unsignedBigInteger('product_id')->nullable(false)->change();
+            $table->foreign('product_id')->references('id')->on('products')->cascadeOnDelete();
+            $table->unique(['product_id', 'ingredient_id']);
         });
-        DB::statement('ALTER TABLE recipe_ingredients DROP FOREIGN KEY recipe_ingredients_product_id_foreign');
-        DB::statement('ALTER TABLE recipe_ingredients MODIFY COLUMN product_id BIGINT UNSIGNED NOT NULL');
-        DB::statement('ALTER TABLE recipe_ingredients ADD CONSTRAINT recipe_ingredients_product_id_foreign FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE');
-        DB::statement('ALTER TABLE recipe_ingredients ADD UNIQUE recipe_ingredients_product_id_ingredient_id_unique (product_id, ingredient_id)');
 
         Schema::table('order_items', function (Blueprint $table) {
             $table->dropForeign(['restaurant_item_id']);
             $table->dropColumn('restaurant_item_id');
+            $table->dropForeign(['product_id']);
+            $table->unsignedBigInteger('product_id')->nullable(false)->change();
+            $table->foreign('product_id')->references('id')->on('products')->cascadeOnDelete();
         });
-        DB::statement('ALTER TABLE order_items DROP FOREIGN KEY order_items_product_id_foreign');
-        DB::statement('ALTER TABLE order_items MODIFY COLUMN product_id BIGINT UNSIGNED NOT NULL');
-        DB::statement('ALTER TABLE order_items ADD CONSTRAINT order_items_product_id_foreign FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE');
     }
 };

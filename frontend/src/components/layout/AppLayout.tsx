@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
+import toast from 'react-hot-toast'
 import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users, BarChart3,
   Settings, LogOut, ChevronLeft, ChevronRight, AlertTriangle,
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
   UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target, Palette, Sun, Moon,
-  FolderOpen,
+  FolderOpen, MapPin, Banknote,
 } from 'lucide-react'
 import { usePreferencesStore } from '../../store/preferences.store'
 import { useMenuStore, type MenuNode } from '../../store/menu.store'
@@ -43,6 +44,7 @@ const navItems: NavItem[] = [
   { id: 'suppliers',       label: 'Fournisseurs',    to: '/suppliers',      icon: <Truck size={18} />,             permission: 'manage_suppliers' },
   { id: 'purchases',       label: 'Achats',          to: '/purchases',      icon: <ArrowLeftRight size={18} />,    permission: 'create_purchase_orders' },
   { id: 'clients',         label: 'Clients',         to: '/clients',        icon: <Users size={18} />,             permission: 'manage_clients',        hideFor: ['depot'] },
+  { id: 'encours',         label: 'Encaissements',   to: '/encours',        icon: <Banknote size={18} />,          permission: 'manage_clients',        hideFor: ['depot'] },
   { id: 'invoices',        label: 'Facturation',     to: '/invoices',       icon: <FilePlus2 size={18} />,         permission: 'manage_invoices',       hideFor: ['depot'] },
   { id: 'crm',             label: 'CRM / Leads',     to: '/crm',            icon: <Target size={18} />,            permission: 'manage_crm',            hideFor: ['depot'] },
   { id: 'users',           label: 'Utilisateurs',    to: '/users',          icon: <UserCircle size={18} />,        permission: 'manage_users' },
@@ -258,14 +260,37 @@ function StoreSwitcher({ collapsed }: { collapsed: boolean }) {
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
-  const { user, clearAuth, can, hasLicense } = useAuthStore()
+  const { user, clearAuth, can, hasLicense, setUser } = useAuthStore()
   const { activeStore } = useActiveStoreStore()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [switchingStore, setSwitchingStore] = useState(false)
+  const userBarRef = useRef<HTMLDivElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
   const { theme, setTheme } = usePreferencesStore()
   const { isOnline, wasOffline } = useNetworkStatus()
   useOfflineSync()
   const [pendingCount, setPendingCount] = useState(0)
+
+  // Refresh user data on mount to get latest stores/permissions
+  useEffect(() => {
+    if (!user) return
+    api.get('/auth/me').then(res => setUser(res.data)).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close popup on outside click
+  useEffect(() => {
+    if (!showUserMenu) return
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (!userBarRef.current?.contains(t) && !popupRef.current?.contains(t)) {
+        setShowUserMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showUserMenu])
 
   useEffect(() => {
     getPendingSalesCount().then(setPendingCount)
@@ -273,7 +298,25 @@ export default function AppLayout() {
     return () => clearInterval(interval)
   }, [])
 
-  const isSuperAdmin = user?.roles?.includes('super_admin') && !user?.store_id
+  const isSuperAdmin = user?.roles?.includes('super_admin') ?? false
+
+  const handleSwitchStore = async (storeId: number) => {
+    if (storeId === user?.store_id || switchingStore) return
+    setSwitchingStore(true)
+    try {
+      const res = await api.post('/auth/switch-store', { store_id: storeId })
+      setUser(res.data)
+      queryClient.clear()
+      setShowUserMenu(false)
+      navigate('/')
+      toast.success('Emplacement changé')
+    } catch {
+      toast.error("Erreur lors du changement d'emplacement")
+    } finally {
+      setSwitchingStore(false)
+    }
+  }
+
   const { nodes, loaded: menuLoaded, fetchConfig, getLabel, isVisible } = useMenuStore()
 
   useEffect(() => {
@@ -345,9 +388,7 @@ export default function AppLayout() {
     navigate('/login')
   }
 
-  const storeName = isSuperAdmin
-    ? activeStore?.name ?? '—'
-    : user?.store?.name ?? 'Suite'
+  const storeName = user?.store?.name ?? 'BAOBAB'
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100">
@@ -373,20 +414,6 @@ export default function AppLayout() {
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </div>
-
-        {/* Super-admin store switcher */}
-        {isSuperAdmin && !collapsed && (
-          <div className="border-b border-brand-700 pt-2">
-            <StoreSwitcher collapsed={collapsed} />
-          </div>
-        )}
-
-        {isSuperAdmin && !activeStore && !collapsed && (
-          <div className="mx-2 mb-2 flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-            <AlertTriangle size={11} className="text-yellow-400 flex-shrink-0" />
-            <p className="text-[10px] text-yellow-300">Sélectionnez un magasin</p>
-          </div>
-        )}
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
@@ -429,7 +456,7 @@ export default function AppLayout() {
         </nav>
 
         {/* User info */}
-        <div className="border-t border-brand-700 p-3 relative">
+        <div ref={userBarRef} className="border-t border-brand-700 p-3 relative">
           <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
             <button
               onClick={() => !collapsed && setShowUserMenu(m => !m)}
@@ -461,7 +488,10 @@ export default function AppLayout() {
           </div>
 
           {showUserMenu && !collapsed && (
-            <div className="absolute bottom-full left-2 right-2 mb-1 bg-brand-800 border border-brand-600 rounded-xl shadow-2xl py-1 z-50">
+            <div
+              ref={popupRef}
+              className="fixed bottom-4 left-[264px] w-60 bg-brand-800 border border-brand-600 rounded-xl shadow-2xl py-1 z-[200] max-h-[80vh] overflow-y-auto"
+            >
               <button
                 onClick={() => { navigate('/profile'); setShowUserMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-200 hover:bg-brand-700 hover:text-white transition-colors"
@@ -474,6 +504,40 @@ export default function AppLayout() {
               >
                 <Palette size={13} /> Préférences
               </button>
+              {/* Store switcher for users assigned to multiple stores */}
+              {user?.stores && user.stores.length > 1 && (
+                <>
+                  <div className="border-t border-brand-700 my-1" />
+                  <p className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-brand-400 font-semibold flex items-center gap-1.5">
+                    <MapPin size={10} /> Emplacement
+                  </p>
+                  {user.stores.map(s => {
+                    const isCurrent = s.id === user.store_id
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => handleSwitchStore(s.id)}
+                        disabled={switchingStore}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors disabled:opacity-50 ${
+                          isCurrent
+                            ? 'text-primary font-semibold bg-primary/10'
+                            : 'text-brand-200 hover:bg-brand-700 hover:text-white'
+                        }`}
+                      >
+                        {isCurrent
+                          ? <Check size={11} className="flex-shrink-0 text-primary" />
+                          : <Store size={11} className="flex-shrink-0 opacity-50" />}
+                        <span className="flex-1 truncate text-left">{s.name}</span>
+                        {isCurrent && (
+                          <span className="text-[9px] text-primary/70 font-normal">actuel</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </>
+              )}
+
+              <div className="border-t border-brand-700 my-1" />
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-200 hover:bg-brand-700 hover:text-white transition-colors"
@@ -481,6 +545,7 @@ export default function AppLayout() {
                 {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
                 {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
               </button>
+
               <div className="border-t border-brand-700 my-1" />
               <button
                 onClick={() => { handleLogout(); setShowUserMenu(false) }}

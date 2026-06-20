@@ -107,6 +107,22 @@ class StoreSectionController extends Controller
         return response()->json($products);
     }
 
+    /** Affecter plusieurs produits d'un coup à un rayon */
+    public function assignBulk(Request $request, StoreSection $section)
+    {
+        abort_if($section->store_id !== $this->storeId($request), 403);
+
+        $data = $request->validate([
+            'product_ids'   => 'required|array|min:1',
+            'product_ids.*' => 'integer|exists:products,id',
+        ]);
+
+        \App\Models\Product::whereIn('id', $data['product_ids'])
+            ->update(['section_id' => $section->id]);
+
+        return response()->json(['assigned' => count($data['product_ids'])]);
+    }
+
     /** Assigner un produit à un rayon + position */
     public function assignProduct(Request $request, StoreSection $section)
     {

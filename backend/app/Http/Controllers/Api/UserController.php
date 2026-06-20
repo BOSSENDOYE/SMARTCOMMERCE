@@ -11,17 +11,30 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $isSuperAdmin = $request->user()->hasRole('super_admin') && $request->user()->getOriginal('store_id') === null;
+        $isSuperAdmin = $request->user()->hasRole('super_admin');
 
-        $query = User::with(['roles', 'store:id,name,code'])
+        $query = User::with(['roles', 'store:id,name,code', 'stores:id,name,code'])
             ->select(['id', 'name', 'email', 'is_active', 'store_id', 'last_login_at', 'created_at']);
 
         if ($isSuperAdmin) {
-            // Super-admin: optionally filter by store
-            $query->when($request->store_id, fn($q) => $q->where('store_id', $request->store_id));
+            // Priorité : param store_id > header X-Store-Id > afficher tout
+            $storeFilter = $request->filled('store_id')
+                ? (int) $request->store_id
+                : ($request->header('X-Store-Id') ? (int) $request->header('X-Store-Id') : null);
+
+            if ($storeFilter) {
+                $query->where(function ($q) use ($storeFilter) {
+                    $q->where('store_id', $storeFilter)
+                      ->orWhereHas('stores', fn($q2) => $q2->where('stores.id', $storeFilter));
+                });
+            }
         } else {
-            // Regular user: only see users of their own store
-            $query->where('store_id', $request->user()->store_id);
+            // Utilisateur normal : uniquement les users du même magasin
+            $myStoreId = $request->user()->store_id;
+            $query->where(function ($q) use ($myStoreId) {
+                $q->where('store_id', $myStoreId)
+                  ->orWhereHas('stores', fn($q2) => $q2->where('stores.id', $myStoreId));
+            });
         }
 
         return response()->json($query->orderBy('name')->get());
@@ -29,69 +42,103 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        $isSuperAdmin = $request->user()->hasRole('super_admin') && $request->user()->getOriginal('store_id') === null;
+        $isSuperAdmin = $request->user()->hasRole('super_admin');
 
         $rules = [
-            'name'     => 'required|string|max:100',
-            'email'    => 'required|email|unique:users',
-            'password' => 'required|string|min:8',
-            'pin'      => 'required|string|size:4',
-            'role'     => 'required|string|exists:roles,name',
+            'name'        => 'required|string|max:100',
+            'email'       => 'required|email|unique:users',
+            'password'    => 'required|string|min:8',
+            'pin'         => 'required|string|size:4',
+            'role'        => 'required|string|exists:roles,name',
+            'store_id'    => 'required|exists:stores,id',
+            'store_ids'   => 'required|array|min:1',
+            'store_ids.*' => 'exists:stores,id',
         ];
 
-        if ($isSuperAdmin) {
-            $rules['store_id'] = 'required|exists:stores,id';
+        // Non-super-admin: force store_id to their own store
+        if (!$isSuperAdmin) {
+            unset($rules['store_id'], $rules['store_ids'], $rules['store_ids.*']);
         }
 
         $data = $request->validate($rules);
 
-        $storeId = $isSuperAdmin
-            ? $data['store_id']
-            : $request->user()->store_id;
+        if ($isSuperAdmin) {
+            $defaultStoreId = (int) $data['store_id'];
+            $storeIds       = array_map('intval', $data['store_ids']);
+            // Default store must be among assigned stores
+            if (!in_array($defaultStoreId, $storeIds, true)) {
+                return response()->json([
+                    'message' => 'Le magasin par défaut doit faire partie des magasins assignés.',
+                    'errors'  => ['store_id' => ['Le magasin par défaut doit être dans la liste des magasins assignés.']],
+                ], 422);
+            }
+        } else {
+            $defaultStoreId = $request->user()->store_id;
+            $storeIds       = [$defaultStoreId];
+        }
 
         $user = User::create([
-            'name'       => $data['name'],
-            'email'      => $data['email'],
-            'password'   => Hash::make($data['password']),
-            'pin'        => Hash::make($data['pin']),
-            'store_id'   => $storeId,
-            'is_active'  => true,
+            'name'      => $data['name'],
+            'email'     => $data['email'],
+            'password'  => Hash::make($data['password']),
+            'pin'       => Hash::make($data['pin']),
+            'store_id'  => $defaultStoreId,
+            'is_active' => true,
         ]);
         $user->assignRole($data['role']);
+        $user->stores()->sync($storeIds);
 
-        return response()->json($user->load(['roles', 'store:id,name,code']), 201);
+        return response()->json($user->load(['roles', 'store:id,name,code', 'stores:id,name,code']), 201);
     }
 
     public function update(Request $request, User $user)
     {
-        $isSuperAdmin = $request->user()->hasRole('super_admin') && $request->user()->getOriginal('store_id') === null;
+        $isSuperAdmin = $request->user()->hasRole('super_admin');
 
         $data = $request->validate([
-            'name'       => 'sometimes|string',
-            'is_active'  => 'sometimes|boolean',
-            'role'       => 'sometimes|string|exists:roles,name',
-            'password'   => 'nullable|string|min:8',
-            'pin'        => 'nullable|string|size:4',
-            'store_id'   => $isSuperAdmin ? 'sometimes|exists:stores,id' : 'prohibited',
+            'name'        => 'sometimes|string',
+            'is_active'   => 'sometimes|boolean',
+            'role'        => 'sometimes|string|exists:roles,name',
+            'password'    => 'nullable|string|min:8',
+            'pin'         => 'nullable|string|size:4',
+            'store_id'    => $isSuperAdmin ? 'sometimes|exists:stores,id' : 'prohibited',
+            'store_ids'   => $isSuperAdmin ? 'sometimes|array|min:1' : 'prohibited',
+            'store_ids.*' => 'exists:stores,id',
         ]);
 
-        if (! empty($data['password'])) {
+        if (!empty($data['password'])) {
             $data['password'] = Hash::make($data['password']);
         } else {
             unset($data['password']);
         }
-        if (! empty($data['pin'])) {
+        if (!empty($data['pin'])) {
             $data['pin'] = Hash::make($data['pin']);
         } else {
             unset($data['pin']);
         }
-        if (! empty($data['role'])) {
+        if (!empty($data['role'])) {
             $user->syncRoles([$data['role']]);
             unset($data['role']);
         }
 
+        // Sync stores if provided
+        if ($isSuperAdmin && isset($data['store_ids'])) {
+            $storeIds = array_map('intval', $data['store_ids']);
+            $defaultStoreId = isset($data['store_id']) ? (int) $data['store_id'] : (int) $user->store_id;
+
+            if (!in_array($defaultStoreId, $storeIds, true)) {
+                return response()->json([
+                    'message' => 'Le magasin par défaut doit faire partie des magasins assignés.',
+                    'errors'  => ['store_id' => ['Le magasin par défaut doit être dans la liste des magasins assignés.']],
+                ], 422);
+            }
+
+            $user->stores()->sync($storeIds);
+            unset($data['store_ids']);
+        }
+
         $user->update($data);
-        return response()->json($user->load(['roles', 'store:id,name,code']));
+        return response()->json($user->load(['roles', 'store:id,name,code', 'stores:id,name,code']));
     }
 
     public function destroy(User $user)
@@ -106,13 +153,13 @@ class UserController extends Controller
     /** List available roles (excluding super_admin unless caller is super_admin) */
     public function roles(Request $request)
     {
-        $isSuperAdmin = $request->user()->hasRole('super_admin') && $request->user()->getOriginal('store_id') === null;
+        $isSuperAdmin = $request->user()->hasRole('super_admin');
 
         $roles = \Spatie\Permission\Models\Role::withCount('permissions')
             ->orderBy('name')
             ->get(['id', 'name', 'guard_name']);
 
-        if (! $isSuperAdmin) {
+        if (!$isSuperAdmin) {
             $roles = $roles->where('name', '!=', 'super_admin')->values();
         }
 
@@ -125,17 +172,17 @@ class UserController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'name'         => 'sometimes|string|max:100',
-            'password'     => 'nullable|string|min:8|confirmed',
-            'pin'          => 'nullable|string|size:4',
+            'name'     => 'sometimes|string|max:100',
+            'password' => 'nullable|string|min:8|confirmed',
+            'pin'      => 'nullable|string|size:4',
         ]);
 
-        if (! empty($data['password'])) {
+        if (!empty($data['password'])) {
             $data['password'] = Hash::make($data['password']);
         } else {
             unset($data['password']);
         }
-        if (! empty($data['pin'])) {
+        if (!empty($data['pin'])) {
             $data['pin'] = Hash::make($data['pin']);
         } else {
             unset($data['pin']);

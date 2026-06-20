@@ -6,7 +6,7 @@ import { useAuthStore } from '../../store/auth.store'
 import toast from 'react-hot-toast'
 import {
   Users, Plus, Search, Edit2, Trash2, X, Check, Eye, EyeOff,
-  UserCheck, UserX, Shield, Store as StoreIcon, Clock,
+  UserCheck, UserX, Shield, Store as StoreIcon, Clock, Star,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,6 +18,7 @@ interface UserEntry {
   is_active: boolean
   store_id: number | null
   store?: { id: number; name: string; code: string }
+  stores: { id: number; name: string; code: string }[]
   roles: { name: string }[]
   last_login_at: string | null
   created_at: string
@@ -58,6 +59,81 @@ function RoleBadge({ role }: { role: string }) {
   )
 }
 
+// ─── Store Selector (multi + default) ────────────────────────────────────────
+
+function StoreSelector({
+  stores,
+  selectedIds,
+  defaultId,
+  onToggle,
+  onSetDefault,
+  error,
+}: {
+  stores: StoreEntry[]
+  selectedIds: number[]
+  defaultId: number | null
+  onToggle: (id: number) => void
+  onSetDefault: (id: number) => void
+  error?: string
+}) {
+  const active = stores.filter(s => s.is_active)
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+        Magasins assignés <span className="text-red-500">*</span>
+        <span className="ml-1 font-normal text-gray-400">(cochez un ou plusieurs)</span>
+      </label>
+      <div className={`border rounded-xl divide-y max-h-52 overflow-y-auto ${error ? 'border-red-400' : 'border-gray-200'}`}>
+        {active.map(s => {
+          const checked = selectedIds.includes(s.id)
+          const isDefault = defaultId === s.id
+          return (
+            <label
+              key={s.id}
+              className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+                checked ? 'bg-primary/5 hover:bg-primary/8' : 'hover:bg-gray-50'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(s.id)}
+                className="accent-primary w-4 h-4 flex-shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{s.name}</p>
+                <p className="text-xs text-gray-400 font-mono">{s.code}</p>
+              </div>
+              {checked && (
+                <button
+                  type="button"
+                  onClick={e => { e.preventDefault(); onSetDefault(s.id) }}
+                  title={isDefault ? 'Magasin par défaut' : 'Définir comme magasin par défaut'}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${
+                    isDefault
+                      ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                      : 'bg-gray-100 text-gray-400 border border-gray-200 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'
+                  }`}
+                >
+                  <Star size={10} fill={isDefault ? 'currentColor' : 'none'} />
+                  {isDefault ? 'Défaut' : 'Définir défaut'}
+                </button>
+              )}
+            </label>
+          )
+        })}
+        {active.length === 0 && (
+          <p className="text-xs text-gray-400 text-center py-4">Aucun magasin actif disponible</p>
+        )}
+      </div>
+      {selectedIds.length > 0 && !defaultId && (
+        <p className="text-xs text-amber-600 mt-1">Cliquez sur "Définir défaut" pour choisir le magasin de connexion par défaut.</p>
+      )}
+      {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
+    </div>
+  )
+}
+
 // ─── User Form Modal ──────────────────────────────────────────────────────────
 
 interface UserFormProps {
@@ -73,19 +149,52 @@ interface UserFormProps {
 function UserFormModal({ user, roles, stores, isSuperAdmin, currentStoreId, onClose, onSaved }: UserFormProps) {
   const isEdit = !!user
 
+  // Initialise selected stores from existing data
+  const initStoreIds = (): number[] => {
+    if (user) {
+      if (user.stores?.length) return user.stores.map(s => s.id)
+      if (user.store_id) return [user.store_id]
+    }
+    if (!isSuperAdmin && currentStoreId) return [currentStoreId]
+    return []
+  }
+
+  const initDefaultId = (): number | null => {
+    if (user?.store_id) return user.store_id
+    if (!isSuperAdmin && currentStoreId) return currentStoreId
+    return null
+  }
+
   const [form, setForm] = useState({
     name:      user?.name ?? '',
     email:     user?.email ?? '',
     password:  '',
     pin:       '',
     role:      user?.roles?.[0]?.name ?? '',
-    store_id:  user?.store_id?.toString() ?? (currentStoreId?.toString() ?? ''),
     is_active: user?.is_active ?? true,
   })
-  const [showPassword, setShowPassword] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [selectedStoreIds, setSelectedStoreIds] = useState<number[]>(initStoreIds)
+  const [defaultStoreId, setDefaultStoreId]     = useState<number | null>(initDefaultId)
+  const [showPassword, setShowPassword]         = useState(false)
+  const [errors, setErrors]                     = useState<Record<string, string>>({})
 
   const qc = useQueryClient()
+
+  const toggleStore = (id: number) => {
+    setSelectedStoreIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      // If the default store was deselected, pick the first remaining
+      if (!next.includes(defaultStoreId ?? -1)) {
+        setDefaultStoreId(next[0] ?? null)
+      }
+      return next
+    })
+  }
+
+  const setDefault = (id: number) => {
+    if (!selectedStoreIds.includes(id)) return
+    setDefaultStoreId(id)
+  }
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -113,81 +222,90 @@ function UserFormModal({ user, roles, stores, isSuperAdmin, currentStoreId, onCl
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setErrors({})
+
+    // Validate stores
+    if (isSuperAdmin) {
+      if (selectedStoreIds.length === 0) {
+        setErrors(prev => ({ ...prev, store_ids: 'Veuillez sélectionner au moins un magasin.' }))
+        return
+      }
+      if (!defaultStoreId || !selectedStoreIds.includes(defaultStoreId)) {
+        setErrors(prev => ({ ...prev, store_id: 'Veuillez définir un magasin par défaut.' }))
+        return
+      }
+    }
+
     const payload: Record<string, unknown> = {
       name: form.name,
       role: form.role,
     }
+
     if (!isEdit) {
-      payload.email = form.email
+      payload.email    = form.email
       payload.password = form.password
-      payload.pin = form.pin
+      payload.pin      = form.pin
     }
     if (isEdit) {
       if (form.password) payload.password = form.password
-      if (form.pin)      payload.pin = form.pin
+      if (form.pin)      payload.pin      = form.pin
       payload.is_active = form.is_active
     }
-    if (isSuperAdmin) payload.store_id = parseInt(form.store_id)
+
+    if (isSuperAdmin) {
+      payload.store_id  = defaultStoreId
+      payload.store_ids = selectedStoreIds
+    }
+
     mutation.mutate(payload)
   }
 
-  const field = (label: string, key: keyof typeof form, type = 'text', required = false, hint?: string) => (
-    <div>
-      <label className="block text-xs font-semibold text-gray-600 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      {type === 'password' ? (
-        <div className="relative">
-          <input
-            type={showPassword ? 'text' : 'password'}
-            value={form[key] as string}
-            onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-            className={`input pr-9 ${errors[key] ? 'border-red-400' : ''}`}
-            placeholder={isEdit ? '(laisser vide pour ne pas changer)' : undefined}
-          />
-          <button type="button" onClick={() => setShowPassword(s => !s)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-            {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
-      ) : (
-        <input
-          type={type}
-          value={form[key] as string}
-          onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-          className={`input ${errors[key] ? 'border-red-400' : ''}`}
-          disabled={isEdit && (key === 'email')}
-          readOnly={isEdit && (key === 'email')}
-        />
-      )}
-      {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
-      {errors[key] && <p className="text-xs text-red-500 mt-0.5">{errors[key]}</p>}
-    </div>
-  )
-
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
               <Users size={17} className="text-primary" />
             </div>
             <div>
-              <h2 className="font-bold text-gray-900">{isEdit ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}</h2>
+              <h2 className="font-bold text-gray-900">{isEdit ? "Modifier l'utilisateur" : 'Nouvel utilisateur'}</h2>
               {isEdit && <p className="text-xs text-gray-400">{user!.email}</p>}
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Name */}
-          {field('Nom complet', 'name', 'text', true)}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Nom complet <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              className={`input ${errors.name ? 'border-red-400' : ''}`}
+            />
+            {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
+          </div>
 
           {/* Email (create only) */}
-          {!isEdit && field('Adresse email', 'email', 'email', true)}
+          {!isEdit && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Adresse email <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                className={`input ${errors.email ? 'border-red-400' : ''}`}
+              />
+              {errors.email && <p className="text-xs text-red-500 mt-0.5">{errors.email}</p>}
+            </div>
+          )}
 
           {/* Role */}
           <div>
@@ -210,33 +328,38 @@ function UserFormModal({ user, roles, stores, isSuperAdmin, currentStoreId, onCl
             {errors.role && <p className="text-xs text-red-500 mt-0.5">{errors.role}</p>}
           </div>
 
-          {/* Store (super_admin only) */}
+          {/* Store assignment (super_admin only) */}
           {isSuperAdmin && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">
-                Magasin <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={form.store_id}
-                onChange={e => setForm(f => ({ ...f, store_id: e.target.value }))}
-                className={`input ${errors.store_id ? 'border-red-400' : ''}`}
-                required
-              >
-                <option value="">-- Sélectionner un magasin --</option>
-                {stores.filter(s => s.is_active).map(s => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                ))}
-              </select>
-              {errors.store_id && <p className="text-xs text-red-500 mt-0.5">{errors.store_id}</p>}
-            </div>
+            <StoreSelector
+              stores={stores}
+              selectedIds={selectedStoreIds}
+              defaultId={defaultStoreId}
+              onToggle={toggleStore}
+              onSetDefault={setDefault}
+              error={errors.store_ids || errors.store_id}
+            />
           )}
 
           {/* Password */}
-          {field(
-            isEdit ? 'Nouveau mot de passe' : 'Mot de passe',
-            'password', 'password', !isEdit,
-            isEdit ? undefined : 'Minimum 8 caractères'
-          )}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              {isEdit ? 'Nouveau mot de passe' : 'Mot de passe'} {!isEdit && <span className="text-red-500">*</span>}
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                className={`input pr-9 ${errors.password ? 'border-red-400' : ''}`}
+                placeholder={isEdit ? '(laisser vide pour ne pas changer)' : 'Minimum 8 caractères'}
+              />
+              <button type="button" onClick={() => setShowPassword(s => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            {errors.password && <p className="text-xs text-red-500 mt-0.5">{errors.password}</p>}
+          </div>
 
           {/* PIN */}
           <div>
@@ -273,7 +396,7 @@ function UserFormModal({ user, roles, stores, isSuperAdmin, currentStoreId, onCl
           )}
         </form>
 
-        <div className="flex gap-3 px-6 pb-6">
+        <div className="flex gap-3 px-6 pb-6 flex-shrink-0">
           <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
             Annuler
           </button>
@@ -343,15 +466,15 @@ function DeleteModal({ user, onClose, onDeleted }: { user: UserEntry; onClose: (
 export default function UsersPage() {
   const { user: me, can } = useAuthStore()
   const navigate = useNavigate()
-  const isSuperAdmin = me?.roles?.includes('super_admin') && !me?.store_id
+  const isSuperAdmin = me?.roles?.includes('super_admin')
   const canManage = isSuperAdmin || can('manage_users')
   const canManageRoles = can('manage_roles')
 
-  const [search, setSearch] = useState('')
-  const [filterRole, setFilterRole] = useState('')
+  const [search, setSearch]           = useState('')
+  const [filterRole, setFilterRole]   = useState('')
   const [filterActive, setFilterActive] = useState<'' | 'true' | 'false'>('')
-  const [showForm, setShowForm] = useState(false)
-  const [editTarget, setEditTarget] = useState<UserEntry | null>(null)
+  const [showForm, setShowForm]       = useState(false)
+  const [editTarget, setEditTarget]   = useState<UserEntry | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserEntry | null>(null)
 
   const qc = useQueryClient()
@@ -362,20 +485,38 @@ export default function UsersPage() {
     staleTime: 30_000,
   })
 
-  const { data: roles = [] } = useQuery<RoleEntry[]>({
-    queryKey: ['roles'],
-    queryFn: () => api.get('/roles').then(r => r.data),
-    staleTime: 300_000,
+  const FALLBACK_ROLES: RoleEntry[] = [
+    { id: 1, name: 'super_admin' },
+    { id: 2, name: 'gerant' },
+    { id: 3, name: 'caissier' },
+    { id: 4, name: 'serveur' },
+    { id: 5, name: 'cuisinier' },
+    { id: 6, name: 'magasinier' },
+    { id: 7, name: 'comptable' },
+    { id: 8, name: 'proprietaire' },
+  ]
+
+  const { data: roles = FALLBACK_ROLES } = useQuery<RoleEntry[]>({
+    queryKey: ['roles-simple'],
+    queryFn: async () => {
+      try {
+        const r = await api.get('/roles/simple')
+        if (Array.isArray(r.data) && r.data.length > 0) return r.data as RoleEntry[]
+      } catch {
+        // ignore — utilise le fallback
+      }
+      return FALLBACK_ROLES
+    },
+    retry: 1,
   })
 
   const { data: stores = [] } = useQuery<StoreEntry[]>({
     queryKey: ['stores-list'],
     queryFn: () => api.get('/stores').then(r => r.data),
-    enabled: isSuperAdmin,
+    enabled: !!isSuperAdmin,
     staleTime: 60_000,
   })
 
-  // Toggle active status
   const toggleActive = useMutation({
     mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
       api.put(`/users/${id}`, { is_active }),
@@ -386,7 +527,6 @@ export default function UsersPage() {
     onError: () => toast.error('Erreur lors de la mise à jour'),
   })
 
-  // ── Derived data ──────────────────────────────────────────────────────────
   const filtered = users.filter(u => {
     if (search && !u.name.toLowerCase().includes(search.toLowerCase()) &&
         !u.email.toLowerCase().includes(search.toLowerCase())) return false
@@ -498,7 +638,7 @@ export default function UsersPage() {
               <tr className="border-b bg-gray-50 text-xs text-gray-500 font-semibold">
                 <th className="text-left px-5 py-3">Utilisateur</th>
                 <th className="text-left px-4 py-3">Rôle</th>
-                {isSuperAdmin && <th className="text-left px-4 py-3">Magasin</th>}
+                {isSuperAdmin && <th className="text-left px-4 py-3">Magasins</th>}
                 <th className="text-left px-4 py-3 hidden md:table-cell">Dernière connexion</th>
                 <th className="text-center px-4 py-3">Statut</th>
                 {canManage && <th className="text-center px-4 py-3">Actions</th>}
@@ -506,9 +646,10 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map(u => {
-                const initial = u.name.charAt(0).toUpperCase()
+                const initial  = u.name.charAt(0).toUpperCase()
                 const roleName = u.roles?.[0]?.name ?? ''
-                const isMe = u.id === me?.id
+                const isMe     = u.id === me?.id
+                const allStores = u.stores?.length ? u.stores : (u.store ? [u.store] : [])
 
                 return (
                   <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${!u.is_active ? 'opacity-60' : ''}`}>
@@ -535,16 +676,25 @@ export default function UsersPage() {
                       {roleName ? <RoleBadge role={roleName} /> : <span className="text-gray-300 text-xs">—</span>}
                     </td>
 
-                    {/* Store (super_admin only) */}
+                    {/* Stores (super_admin only) */}
                     {isSuperAdmin && (
                       <td className="px-4 py-3">
-                        {u.store ? (
-                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                            <StoreIcon size={12} className="text-gray-400" />
-                            <span>{u.store.name}</span>
-                          </div>
-                        ) : (
+                        {allStores.length === 0 ? (
                           <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">Global</span>
+                        ) : (
+                          <div className="flex flex-col gap-0.5">
+                            {allStores.map(s => (
+                              <div key={s.id} className="flex items-center gap-1 text-xs">
+                                <StoreIcon size={11} className="text-gray-400 flex-shrink-0" />
+                                <span className="text-gray-700">{s.name}</span>
+                                {s.id === u.store_id && (
+                                  <span title="Défaut" className="inline-flex">
+                                    <Star size={10} className="text-amber-500 fill-amber-500 flex-shrink-0" />
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </td>
                     )}

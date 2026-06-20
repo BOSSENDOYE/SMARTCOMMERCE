@@ -18,6 +18,7 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
+        Route::post('/auth/switch-store', [AuthController::class, 'switchStore']);
 
         // Notifications (cloche)
         Route::get('/notifications/summary', [\App\Http\Controllers\Api\NotificationController::class, 'summary']);
@@ -99,6 +100,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/units', fn() => response()->json(\App\Models\Unit::orderBy('name')->get()));
 
         // Suppliers
+        Route::get('/suppliers/import-template', [\App\Http\Controllers\Api\SupplierImportController::class, 'template']);
+        Route::post('/suppliers/import/preview',  [\App\Http\Controllers\Api\SupplierImportController::class, 'preview']);
+        Route::post('/suppliers/import/confirm',  [\App\Http\Controllers\Api\SupplierImportController::class, 'confirm']);
         Route::get('/suppliers/stats', [\App\Http\Controllers\Api\SupplierController::class, 'stats']);
         Route::apiResource('/suppliers', \App\Http\Controllers\Api\SupplierController::class);
         Route::get('/suppliers/{supplier}/orders', [\App\Http\Controllers\Api\SupplierController::class, 'getOrders']);
@@ -110,12 +114,22 @@ Route::prefix('v1')->group(function () {
         Route::delete('/suppliers/{supplier}/products/{product}', [\App\Http\Controllers\Api\SupplierController::class, 'unlinkProduct']);
 
         // Clients
+        Route::get('/clients/import-template', [\App\Http\Controllers\Api\ClientImportController::class, 'template']);
+        Route::post('/clients/import/preview', [\App\Http\Controllers\Api\ClientImportController::class, 'preview']);
+        Route::post('/clients/import/confirm', [\App\Http\Controllers\Api\ClientImportController::class, 'confirm']);
         Route::get('/clients/stats', [\App\Http\Controllers\Api\ClientController::class, 'stats']);
-        Route::get('/clients/search', fn(\Illuminate\Http\Request $r) => response()->json(
-            \App\Models\Client::where('store_id', $r->user()->store_id)
-                ->where(fn($q) => $q->where('phone', 'like', "%{$r->q}%")->orWhere('name', 'like', "%{$r->q}%"))
-                ->limit(10)->get()
-        ));
+        Route::get('/clients/search', function (\Illuminate\Http\Request $r) {
+            $term = trim((string) $r->input('q', ''));
+            if ($term === '') return response()->json([]);
+            return response()->json(
+                \App\Models\Client::where('store_id', $r->user()->store_id)
+                    ->where(fn($q) => $q->where('phone', 'like', "%{$term}%")
+                                        ->orWhere('name',  'like', "%{$term}%"))
+                    ->orderBy('name')
+                    ->limit(15)
+                    ->get(['id','name','phone','credit_balance','account_balance'])
+            );
+        });
         Route::apiResource('/clients', \App\Http\Controllers\Api\ClientController::class);
         Route::get('/clients/{client}/sales', [\App\Http\Controllers\Api\ClientController::class, 'sales']);
         Route::get('/clients/{client}/loyalty-transactions', [\App\Http\Controllers\Api\ClientController::class, 'loyaltyTransactions']);
@@ -125,6 +139,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/clients/{client}/account-transactions', [\App\Http\Controllers\Api\ClientController::class, 'accountTransactions']);
         Route::post('/clients/{client}/deposit', [\App\Http\Controllers\Api\ClientController::class, 'deposit']);
         Route::post('/clients/{client}/withdraw', [\App\Http\Controllers\Api\ClientController::class, 'withdraw']);
+        // Encours (créances) client
+        Route::get('/clients/{client}/encours', [\App\Http\Controllers\Api\EncourController::class, 'index']);
+        Route::post('/clients/{client}/payer-encours', [\App\Http\Controllers\Api\EncourController::class, 'pay']);
 
         // Purchase Orders
         Route::get('/purchase-orders/stats', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'stats']);
@@ -257,11 +274,20 @@ Route::prefix('v1')->group(function () {
             ]);
         });
 
-        // Inventory
+        // Inventory — specific routes before apiResource to avoid conflicts
+        Route::get('/inventory-sessions/active',                                              [\App\Http\Controllers\Api\InventoryController::class, 'active']);
+        Route::get('/inventory-sessions/my-sheets',                                           [\App\Http\Controllers\Api\InventorySheetController::class, 'mySheets']);
         Route::apiResource('/inventory-sessions', \App\Http\Controllers\Api\InventoryController::class);
-        Route::post('/inventory-sessions/{inventorySession}/validate', [\App\Http\Controllers\Api\InventoryController::class, 'validate']);
-        Route::post('/inventory-sessions/{inventorySession}/items', [\App\Http\Controllers\Api\InventoryController::class, 'addItem']);
+        Route::post('/inventory-sessions/{inventorySession}/start',      [\App\Http\Controllers\Api\InventoryController::class, 'start']);
+        Route::post('/inventory-sessions/{inventorySession}/validate',   [\App\Http\Controllers\Api\InventoryController::class, 'validate']);
+        Route::post('/inventory-sessions/{inventorySession}/transmit',   [\App\Http\Controllers\Api\InventoryController::class, 'transmit']);
+        Route::post('/inventory-sessions/{inventorySession}/items',      [\App\Http\Controllers\Api\InventoryController::class, 'addItem']);
         Route::delete('/inventory-sessions/{inventorySession}/items/{item}', [\App\Http\Controllers\Api\InventoryController::class, 'removeItem']);
+        // Inventory sheets
+        Route::post('/inventory-sessions/{inventorySession}/sheets',                          [\App\Http\Controllers\Api\InventorySheetController::class, 'store']);
+        Route::post('/inventory-sessions/{inventorySession}/sheets/{sheet}/validate',         [\App\Http\Controllers\Api\InventorySheetController::class, 'validateSheet']);
+        Route::post('/inventory-sessions/{inventorySession}/sheets/{sheet}/items',            [\App\Http\Controllers\Api\InventorySheetController::class, 'addSheetItem']);
+        Route::delete('/inventory-sessions/{inventorySession}/sheets/{sheet}',                [\App\Http\Controllers\Api\InventorySheetController::class, 'destroy']);
 
         // POS — Sales
         Route::post('/sales/sync-offline', [SaleController::class, 'syncOffline']);
@@ -270,10 +296,12 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('/sales', SaleController::class)->only(['index', 'store', 'show']);
 
         // Cash Sessions
+        Route::get('/cash-sessions', [CashSessionController::class, 'index']);
         Route::post('/cash-sessions/open', [CashSessionController::class, 'open']);
         Route::get('/cash-sessions/current', [CashSessionController::class, 'current']);
         Route::post('/cash-sessions/{session}/close', [CashSessionController::class, 'close']);
         Route::post('/cash-sessions/{session}/movements', [CashSessionController::class, 'addMovement']);
+        Route::get('/cash-sessions/{session}', [CashSessionController::class, 'show']);
 
         // Promotions
         Route::get('/promotions/stats', [\App\Http\Controllers\Api\PromotionController::class, 'stats']);
@@ -380,6 +408,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('/users', \App\Http\Controllers\Api\UserController::class);
         Route::put('/profile', [\App\Http\Controllers\Api\UserController::class, 'updateProfile']);
         // Roles & Permissions management
+        Route::get('/roles/simple', [\App\Http\Controllers\Api\RoleController::class, 'simple']);
         Route::get('/roles', [\App\Http\Controllers\Api\RoleController::class, 'index']);
         Route::post('/roles', [\App\Http\Controllers\Api\RoleController::class, 'store']);
         Route::put('/roles/{role}', [\App\Http\Controllers\Api\RoleController::class, 'update']);
@@ -420,6 +449,10 @@ Route::prefix('v1')->group(function () {
         });
 
         // ── Facturation & Devis ────────────────────────────────────────────────
+        Route::get('/invoices/import-template', [\App\Http\Controllers\Api\InvoiceImportController::class, 'template']);
+        Route::post('/invoices/import/preview', [\App\Http\Controllers\Api\InvoiceImportController::class, 'preview']);
+        Route::post('/invoices/import/confirm', [\App\Http\Controllers\Api\InvoiceImportController::class, 'confirm']);
+
         Route::prefix('invoices')->group(function () {
             Route::get('/stats',                   [\App\Http\Controllers\Api\InvoiceController::class, 'stats']);
             Route::get('/',                        [\App\Http\Controllers\Api\InvoiceController::class, 'index']);
@@ -444,6 +477,25 @@ Route::prefix('v1')->group(function () {
             Route::post('/{quote}/convert',        [\App\Http\Controllers\Api\InvoiceController::class, 'quoteConvert']);
         });
 
+        // ── Relances factures ─────────────────────────────────────────────────────
+        Route::get('/invoice-reminder-rules/default-template', [\App\Http\Controllers\Api\InvoiceReminderController::class, 'getDefaultTemplate']);
+        Route::get('/invoice-reminder-rules',                  [\App\Http\Controllers\Api\InvoiceReminderController::class, 'indexRules']);
+        Route::post('/invoice-reminder-rules',                 [\App\Http\Controllers\Api\InvoiceReminderController::class, 'storeRule']);
+        Route::put('/invoice-reminder-rules/{invoiceReminderRule}',    [\App\Http\Controllers\Api\InvoiceReminderController::class, 'updateRule']);
+        Route::delete('/invoice-reminder-rules/{invoiceReminderRule}', [\App\Http\Controllers\Api\InvoiceReminderController::class, 'destroyRule']);
+        Route::get('/invoice-reminder-queue',                          [\App\Http\Controllers\Api\InvoiceReminderController::class, 'indexQueue']);
+        Route::post('/invoice-reminder-queue/process',                 [\App\Http\Controllers\Api\InvoiceReminderController::class, 'processQueue']);
+        Route::post('/invoice-reminder-queue/{invoiceReminderQueue}/send',  [\App\Http\Controllers\Api\InvoiceReminderController::class, 'markSent']);
+        Route::post('/invoice-reminder-queue/{invoiceReminderQueue}/skip',  [\App\Http\Controllers\Api\InvoiceReminderController::class, 'markSkipped']);
+        // Twilio
+        Route::get('/twilio/status',    [\App\Http\Controllers\Api\InvoiceReminderController::class, 'twilioStatus']);
+        Route::post('/twilio/test',     [\App\Http\Controllers\Api\InvoiceReminderController::class, 'twilioTest']);
+        Route::post('/twilio/send-test', [\App\Http\Controllers\Api\InvoiceReminderController::class, 'twilioSendTest']);
+        // Mail
+        Route::get('/mail/status',      [\App\Http\Controllers\Api\InvoiceReminderController::class, 'mailStatus']);
+        Route::post('/mail/test',        [\App\Http\Controllers\Api\InvoiceReminderController::class, 'mailTest']);
+        Route::post('/mail/send-test',   [\App\Http\Controllers\Api\InvoiceReminderController::class, 'mailSendTest']);
+
         // ── Rayons / Rangement ────────────────────────────────────────────────────
         Route::prefix('sections')->group(function () {
             Route::get('/',                                 [\App\Http\Controllers\Api\StoreSectionController::class, 'index']);
@@ -455,6 +507,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('/{section}',                    [\App\Http\Controllers\Api\StoreSectionController::class, 'destroy']);
             Route::get('/{section}/products',              [\App\Http\Controllers\Api\StoreSectionController::class, 'products']);
             Route::post('/{section}/assign',               [\App\Http\Controllers\Api\StoreSectionController::class, 'assignProduct']);
+            Route::post('/{section}/assign-bulk',          [\App\Http\Controllers\Api\StoreSectionController::class, 'assignBulk']);
         });
 
         // ── CRM ───────────────────────────────────────────────────────────────

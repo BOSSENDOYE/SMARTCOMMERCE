@@ -32,11 +32,17 @@ class AuthController extends Controller
 
         AuditService::log('login', 'users', $user->id);
 
+        $user->load(['store', 'stores']);
+
         return response()->json([
-            'user' => $user->load('store')->only([
+            'user' => $user->only([
                 'id', 'name', 'email', 'store_id', 'store',
                 'is_active', 'last_login_at',
-            ]) + ['roles' => $user->getRoleNames(), 'permissions' => $user->getAllPermissions()->pluck('name')],
+            ]) + [
+                'roles'       => $user->getRoleNames(),
+                'permissions' => $user->getAllPermissions()->pluck('name'),
+                'stores'      => $user->stores->map(fn($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code]),
+            ],
             'token' => $token,
         ]);
     }
@@ -77,12 +83,41 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        $user = $request->user()->load('store');
+        $user = $request->user()->load(['store', 'stores']);
         return response()->json($user->only([
             'id', 'name', 'email', 'store_id', 'store', 'last_login_at',
         ]) + [
-            'roles' => $user->getRoleNames(),
+            'roles'       => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name'),
+            'stores'      => $user->stores->map(fn($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code]),
+        ]);
+    }
+
+    public function switchStore(Request $request)
+    {
+        $data = $request->validate(['store_id' => 'required|integer|exists:stores,id']);
+        $user    = $request->user();
+        $storeId = (int) $data['store_id'];
+
+        // Verify the user is actually assigned to this store
+        $hasAccess = $user->stores()->where('stores.id', $storeId)->exists()
+            || (int) $user->store_id === $storeId;
+
+        if (!$hasAccess) {
+            return response()->json(['message' => "Vous n'avez pas accès à ce magasin."], 403);
+        }
+
+        $user->update(['store_id' => $storeId]);
+        $user->load(['store', 'stores']);
+
+        AuditService::log('switch_store', 'stores', $storeId);
+
+        return response()->json($user->only([
+            'id', 'name', 'email', 'store_id', 'store', 'last_login_at',
+        ]) + [
+            'roles'       => $user->getRoleNames(),
+            'permissions' => $user->getAllPermissions()->pluck('name'),
+            'stores'      => $user->stores->map(fn($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code]),
         ]);
     }
 }

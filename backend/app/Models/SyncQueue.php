@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SyncQueue extends Model
 {
+    const UPDATED_AT = null;
+
     protected $fillable = [
         'store_id', 'model_type', 'model_id', 'action',
         'payload', 'status', 'attempts', 'error_message', 'processed_at',

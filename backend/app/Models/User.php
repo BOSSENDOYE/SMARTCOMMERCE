@@ -36,6 +36,11 @@ class User extends Authenticatable
         return $this->belongsTo(Store::class);
     }
 
+    public function stores()
+    {
+        return $this->belongsToMany(Store::class, 'user_stores');
+    }
+
     public function auditLogs()
     {
         return $this->hasMany(AuditLog::class);

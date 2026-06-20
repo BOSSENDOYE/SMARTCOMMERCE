@@ -8,7 +8,8 @@ import {
   Phone, Mail, MapPin, Star, CreditCard, ShoppingBag, Gift, TrendingUp,
   ArrowUpCircle, ArrowDownCircle, Building2, User, Filter, ChevronDown,
   AlertCircle, ToggleLeft, ToggleRight, Wallet, ArrowDownToLine, ArrowUpFromLine,
-  TrendingDown, Activity,
+  TrendingDown, Activity, Upload, Download, AlertTriangle, CheckCircle2,
+  Banknote, Loader2, FileText,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -70,8 +71,49 @@ interface LoyaltyTx {
 
 interface Paginated<T> { data: T[]; total: number; current_page: number; last_page: number }
 
+interface ClientInvoice {
+  id: number
+  reference: string
+  object?: string
+  status: 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'cancelled'
+  issue_date: string
+  due_date?: string
+  total_ttc: number
+  paid_amount: number
+  balance: number
+  is_overdue: boolean
+}
+
 type TypeFilter = 'all' | 'individual' | 'company'
 type StatusFilter = 'all' | 'active' | 'inactive' | 'credit'
+
+interface EncourItem {
+  id: number
+  type: 'invoice' | 'sale'
+  reference: string
+  label: string
+  date: string
+  due_date: string | null
+  total_ttc: number
+  paid_amount: number
+  balance: number
+  status: string
+  is_overdue: boolean
+}
+
+interface EncourData {
+  client: { id: number; name: string; phone: string; credit_balance: number; account_balance: number }
+  items: EncourItem[]
+  total_due: number
+}
+
+const PAYMENT_METHODS_ENCOUR = [
+  { value: 'cash',          label: 'Espèces' },
+  { value: 'mobile_money',  label: 'Mobile' },
+  { value: 'bank_transfer', label: 'Virement' },
+  { value: 'check',         label: 'Chèque' },
+  { value: 'other',         label: 'Autre' },
+]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -551,11 +593,12 @@ function DepositWithdrawModal({ client, mode, onClose }: {
 function ClientDetail({ client: initialClient, onClose, onEdit }: {
   client: Client; onClose: () => void; onEdit: () => void
 }) {
-  const [tab, setTab] = useState<'sales' | 'loyalty' | 'account'>('sales')
+  const [tab, setTab] = useState<'sales' | 'invoices' | 'loyalty' | 'account'>('sales')
   const [showCreditModal, setShowCreditModal] = useState(false)
   const [showLoyaltyModal, setShowLoyaltyModal] = useState(false)
   const [showDeposit, setShowDeposit] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
+  const [showEncour, setShowEncour] = useState(false)
 
   const { data: clientData } = useQuery<Client>({
     queryKey: ['client', initialClient.id],
@@ -579,6 +622,12 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
     queryKey: ['account-tx', client.id],
     queryFn: () => api.get(`/clients/${client.id}/account-transactions`).then(r => r.data),
     enabled: tab === 'account',
+  })
+
+  const { data: invoicesData } = useQuery<{ data: ClientInvoice[] }>({
+    queryKey: ['client-invoices', client.id],
+    queryFn: () => api.get(`/invoices?client_id=${client.id}&per_page=50&sort=issue_date&dir=desc`).then(r => r.data),
+    enabled: tab === 'invoices',
   })
 
   const creditPct = client.credit_limit > 0
@@ -612,6 +661,10 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => setShowEncour(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors">
+                <Banknote size={14} /> Encaisser
+              </button>
               <button onClick={onEdit}
                 className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-200">
                 <Edit2 size={14} /> Modifier
@@ -744,9 +797,10 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
             <div>
               <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
                 {([
-                  ['sales',   'Achats',        ShoppingBag],
-                  ['account', 'Compte',         Wallet],
-                  ['loyalty', 'Fidélité',       Gift],
+                  ['sales',    'Achats',    ShoppingBag],
+                  ['invoices', 'Factures',  FileText],
+                  ['account',  'Compte',    Wallet],
+                  ['loyalty',  'Fidélité',  Gift],
                 ] as const).map(([key, label, Icon]) => (
                   <button key={key} onClick={() => setTab(key)}
                     className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
@@ -782,6 +836,60 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
                     }
                   </div>
                 )}
+
+                {tab === 'invoices' && (() => {
+                  const STATUS_INV: Record<string, { label: string; cls: string }> = {
+                    draft:     { label: 'Brouillon',  cls: 'bg-gray-100 text-gray-500' },
+                    sent:      { label: 'Non payé',   cls: 'bg-blue-100 text-blue-700' },
+                    partial:   { label: 'Partiel',    cls: 'bg-yellow-100 text-yellow-700' },
+                    paid:      { label: 'Payé',       cls: 'bg-green-100 text-green-700' },
+                    overdue:   { label: 'En retard',  cls: 'bg-red-100 text-red-700' },
+                    cancelled: { label: 'Annulé',     cls: 'bg-gray-100 text-gray-400' },
+                  }
+                  const invs = invoicesData?.data ?? []
+                  const totalDue = invs.filter(i => ['sent','partial','overdue'].includes(i.status))
+                    .reduce((s, i) => s + (i.balance ?? (i.total_ttc - i.paid_amount)), 0)
+                  return (
+                    <div className="space-y-2">
+                      {totalDue > 0 && (
+                        <div className="flex items-center justify-between p-3 bg-red-50 rounded-xl mb-3">
+                          <span className="text-sm font-semibold text-red-700">Total restant dû</span>
+                          <span className="text-base font-bold text-red-700">{formatCurrency(totalDue)}</span>
+                        </div>
+                      )}
+                      {invs.length === 0
+                        ? <p className="text-sm text-gray-400 text-center py-6">Aucune facture enregistrée</p>
+                        : invs.map((inv: ClientInvoice) => {
+                            const st = STATUS_INV[inv.status] ?? { label: inv.status, cls: 'bg-gray-100 text-gray-500' }
+                            const balance = inv.balance ?? (inv.total_ttc - inv.paid_amount)
+                            return (
+                              <div key={inv.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-mono font-medium text-gray-700">{inv.reference}</p>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${st.cls}`}>{st.label}</span>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    {inv.object && inv.object !== 'Import' ? `${inv.object} · ` : ''}
+                                    {inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('fr-SN', { day:'2-digit', month:'short', year:'numeric' }) : ''}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm font-bold text-gray-900">{formatCurrency(inv.total_ttc)}</p>
+                                  {balance > 0.01 && (
+                                    <p className="text-xs font-semibold text-red-600">Reste: {formatCurrency(balance)}</p>
+                                  )}
+                                  {balance <= 0.01 && inv.paid_amount > 0 && (
+                                    <p className="text-xs text-green-600">Soldé</p>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })
+                      }
+                    </div>
+                  )
+                })()}
 
                 {tab === 'loyalty' && (
                   <div className="space-y-1">
@@ -879,7 +987,578 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
       {showLoyaltyModal && <AdjustLoyaltyModal client={client} onClose={() => setShowLoyaltyModal(false)} />}
       {showDeposit && <DepositWithdrawModal client={client} mode="deposit" onClose={() => setShowDeposit(false)} />}
       {showWithdraw && <DepositWithdrawModal client={client} mode="withdraw" onClose={() => setShowWithdraw(false)} />}
+      {showEncour && (
+        <PayEncourModal
+          client={client}
+          onClose={() => setShowEncour(false)}
+          onSuccess={() => setShowEncour(false)}
+        />
+      )}
     </>
+  )
+}
+
+// ─── Pay Encour Modal ─────────────────────────────────────────────────────────
+
+function PayEncourModal({ client, onClose, onSuccess }: {
+  client: Client
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [method, setMethod] = useState('cash')
+  const [reference, setReference] = useState('')
+  const [note, setNote] = useState('')
+  const [advance, setAdvance] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [amounts, setAmounts] = useState<Record<string, string>>({})
+
+  const { data, isLoading } = useQuery<EncourData>({
+    queryKey: ['encours', client.id],
+    queryFn: () => api.get(`/clients/${client.id}/encours`).then(r => r.data),
+  })
+
+  // Pré-sélectionner tous les encours avec leur solde restant
+  const itemsKey = data?.items?.map(i => `${i.type}-${i.id}`).join(',') ?? ''
+  useEffect(() => {
+    if (!data?.items?.length) return
+    const newSelected = new Set<string>()
+    const newAmounts: Record<string, string> = {}
+    data.items.forEach(item => {
+      const key = `${item.type}-${item.id}`
+      newSelected.add(key)
+      newAmounts[key] = String(item.balance)
+    })
+    setSelected(newSelected)
+    setAmounts(newAmounts)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsKey])
+
+  const totalSelected = Array.from(selected).reduce((sum, key) => {
+    return sum + (parseFloat(amounts[key] || '0') || 0)
+  }, 0)
+  const totalWithAdvance = totalSelected + (parseFloat(advance) || 0)
+
+  const mutation = useMutation({
+    mutationFn: (payload: object) =>
+      api.post(`/clients/${client.id}/payer-encours`, payload).then(r => r.data),
+    onSuccess: () => {
+      toast.success('Paiement enregistré avec succès')
+      queryClient.invalidateQueries({ queryKey: ['encours', client.id] })
+      queryClient.invalidateQueries({ queryKey: ['client', client.id] })
+      queryClient.invalidateQueries({ queryKey: ['client-sales', client.id] })
+      queryClient.invalidateQueries({ queryKey: ['account-tx', client.id] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+      onSuccess()
+      onClose()
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erreur lors du paiement')
+    },
+  })
+
+  const handleSubmit = () => {
+    const payments = Array.from(selected)
+      .filter(key => (parseFloat(amounts[key] || '0') || 0) > 0)
+      .map(key => {
+        const dashIdx = key.indexOf('-')
+        return {
+          type: key.slice(0, dashIdx),
+          id: parseInt(key.slice(dashIdx + 1)),
+          amount: parseFloat(amounts[key]),
+        }
+      })
+
+    const advanceAmount = parseFloat(advance) || 0
+    if (payments.length === 0 && advanceAmount <= 0) {
+      toast.error('Sélectionnez au moins un encours ou saisissez une avance')
+      return
+    }
+    mutation.mutate({
+      method,
+      reference: reference || undefined,
+      note: note || undefined,
+      payments: payments.length > 0 ? payments : undefined,
+      advance: advanceAmount > 0 ? advanceAmount : undefined,
+    })
+  }
+
+  const toggleItem = (key: string) => {
+    const next = new Set(selected)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    setSelected(next)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <div className="p-5 border-b flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Banknote size={20} className="text-primary" />
+            </div>
+            <div>
+              <h2 className="font-bold text-gray-900">Paiement des encours</h2>
+              <p className="text-sm text-gray-500">{client.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {isLoading && (
+            <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+              <Loader2 size={18} className="animate-spin" /> Chargement des encours...
+            </div>
+          )}
+
+          {data && (
+            <>
+              {/* Résumé encours */}
+              {data.total_due > 0 ? (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={15} className="text-orange-500" />
+                    <span className="text-sm font-semibold text-orange-700">Total dû</span>
+                  </div>
+                  <span className="text-lg font-bold text-orange-700">{formatCurrency(data.total_due)}</span>
+                </div>
+              ) : (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-green-500" />
+                  <span className="text-sm text-green-700 font-medium">Aucun encours — le client est à jour</span>
+                </div>
+              )}
+
+              {/* Moyen de paiement */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Moyen de paiement</label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {PAYMENT_METHODS_ENCOUR.map(m => (
+                    <button key={m.value} onClick={() => setMethod(m.value)}
+                      className={`py-2 px-1 rounded-xl text-xs font-semibold text-center transition-all border ${
+                        method === m.value
+                          ? 'bg-primary text-white border-primary shadow-sm'
+                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                      }`}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Référence</label>
+                  <input value={reference} onChange={e => setReference(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="N° chèque, transaction..." />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Note</label>
+                  <input value={note} onChange={e => setNote(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="Remarque..." />
+                </div>
+              </div>
+
+              {/* Liste des encours */}
+              {data.items.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Encours à régler</label>
+                    <div className="flex gap-2 text-[11px]">
+                      <button onClick={() => setSelected(new Set(data.items.map(i => `${i.type}-${i.id}`)))}
+                        className="text-primary font-semibold hover:underline">Tout</button>
+                      <span className="text-gray-300">·</span>
+                      <button onClick={() => setSelected(new Set())}
+                        className="text-gray-400 font-semibold hover:underline">Aucun</button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {data.items.map(item => {
+                      const key = `${item.type}-${item.id}`
+                      const isChecked = selected.has(key)
+                      return (
+                        <div key={key}
+                          className={`border rounded-xl p-3 transition-all ${isChecked ? 'border-primary/30 bg-primary/5' : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="flex items-start gap-2">
+                            <button onClick={() => toggleItem(key)} className="mt-0.5 flex-shrink-0">
+                              {isChecked
+                                ? <div className="w-4 h-4 rounded bg-primary flex items-center justify-center"><Check size={10} className="text-white" /></div>
+                                : <div className="w-4 h-4 rounded border-2 border-gray-300" />
+                              }
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-sm font-semibold text-gray-800">{item.reference}</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                  item.type === 'invoice'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-orange-100 text-orange-700'
+                                }`}>
+                                  {item.type === 'invoice' ? 'Facture' : 'Vente crédit'}
+                                </span>
+                                {item.is_overdue && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">En retard</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5 flex-wrap">
+                                <span>{new Date(item.date).toLocaleDateString('fr-FR')}</span>
+                                {item.due_date && (
+                                  <span>Échéance : {new Date(item.due_date).toLocaleDateString('fr-FR')}</span>
+                                )}
+                                {item.paid_amount > 0 && (
+                                  <span className="text-emerald-600">Déjà encaissé : {formatCurrency(item.paid_amount)}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-[10px] text-gray-400">Reste dû</p>
+                              <p className="text-sm font-bold text-orange-600">{formatCurrency(item.balance)}</p>
+                            </div>
+                          </div>
+                          {isChecked && (
+                            <div className="mt-2.5 ml-6 flex items-center gap-2">
+                              <label className="text-xs text-gray-500 flex-shrink-0">Montant :</label>
+                              <input
+                                type="number" min="0" max={item.balance}
+                                value={amounts[key] ?? String(item.balance)}
+                                onChange={e => setAmounts(prev => ({ ...prev, [key]: e.target.value }))}
+                                className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                              />
+                              <button
+                                onClick={() => setAmounts(prev => ({ ...prev, [key]: String(item.balance) }))}
+                                className="text-[11px] text-primary font-semibold hover:underline flex-shrink-0">
+                                Max
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Avance sur compte */}
+              <div className="border border-dashed border-gray-200 rounded-xl p-3">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Avance sur compte
+                  <span className="ml-1 text-gray-400 font-normal normal-case">(crédite le solde compte du client)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min="0"
+                    value={advance}
+                    onChange={e => setAdvance(e.target.value)}
+                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="0"
+                  />
+                  <span className="text-sm text-gray-500 flex-shrink-0">FCFA</span>
+                </div>
+                {data.client.account_balance !== 0 && (
+                  <p className="text-xs mt-1 text-gray-400">
+                    Solde actuel : <span className={data.client.account_balance > 0 ? 'text-emerald-600' : 'text-red-500'}>
+                      {data.client.account_balance >= 0 ? '+' : '−'}{formatCurrency(Math.abs(data.client.account_balance))}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t flex-shrink-0 bg-gray-50 rounded-b-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-gray-500 font-medium">Total à encaisser</span>
+            <span className="text-2xl font-bold text-gray-900">{formatCurrency(totalWithAdvance)}</span>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} disabled={mutation.isPending}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-white disabled:opacity-50">
+              Annuler
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={mutation.isPending || totalWithAdvance <= 0 || isLoading}
+              className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2">
+              {mutation.isPending
+                ? <><Loader2 size={15} className="animate-spin" /> Traitement...</>
+                : <><Check size={15} /> Confirmer le paiement</>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Import Clients Modal ─────────────────────────────────────────────────────
+
+interface ImportRow {
+  row: number
+  action: 'create' | 'update'
+  existing_id?: number
+  nom: string
+  telephone?: string
+  email?: string
+  adresse?: string
+  type: string
+  ninea?: string
+  notes?: string
+  credit_balance: number
+  account_balance: number
+  credit_limit: number
+  errors: string[]
+  warnings: string[]
+  status: 'ok' | 'error'
+}
+
+interface PreviewResult {
+  rows: ImportRow[]
+  total: number
+  ok: number
+  errors: number
+  creates: number
+  updates: number
+}
+
+function ImportClientsModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
+  const [preview, setPreview] = useState<PreviewResult | null>(null)
+  const [result, setResult] = useState<{ created: number; updated: number; skipped: number; errors: string[] } | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  const previewMutation = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      return api.post<PreviewResult>('/clients/import/preview', fd)
+    },
+    onSuccess: (res) => {
+      setPreview(res.data)
+      setStep('preview')
+    },
+    onError: (err: unknown) => {
+      const data = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
+      const fieldErrors: string[] = data?.errors ? (Object.values(data.errors).flat() as string[]) : []
+      toast.error(fieldErrors[0] ?? data?.message ?? 'Erreur lors de la lecture du fichier')
+    },
+  })
+
+  const confirmMutation = useMutation({
+    mutationFn: () => {
+      const okRows = preview!.rows.filter(r => r.status === 'ok')
+      return api.post('/clients/import/confirm', { rows: okRows })
+    },
+    onSuccess: (res) => {
+      setResult(res.data)
+      setStep('done')
+      qc.invalidateQueries({ queryKey: ['clients'] })
+      qc.invalidateQueries({ queryKey: ['client-stats'] })
+    },
+    onError: (err: unknown) => {
+      const data = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
+      const fieldErrors: string[] = data?.errors ? (Object.values(data.errors).flat() as string[]) : []
+      toast.error(fieldErrors[0] ?? data?.message ?? "Erreur lors de l'import")
+    },
+  })
+
+  const handleFile = (file: File) => {
+    if (!file) return
+    previewMutation.mutate(file)
+  }
+
+  const downloadTemplate = async () => {
+    try {
+      const res = await api.get('/clients/import-template', { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'modele_import_clients.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Erreur téléchargement modèle')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="p-6 border-b flex items-center justify-between flex-shrink-0">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <Upload size={20} className="text-primary" />
+            Import clients
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Step: Upload */}
+          {step === 'upload' && (
+            <div className="space-y-5">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
+                <AlertCircle size={18} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-1">Colonnes du fichier</p>
+                  <p><strong>nom *</strong>, telephone, email, adresse, type (individual/company), ninea, notes, <strong>credit_en_cours</strong>, <strong>solde_compte</strong>, plafond_credit</p>
+                  <p className="mt-1 text-blue-600">Les clients existants sont identifiés par leur téléphone et seront mis à jour.</p>
+                </div>
+              </div>
+
+              <button onClick={downloadTemplate}
+                className="flex items-center gap-2 text-sm text-primary hover:underline font-medium">
+                <Download size={16} /> Télécharger le modèle Excel
+              </button>
+
+              {/* Drop zone */}
+              <div
+                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+                onClick={() => fileRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${dragging ? 'border-primary bg-primary/5' : 'border-gray-300 hover:border-primary hover:bg-gray-50'}`}
+              >
+                <Upload size={32} className="mx-auto text-gray-400 mb-3" />
+                <p className="font-medium text-gray-700">Glissez votre fichier ici</p>
+                <p className="text-sm text-gray-400 mt-1">ou cliquez pour sélectionner</p>
+                <p className="text-xs text-gray-400 mt-2">CSV, XLS, XLSX — max 10 Mo</p>
+                <input ref={fileRef} type="file" accept=".csv,.xls,.xlsx" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+              </div>
+
+              {previewMutation.isPending && (
+                <div className="text-center text-sm text-gray-500 animate-pulse">Analyse du fichier en cours...</div>
+              )}
+            </div>
+          )}
+
+          {/* Step: Preview */}
+          {step === 'preview' && preview && (
+            <div className="space-y-4">
+              {/* Summary bar */}
+              <div className="grid grid-cols-4 gap-3">
+                {[
+                  { label: 'Total lignes', value: preview.total, cls: 'bg-gray-100 text-gray-700' },
+                  { label: 'Valides', value: preview.ok, cls: 'bg-green-100 text-green-700' },
+                  { label: 'À créer', value: preview.creates, cls: 'bg-blue-100 text-blue-700' },
+                  { label: 'À mettre à jour', value: preview.updates, cls: 'bg-yellow-100 text-yellow-700' },
+                ].map(s => (
+                  <div key={s.label} className={`rounded-xl p-3 text-center ${s.cls}`}>
+                    <p className="text-2xl font-bold">{s.value}</p>
+                    <p className="text-xs mt-0.5">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {preview.errors > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex gap-2">
+                  <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>{preview.errors} ligne(s) avec erreur seront ignorées.</span>
+                </div>
+              )}
+
+              {/* Table */}
+              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-600 uppercase text-[10px]">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Ligne</th>
+                      <th className="px-3 py-2 text-left">Action</th>
+                      <th className="px-3 py-2 text-left">Nom</th>
+                      <th className="px-3 py-2 text-left">Téléphone</th>
+                      <th className="px-3 py-2 text-right">Crédit dû</th>
+                      <th className="px-3 py-2 text-right">Solde compte</th>
+                      <th className="px-3 py-2 text-left">Alertes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {preview.rows.map(r => (
+                      <tr key={r.row} className={r.status === 'error' ? 'bg-red-50' : 'hover:bg-gray-50'}>
+                        <td className="px-3 py-2 text-gray-400">{r.row}</td>
+                        <td className="px-3 py-2">
+                          {r.status === 'error'
+                            ? <span className="text-red-600 font-medium">Erreur</span>
+                            : r.action === 'update'
+                              ? <span className="text-yellow-600 font-medium">Màj</span>
+                              : <span className="text-green-600 font-medium">Créer</span>}
+                        </td>
+                        <td className="px-3 py-2 font-medium text-gray-800">{r.nom || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-3 py-2 text-gray-600">{r.telephone || '—'}</td>
+                        <td className="px-3 py-2 text-right">{r.credit_balance > 0 ? formatCurrency(r.credit_balance) : '—'}</td>
+                        <td className="px-3 py-2 text-right">{r.account_balance !== 0 ? formatCurrency(r.account_balance) : '—'}</td>
+                        <td className="px-3 py-2">
+                          {r.errors.map((e, i) => <p key={i} className="text-red-600">{e}</p>)}
+                          {r.warnings.map((w, i) => <p key={i} className="text-yellow-600">{w}</p>)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Step: Done */}
+          {step === 'done' && result && (
+            <div className="text-center py-8 space-y-4">
+              <CheckCircle2 size={52} className="mx-auto text-green-500" />
+              <h3 className="text-xl font-bold text-gray-800">Import terminé</h3>
+              <div className="grid grid-cols-3 gap-4 max-w-sm mx-auto">
+                <div className="bg-green-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-green-700">{result.created}</p>
+                  <p className="text-xs text-green-600">Créés</p>
+                </div>
+                <div className="bg-yellow-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-yellow-700">{result.updated}</p>
+                  <p className="text-xs text-yellow-600">Mis à jour</p>
+                </div>
+                <div className="bg-gray-100 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-gray-600">{result.skipped}</p>
+                  <p className="text-xs text-gray-500">Ignorés</p>
+                </div>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="text-left bg-red-50 rounded-xl p-3 max-h-32 overflow-y-auto">
+                  {result.errors.map((e, i) => <p key={i} className="text-xs text-red-600">{e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t flex justify-between flex-shrink-0">
+          <button onClick={onClose} className="btn-secondary">
+            {step === 'done' ? 'Fermer' : 'Annuler'}
+          </button>
+          {step === 'preview' && (
+            <div className="flex gap-3">
+              <button onClick={() => { setStep('upload'); setPreview(null) }} className="btn-secondary">
+                Changer de fichier
+              </button>
+              <button
+                onClick={() => confirmMutation.mutate()}
+                disabled={confirmMutation.isPending || preview!.ok === 0}
+                className="btn-primary disabled:opacity-50 flex items-center gap-2">
+                {confirmMutation.isPending ? 'Import en cours...' : `Importer ${preview!.ok} client(s)`}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -894,6 +1573,7 @@ export default function ClientsPage() {
   const [editClient, setEditClient] = useState<Client | undefined>()
   const [viewClient, setViewClient] = useState<Client | undefined>()
   const [showStatusMenu, setShowStatusMenu] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
 
@@ -952,10 +1632,16 @@ export default function ClientsPage() {
           </h1>
           <p className="text-gray-500 text-sm">{data?.total ?? 0} clients correspondants</p>
         </div>
-        <button onClick={() => { setEditClient(undefined); setShowForm(true) }}
-          className="btn-primary flex items-center gap-2">
-          <Plus size={18} /> Nouveau client
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowImport(true)}
+            className="btn-secondary flex items-center gap-2">
+            <Upload size={18} /> Importer
+          </button>
+          <button onClick={() => { setEditClient(undefined); setShowForm(true) }}
+            className="btn-primary flex items-center gap-2">
+            <Plus size={18} /> Nouveau client
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -1149,6 +1835,9 @@ export default function ClientsPage() {
       </div>
 
       {/* Modals */}
+      {showImport && (
+        <ImportClientsModal onClose={() => setShowImport(false)} />
+      )}
       {showForm && (
         <ClientFormModal
           client={editClient}

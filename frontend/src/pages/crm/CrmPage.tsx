@@ -53,6 +53,7 @@ interface Activity {
   description?: string
   scheduled_at?: string
   completed_at?: string
+  created_at?: string
   user?: { id: number; name: string }
 }
 
@@ -954,7 +955,7 @@ export default function CrmPage() {
     staleTime: 30_000,
   })
 
-  const { data: kanbanData = {} } = useQuery<Record<Stage, Lead[]>>({
+  const { data: kanbanData = {} } = useQuery<Partial<Record<Stage, Lead[]>>>({
     queryKey: ['crm-leads', 'kanban', storeId, effectivePipelineId],
     queryFn: () => api.get('/crm/leads', {
       params: { store_id: storeId, kanban: 1, pipeline_id: effectivePipelineId ?? undefined }

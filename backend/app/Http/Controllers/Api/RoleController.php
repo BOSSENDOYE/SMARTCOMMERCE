@@ -12,14 +12,36 @@ class RoleController extends Controller
     // Roles that cannot be deleted
     private const PROTECTED_ROLES = ['super_admin'];
 
+    /** Lightweight list for dropdowns — id + name only */
+    public function simple(Request $request)
+    {
+        $isSuperAdmin = $request->user()->hasRole('super_admin');
+
+        $roles = \Spatie\Permission\Models\Role::orderBy('name')->get(['id', 'name']);
+
+        if (!$isSuperAdmin) {
+            $roles = $roles->where('name', '!=', 'super_admin')->values();
+        }
+
+        return response()->json($roles);
+    }
+
     /** List all roles with their permissions and user count */
     public function index(Request $request)
     {
-        $isSuperAdmin = $request->user()->hasRole('super_admin')
-            && $request->user()->getOriginal('store_id') === null;
+        $isSuperAdmin = $request->user()->hasRole('super_admin');
+
+        // Scope user count to the current store context
+        $storeId = $request->header('X-Store-Id')
+            ? (int) $request->header('X-Store-Id')
+            : $request->user()->store_id;
 
         $roles = Role::with('permissions:id,name')
-            ->withCount('users')
+            ->when($storeId, fn($q) => $q->withCount(['users' => fn($uq) => $uq
+                ->where('store_id', $storeId)
+                ->orWhereHas('stores', fn($sq) => $sq->where('stores.id', $storeId))
+            ]))
+            ->when(!$storeId, fn($q) => $q->withCount('users'))
             ->orderBy('name')
             ->get();
 

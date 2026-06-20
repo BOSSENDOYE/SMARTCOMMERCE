@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LoyaltyTransaction extends Model
 {
+    const UPDATED_AT = null;
+
     protected $fillable = [
         'client_id', 'store_id', 'sale_id', 'type',
         'points', 'balance_after', 'description',

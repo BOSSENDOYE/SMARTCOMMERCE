@@ -46,10 +46,72 @@ class CashSessionController extends Controller
         return response()->json($session, 201);
     }
 
+    public function index(Request $request)
+    {
+        $storeId = $request->user()->store_id;
+
+        $sessions = CashSession::where('store_id', $storeId)
+            ->with(['user:id,name', 'closedByUser:id,name'])
+            ->orderByDesc('opened_at')
+            ->paginate(30);
+
+        // Aggregate sales stats in one query
+        $ids = $sessions->pluck('id');
+        $stats = \App\Models\Sale::whereIn('cash_session_id', $ids)
+            ->where('status', 'completed')
+            ->selectRaw('cash_session_id, COUNT(*) as sales_count, SUM(total_ttc) as total_ttc')
+            ->groupBy('cash_session_id')
+            ->get()->keyBy('cash_session_id');
+
+        $sessions->each(function ($s) use ($stats) {
+            $row = $stats[$s->id] ?? null;
+            $s->sales_count = $row ? (int) $row->sales_count : 0;
+            $s->total_sales = $row ? (float) $row->total_ttc  : 0.0;
+        });
+
+        return response()->json($sessions);
+    }
+
+    public function show(Request $request, CashSession $session)
+    {
+        abort_if($session->store_id !== $request->user()->store_id, 403);
+
+        $sales = \App\Models\Sale::where('cash_session_id', $session->id)
+            ->where('status', 'completed')
+            ->orderByDesc('created_at')
+            ->get(['id', 'reference', 'total_ttc', 'paid_amount', 'created_at', 'channel']);
+
+        $paymentTotals = \App\Models\SalePayment::whereHas('sale', fn($q) => $q
+                ->where('cash_session_id', $session->id)->where('status', 'completed')
+            )
+            ->selectRaw('payment_method, SUM(amount) as total')
+            ->groupBy('payment_method')
+            ->pluck('total', 'payment_method');
+
+        $movements = $session->movements()->orderByDesc('created_at')->get();
+
+        return response()->json([
+            'session'           => $session->load('user:id,name', 'closedByUser:id,name'),
+            'sales'             => $sales,
+            'payment_breakdown' => $paymentTotals,
+            'movements'         => $movements,
+            'stats'             => [
+                'total_sales'   => $sales->count(),
+                'total_ttc'     => (float) $sales->sum('total_ttc'),
+                'cash_expected' => (float) ($session->closing_balance_expected ?? 0),
+                'cash_actual'   => (float) ($session->closing_balance_actual   ?? 0),
+                'cash_variance' => (float) ($session->closing_balance_variance  ?? 0),
+            ],
+        ]);
+    }
+
     public function close(Request $request, CashSession $session)
     {
+        abort_if($session->store_id !== $request->user()->store_id, 403);
+
+        // Already closed → return existing Z-report instead of an error
         if ($session->status === 'closed') {
-            return response()->json(['message' => 'Session déjà clôturée.'], 422);
+            return response()->json($this->buildZReport($session));
         }
 
         $request->validate([

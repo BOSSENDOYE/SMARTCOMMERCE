@@ -50,8 +50,8 @@ class NotificationController extends Controller
         }
 
         // ── 2. Stock faible (alert_stock > 0 ET qty > 0 ET qty <= alert_stock) ──
-        $lowStock = StockLevel::where('store_id', $storeId)
-            ->where('qty_on_hand', '>', 0)
+        $lowStock = StockLevel::where('stock_levels.store_id', $storeId)
+            ->where('stock_levels.qty_on_hand', '>', 0)
             ->join('products', 'products.id', '=', 'stock_levels.product_id')
             ->whereRaw('products.alert_stock > 0 AND stock_levels.qty_on_hand <= products.alert_stock')
             ->where('products.is_active', true)
@@ -194,6 +194,84 @@ class NotificationController extends Controller
                         : 'Lead en cours',
                 ])->values()->toArray(),
             ];
+        }
+
+        // ── 6. Inventaires planifiés (rappel in-app) ────────────────────────
+        $upcomingInventories = \App\Models\InventorySession::where('store_id', $storeId)
+            ->where('status', 'scheduled')
+            ->whereNotNull('scheduled_at')
+            ->where('scheduled_at', '<=', Carbon::now()->addHours(24))
+            ->orderBy('scheduled_at')
+            ->take(5)
+            ->get();
+
+        foreach ($upcomingInventories as $inv) {
+            $minutesLeft = (int) round(Carbon::now()->diffInMinutes($inv->scheduled_at, false));
+            if ($minutesLeft < 0) {
+                // Past scheduled time but not yet started — urgent
+                $groups[] = [
+                    'type'  => 'inventory_overdue',
+                    'label' => 'Inventaire en attente de démarrage',
+                    'icon'  => 'alert-triangle',
+                    'color' => 'red',
+                    'count' => 1,
+                    'link'  => '/inventory',
+                    'items' => [[
+                        'id'   => $inv->id,
+                        'name' => $inv->name,
+                        'code' => null,
+                        'qty'  => null,
+                        'text' => "Planifié le {$inv->scheduled_at->format('d/m/Y à H:i')} — à démarrer",
+                    ]],
+                ];
+            } else {
+                $groups[] = [
+                    'type'  => 'inventory_reminder',
+                    'label' => 'Inventaire planifié',
+                    'icon'  => 'clipboard-list',
+                    'color' => 'blue',
+                    'count' => 1,
+                    'link'  => '/inventory',
+                    'items' => [[
+                        'id'   => $inv->id,
+                        'name' => $inv->name,
+                        'code' => null,
+                        'qty'  => null,
+                        'text' => "Prévu le {$inv->scheduled_at->format('d/m/Y à H:i')} (dans {$minutesLeft} min)",
+                    ]],
+                ];
+            }
+        }
+
+        // ── 7. Inventaire actif : fiches à compter ──────────────────────────
+        $activeInventory = \App\Models\InventorySession::where('store_id', $storeId)
+            ->whereIn('status', ['draft', 'counting', 'pending'])
+            ->latest('started_at')
+            ->first();
+
+        if ($activeInventory) {
+            $myPendingSheets = $activeInventory->sheets()
+                ->where('assigned_to', $request->user()->id)
+                ->whereNotIn('status', ['validated', 'cancelled'])
+                ->count();
+
+            if ($myPendingSheets > 0) {
+                $groups[] = [
+                    'type'  => 'inventory_active',
+                    'label' => 'Inventaire en cours',
+                    'icon'  => 'clipboard-list',
+                    'color' => 'purple',
+                    'count' => $myPendingSheets,
+                    'link'  => '/my-inventory',
+                    'items' => [[
+                        'id'   => $activeInventory->id,
+                        'name' => $activeInventory->name,
+                        'code' => null,
+                        'qty'  => null,
+                        'text' => "{$myPendingSheets} fiche(s) à compter",
+                    ]],
+                ];
+            }
         }
 
         $total = array_sum(array_column($groups, 'count'));
