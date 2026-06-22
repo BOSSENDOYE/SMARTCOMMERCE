@@ -114,9 +114,13 @@ Route::prefix('v1')->group(function () {
         Route::delete('/suppliers/{supplier}/products/{product}', [\App\Http\Controllers\Api\SupplierController::class, 'unlinkProduct']);
 
         // Clients
+<<<<<<< HEAD
         Route::get('/clients/import-template', [\App\Http\Controllers\Api\ClientImportController::class, 'template']);
         Route::post('/clients/import/preview', [\App\Http\Controllers\Api\ClientImportController::class, 'preview']);
         Route::post('/clients/import/confirm', [\App\Http\Controllers\Api\ClientImportController::class, 'confirm']);
+=======
+        Route::apiResource('/client-categories', \App\Http\Controllers\Api\ClientCategoryController::class)->except(['show']);
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
         Route::get('/clients/stats', [\App\Http\Controllers\Api\ClientController::class, 'stats']);
         Route::get('/clients/search', function (\Illuminate\Http\Request $r) {
             $term = trim((string) $r->input('q', ''));

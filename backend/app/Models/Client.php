@@ -12,7 +12,7 @@ class Client extends Model
 
     protected $fillable = [
         'store_id', 'name', 'phone', 'email', 'address',
-        'type', 'ninea', 'notes', 'is_active',
+        'type', 'client_category_id', 'ninea', 'notes', 'is_active',
         'loyalty_points', 'credit_balance', 'credit_limit', 'account_balance',
     ];
 
@@ -23,6 +23,7 @@ class Client extends Model
         'account_balance' => 'decimal:2',
     ];
 
+    public function category() { return $this->belongsTo(ClientCategory::class, 'client_category_id'); }
     public function sales(): HasMany { return $this->hasMany(Sale::class); }
     public function loyaltyTransactions(): HasMany { return $this->hasMany(LoyaltyTransaction::class); }
     public function accountTransactions(): HasMany { return $this->hasMany(ClientAccountTransaction::class); }

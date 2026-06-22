@@ -71,7 +71,50 @@ function DashboardSkeleton() {
   )
 }
 
+<<<<<<< HEAD
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
+=======
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: 'Espèces',
+  card: 'Carte',
+  wave: 'Wave',
+  orange_money: 'Orange Money',
+  free_money: 'Free Money',
+  check: 'Chèque',
+  credit: 'Crédit',
+  voucher: 'Avoir',
+}
+
+export default function DashboardPage() {
+  const { data, isLoading, refetch } = useQuery<DashboardData>({
+    queryKey: ['dashboard'],
+    queryFn: () => api.get('/dashboard').then(r => r.data),
+    refetchInterval: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="p-3 sm:p-6 space-y-6 animate-pulse">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-32 bg-gray-200 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const today = data?.sales.today
+  const yesterday = data?.sales.yesterday
+  const dayChange = yesterday?.total_ttc && yesterday.total_ttc > 0
+    ? ((today?.total_ttc ?? 0) - yesterday.total_ttc) / yesterday.total_ttc * 100
+    : 0
+
+  const paymentData = (data?.payment_breakdown ?? []).map(p => ({
+    name: PAYMENT_LABELS[p.method] || p.method,
+    value: p.total,
+  }))
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
 
 function KpiCard({
   label, value, sub, icon, iconClass, accentClass,
@@ -82,6 +125,7 @@ function KpiCard({
   trend?: 'up' | 'down' | 'flat'; trendPct?: string; trendLabel?: string
 }) {
   return (
+<<<<<<< HEAD
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
       <div className={`h-1 w-full ${accentClass}`} />
       <div className="p-5 flex flex-col gap-3 flex-1">
@@ -91,6 +135,11 @@ function KpiCard({
             {icon}
           </div>
         </div>
+=======
+    <div className="p-3 sm:p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
         <div>
           <p className="text-2xl font-bold text-gray-900 leading-tight">{value}</p>
           {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}

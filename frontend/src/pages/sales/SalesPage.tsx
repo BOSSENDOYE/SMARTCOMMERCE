@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 import {
   Plus, Trash2, User, ArrowLeft, ChevronRight,
   Printer, X, FileText, Ban, RotateCcw, AlertTriangle,
-  Eye, Edit2, ShoppingCart, Package,
+  Eye, Edit2, ShoppingCart, Package, CreditCard,
 } from 'lucide-react'
 import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
 
@@ -169,9 +169,22 @@ interface LineRowProps {
 function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange, onRemove, canRemove }: LineRowProps) {
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([])
   const [showSug, setShowSug]         = useState(false)
+<<<<<<< HEAD
   const [dropPos, setDropPos]         = useState<{ top: number; left: number; width: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+=======
+  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef  = useRef<HTMLInputElement>(null)
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null)
+
+  const updateDropPos = () => {
+    if (inputRef.current) {
+      const r = inputRef.current.getBoundingClientRect()
+      setDropPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 320) })
+    }
+  }
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
 
   const updateDropPos = () => {
     if (inputRef.current) {
@@ -189,6 +202,7 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
 
   const handleInput = (val: string) => {
     onChange({ search: val, product_id: null, product_name: '' })
+    updateDropPos()
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(async () => {
       const res = await onSearchProducts(val)
@@ -219,6 +233,7 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
           <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold">{index + 1}</span>
         </td>
 
+<<<<<<< HEAD
         {/* Produit */}
         <td className="px-3 py-2.5">
           <div className="relative">
@@ -244,6 +259,23 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
               ><X size={13} /></button>
             )}
           </div>
+=======
+      {/* Produit */}
+      <td className="px-3 py-2">
+        <div className="relative">
+          <input
+            ref={inputRef}
+            type="text"
+            value={line.search}
+            onChange={e => handleInput(e.target.value)}
+            onFocus={() => { updateDropPos(); setShowSug(suggestions.length > 0) }}
+            onBlur={() => setTimeout(() => setShowSug(false), 200)}
+            placeholder="Saisir ou rechercher un produit…"
+            className={`w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 pr-8 ${
+              isLow ? 'border-red-300 bg-red-50' : 'border-gray-200'
+            }`}
+          />
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
           {line.product_id && (
             <span className={`text-[10px] mt-0.5 ml-1 font-medium inline-flex items-center gap-1 ${stockQty > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
               <span className={`w-1.5 h-1.5 rounded-full inline-block ${stockQty > 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
@@ -320,6 +352,7 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
         </td>
       </tr>
 
+<<<<<<< HEAD
       {/* Dropdown via portal — évite le clipping de overflow-x-auto */}
       {showSug && dropPos && createPortal(
         <div
@@ -348,6 +381,128 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
         document.body
       )}
     </>
+=======
+        {/* Stock badge */}
+        {line.product_id && (
+          <div className={`text-[10px] mt-0.5 ml-1 font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-500'}`}>
+            Stock disponible : {stockQty}
+          </div>
+        )}
+
+        {/* Dropdown portal — renders in <body> to avoid overflow clipping */}
+        {showSug && dropPos && createPortal(
+          <div
+            style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+            className="bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 overflow-y-auto"
+          >
+            {suggestions.map(p => (
+              <button
+                key={p.id}
+                onMouseDown={() => handleSelect(p)}
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex items-center justify-between gap-3 border-b border-gray-100 last:border-0"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-800 truncate">{p.name}</div>
+                  <div className="text-xs text-gray-400">{p.internal_code}</div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-xs font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</div>
+                  <div className={`text-xs ${(p.stock_level?.qty_on_hand ?? 0) > 0 ? 'text-green-500' : 'text-red-400'}`}>
+                    Stk: {p.stock_level?.qty_on_hand ?? 0}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+      </td>
+
+      {/* Quantité */}
+      <td className="px-3 py-2 w-28">
+        <input
+          type="number"
+          value={line.qty}
+          min={0.001}
+          step={0.001}
+          onChange={e => onChange({ qty: parseFloat(e.target.value) || 1 })}
+          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </td>
+
+      {/* Unité / Contenance */}
+      <td className="px-3 py-2 w-36">
+        {line.containers.length > 0 ? (
+          <select
+            value={line.container_id ?? ''}
+            onChange={e => {
+              const c = line.containers.find(c => c.id === Number(e.target.value))
+              if (c) {
+                onChange({
+                  container_id: c.id,
+                  unit_price_ttc: c.price_a ?? line.unit_price_ttc,
+                })
+              }
+            }}
+            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            {line.containers.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.label || c.unit?.symbol || c.unit?.name || '—'}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-xs text-gray-400 px-2">—</span>
+        )}
+      </td>
+
+      {/* Prix unitaire TTC */}
+      <td className="px-3 py-2 w-36">
+        <input
+          type="number"
+          value={line.unit_price_ttc}
+          min={0}
+          step={1}
+          onChange={e => onChange({ unit_price_ttc: parseFloat(e.target.value) || 0 })}
+          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </td>
+
+      {/* Remise % */}
+      <td className="px-3 py-2 w-24">
+        <div className="relative">
+          <input
+            type="number"
+            value={line.discount_pct}
+            min={0}
+            max={100}
+            step={0.5}
+            onChange={e => onChange({ discount_pct: parseFloat(e.target.value) || 0 })}
+            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 pr-5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+        </div>
+      </td>
+
+      {/* Total TTC */}
+      <td className="px-3 py-2 w-28 text-right font-semibold text-gray-800">
+        {formatCurrency(line.total_ttc)}
+      </td>
+
+      {/* Supprimer */}
+      <td className="px-3 py-2 w-10 text-center">
+        {canRemove && (
+          <button
+            onClick={onRemove}
+            className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </td>
+    </tr>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
   )
 }
 
@@ -373,7 +528,8 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
   const [note, setNote] = useState('')
 
   // Payment
-  const [payments, setPayments] = useState<PaymentEntry[]>([{ method: 'cash', amount: 0 }])
+  const [payments, setPayments]           = useState<PaymentEntry[]>([{ method: 'cash', amount: 0 }])
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
 
   // Lines
   const [lines, setLines] = useState<SaleLine[]>(
@@ -527,6 +683,7 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
             <span className="hidden md:inline">Paiement</span>
           </div>
         </div>
+<<<<<<< HEAD
 
         <div className="ml-auto flex items-center gap-2">
           {step === 'cart' ? (
@@ -773,6 +930,180 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
 
               <div className="px-5 py-4 border-t border-gray-200 bg-gray-50/50 rounded-b-2xl space-y-2">
                 <div className="flex justify-between text-sm text-gray-500">
+=======
+        <button
+          onClick={onCancel}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <X size={14} /> Annuler
+        </button>
+      </div>
+
+      <div className="max-w-[1400px] mx-auto p-4 lg:p-6">
+        <div className="flex gap-4 items-start">
+
+          {/* ── COLONNE GAUCHE : infos + articles ── */}
+          <div className="flex-1 min-w-0 space-y-4">
+
+            {/* En-tête de la vente */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                <div className="w-1 h-4 bg-primary rounded-full" />
+                <h2 className="text-sm font-semibold text-gray-700">Informations de la vente</h2>
+              </div>
+              <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                {/* Date */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Date de vente</label>
+                  <input
+                    type="date"
+                    value={saleDate}
+                    onChange={e => setSaleDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+
+                {/* Client */}
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Client</label>
+                  <div className="relative">
+                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={clientId ? clientName : clientSearch}
+                      onChange={e => {
+                        setClientId(null); setClientName(''); setClientSearch(e.target.value); setShowClientSug(true)
+                      }}
+                      onFocus={() => setShowClientSug(true)}
+                      onBlur={() => setTimeout(() => setShowClientSug(false), 200)}
+                      placeholder="Rechercher un client…"
+                      className="w-full border border-gray-300 rounded-lg pl-8 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    {clientId && (
+                      <button onClick={() => { setClientId(null); setClientName(''); setClientSearch('') }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {showClientSug && clientSugs.length > 0 && (
+                    <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {clientSugs.map(c => (
+                        <button key={c.id}
+                          onMouseDown={() => {
+                            setClientId(c.id)
+                            setClientName(c.name)
+                            setClientSearch('')
+                            setShowClientSug(false)
+                            setClientAccountBalance((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0)
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex justify-between border-b border-gray-100 last:border-0">
+                          <span className="font-medium text-gray-800">{c.name}</span>
+                          <div className="text-right">
+                            <span className="text-gray-400 text-xs block">{c.phone}</span>
+                            {(c as ClientSuggestion & { account_balance?: number }).account_balance !== undefined && (
+                              <span className={`text-[10px] font-medium ${((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0) >= 0 ? 'text-indigo-600' : 'text-red-500'}`}>
+                                Compte: {formatCurrency((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0)}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Canal */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Canal de vente</label>
+                  <select value={channel} onChange={e => setChannel(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    {CHANNELS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+
+                {/* Vendeur */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Vendeur</label>
+                  <input type="text" value={user?.name ?? ''} readOnly
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-default" />
+                </div>
+
+                {/* Note */}
+                <div className="md:col-span-4">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Note / Référence interne <span className="text-gray-400">(optionnel)</span></label>
+                  <input type="text" value={note} onChange={e => setNote(e.target.value)}
+                    placeholder="Commentaire, n° de commande client, référence externe…"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+              </div>
+            </div>
+
+            {/* Lignes produits */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-4 bg-primary rounded-full" />
+                  <h2 className="text-sm font-semibold text-gray-700">Détail des articles</h2>
+                  <span className="text-xs text-gray-400 ml-1">({lines.filter(l => l.product_id).length} article{lines.filter(l => l.product_id).length > 1 ? 's' : ''})</span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[700px]">
+                  <thead>
+                    <tr className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                      <th className="px-3 py-3 text-center w-10">#</th>
+                      <th className="px-3 py-3 text-left">Désignation du produit</th>
+                      <th className="px-3 py-3 text-center w-24">Qté</th>
+                      <th className="px-3 py-3 text-left w-32">Unité</th>
+                      <th className="px-3 py-3 text-right w-32">Prix TTC</th>
+                      <th className="px-3 py-3 text-center w-20">Remise</th>
+                      <th className="px-3 py-3 text-right w-28">Total TTC</th>
+                      <th className="w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line, idx) => (
+                      <SaleLineRow
+                        key={line._id}
+                        line={line}
+                        index={idx}
+                        onSearchProducts={searchProducts}
+                        onSelectProduct={p => selectProduct(line._id, p)}
+                        onChange={patch => updateLine(line._id, patch)}
+                        onRemove={() => removeLine(line._id)}
+                        canRemove={lines.length > 1}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-5 py-3 border-t border-gray-100">
+                <button onClick={addLine}
+                  className="flex items-center gap-2 text-sm text-primary hover:text-primary-600 font-medium transition-colors group">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
+                    <Plus size={13} className="text-primary" />
+                  </div>
+                  Ajouter une ligne
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── COLONNE DROITE : récap + bouton paiement ── */}
+          <div className="w-[300px] xl:w-[320px] flex-shrink-0 sticky top-[73px]">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-4 bg-primary rounded-full" />
+                <h2 className="text-sm font-semibold text-gray-700">Récapitulatif</h2>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-sm text-gray-600">
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
                   <span>Sous-total HT</span>
                   <span className="font-mono font-medium">{formatCurrency(subtotalHt)}</span>
                 </div>
@@ -786,13 +1117,67 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
                     <span className="font-mono">−{formatCurrency(discountTotal)}</span>
                   </div>
                 )}
+<<<<<<< HEAD
                 <div className="flex justify-between items-center pt-3 border-t border-gray-200">
                   <span className="font-bold text-gray-800">TOTAL TTC</span>
                   <span className="text-2xl font-bold text-orange-500 font-mono">{formatCurrency(totalTtc)}</span>
+=======
+                <div className="border-t border-gray-100 pt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-base font-bold text-gray-800">TOTAL TTC</span>
+                    <span className="text-2xl font-bold text-primary font-mono">{formatCurrency(totalTtc)}</span>
+                  </div>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
                 </div>
               </div>
+
+              <div className="text-xs text-gray-400 text-center pb-1">
+                {lines.filter(l => l.product_id).length} article(s) —&nbsp;
+                {lines.filter(l => l.product_id).reduce((s, l) => s + l.qty, 0).toFixed(3)} unité(s)
+              </div>
+
+              <button
+                onClick={() => {
+                  const valid = lines.filter(l => l.product_id !== null && l.qty > 0)
+                  if (valid.length === 0) { toast.error('Ajoutez au moins un produit.'); return }
+                  setShowPaymentModal(true)
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary-600 transition-colors shadow-sm"
+              >
+                <CreditCard size={16} />
+                Passer au paiement
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Modale de paiement ── */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center">
+                  <CreditCard size={18} className="text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-800">Mode de règlement</h2>
+                  <p className="text-xs text-gray-400">
+                    Total à encaisser : <span className="font-semibold text-gray-600 font-mono">{formatCurrency(totalTtc)}</span>
+                    {clientName && <span className="ml-2 text-indigo-500">— {clientName}</span>}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                <X size={18} />
+              </button>
             </div>
 
+<<<<<<< HEAD
             {/* Mode de règlement */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col">
               <div className="px-5 py-4 border-b border-gray-100">
@@ -828,12 +1213,44 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
                   {mutation.isPending ? 'Enregistrement…' : 'Confirmer & Imprimer le reçu'}
                 </button>
               </div>
+=======
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <PaymentPanel
+                total={totalTtc}
+                clientAccountBalance={clientId ? clientAccountBalance : undefined}
+                clientName={clientName}
+                value={payments}
+                onChange={setPayments}
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-2 px-6 pb-5 flex-shrink-0">
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Retour
+              </button>
+              <button
+                onClick={() => mutation.mutate()}
+                disabled={mutation.isPending}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary-600 transition-colors disabled:opacity-60 shadow-sm"
+              >
+                <Printer size={15} />
+                {mutation.isPending ? 'Enregistrement…' : 'Confirmer & Imprimer'}
+              </button>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
             </div>
 
           </div>
         </div>
       )}
+<<<<<<< HEAD
 
+=======
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
     </div>
   )
 }
@@ -1365,7 +1782,7 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
   const totals: Record<string, number> = data?.totals  ?? {}
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

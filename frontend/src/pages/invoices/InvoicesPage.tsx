@@ -338,6 +338,7 @@ function DocumentEditor({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4">
 
         {/* Header */}
+<<<<<<< HEAD
         <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl">
           <div>
             <h2 className="text-lg font-bold text-white">
@@ -349,11 +350,28 @@ function DocumentEditor({
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">
             <X size={18} />
+=======
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
+              <FileText size={18} className="text-primary" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-800">
+                {isEdit ? 'Modifier' : 'Nouveau'} {type === 'invoice' ? 'Facture' : 'Devis'}
+              </h2>
+              <p className="text-xs text-gray-400">{isEdit ? 'Modification du document' : 'Création d\'un nouveau document'}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+            <X size={20} />
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
           </button>
         </div>
 
         <div className="p-6 space-y-6">
           {/* Infos générales */}
+<<<<<<< HEAD
           <div className="grid grid-cols-2 gap-4">
             {/* Client autocomplete */}
             <div>
@@ -428,21 +446,86 @@ function DocumentEditor({
                 onChange={e => type === 'invoice' ? setDueDate(e.target.value) : setValidUntil(e.target.value)}
                 className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
               />
+=======
+          <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-primary rounded-full" />
+              <h3 className="text-sm font-semibold text-gray-700">Informations générales</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Client</label>
+                <select
+                  value={clientId}
+                  onChange={e => setClientId(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="">— Sans client —</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Objet</label>
+                <input
+                  type="text"
+                  value={object}
+                  onChange={e => setObject(e.target.value)}
+                  placeholder="Ex : Livraison matériaux mois de juin"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Date d'émission</label>
+                <input
+                  type="date"
+                  value={issueDate}
+                  onChange={e => setIssueDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  {type === 'invoice' ? 'Date d\'échéance' : 'Valide jusqu\'au'}
+                </label>
+                <input
+                  type="date"
+                  value={type === 'invoice' ? dueDate : validUntil}
+                  onChange={e => type === 'invoice' ? setDueDate(e.target.value) : setValidUntil(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
             </div>
           </div>
 
           {/* Lignes */}
           <div>
             <div className="flex items-center justify-between mb-3">
+<<<<<<< HEAD
               <h3 className="font-semibold text-gray-800">Lignes</h3>
               <button
                 onClick={addLine}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold transition"
+=======
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-4 bg-primary rounded-full" />
+                <h3 className="text-sm font-semibold text-gray-700">Détail des lignes</h3>
+              </div>
+              <button
+                onClick={addLine}
+                className="flex items-center gap-1.5 text-sm text-primary hover:text-primary-600 font-medium transition-colors group"
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               >
-                <Plus size={14} /> Ajouter une ligne
+                <div className="w-5 h-5 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
+                  <Plus size={12} className="text-primary" />
+                </div>
+                Ajouter une ligne
               </button>
             </div>
 
+<<<<<<< HEAD
             <div className="space-y-2">
               {items.map((it, i) => {
                 const { ttc } = calcLine(it)
@@ -561,18 +644,138 @@ function DocumentEditor({
                   </div>
                 )
               })}
+=======
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                  <tr>
+                    <th className="px-3 py-2.5 text-center w-8">#</th>
+                    <th className="px-3 py-2.5 text-left">Produit / Description</th>
+                    <th className="px-3 py-2.5 text-right w-20">Qté</th>
+                    <th className="px-3 py-2.5 text-left w-20">Unité</th>
+                    <th className="px-3 py-2.5 text-right w-24">P.U HT</th>
+                    <th className="px-3 py-2.5 text-right w-16">Remise%</th>
+                    <th className="px-3 py-2.5 text-right w-16">TVA%</th>
+                    <th className="px-3 py-2.5 text-right w-28">Total TTC</th>
+                    <th className="px-2 py-2.5 w-8"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {items.map((it, i) => {
+                    const { ttc } = calcLine(it)
+                    return (
+                      <tr key={i} className="hover:bg-blue-50/20 transition-colors">
+                        <td className="px-3 py-2 text-gray-400 text-xs text-center">{i + 1}</td>
+                        <td className="px-3 py-1.5">
+                          <select
+                            className="w-full text-xs border-0 bg-transparent text-primary mb-1 cursor-pointer"
+                            value=""
+                            onChange={e => e.target.value && pickProduct(i, e.target.value)}
+                          >
+                            <option value="">— Sélectionner dans le catalogue —</option>
+                            {catalogProducts.length > 0 && (
+                              <optgroup label="📦 Produits">
+                                {catalogProducts.map(p => (
+                                  <option key={`product:${p.id}`} value={`product:${p.id}`}>{p.name}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {catalogRestaurant.length > 0 && (
+                              <optgroup label="🍽️ Menu Restaurant">
+                                {catalogRestaurant.map(r => (
+                                  <option key={`restaurant:${r.id}`} value={`restaurant:${r.id}`}>{r.name}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                          <input
+                            type="text"
+                            value={it.description}
+                            onChange={e => updateLine(i, 'description', e.target.value)}
+                            placeholder="Description de la prestation..."
+                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="number"
+                            min="0.001"
+                            step="0.001"
+                            value={it.quantity}
+                            onChange={e => updateLine(i, 'quantity', parseFloat(e.target.value) || 0)}
+                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="text"
+                            value={it.unit}
+                            onChange={e => updateLine(i, 'unit', e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            value={it.unit_price}
+                            onChange={e => updateLine(i, 'unit_price', parseFloat(e.target.value) || 0)}
+                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={it.discount_percent}
+                            onChange={e => updateLine(i, 'discount_percent', parseFloat(e.target.value) || 0)}
+                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={it.vat_rate}
+                            onChange={e => updateLine(i, 'vat_rate', parseFloat(e.target.value) || 0)}
+                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-semibold text-gray-800">
+                          {fmt(ttc)}
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          {items.length > 1 && (
+                            <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-500 transition-colors">
+                              <X size={14} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
             </div>
 
             {/* Totaux */}
             <div className="mt-4 flex justify-end">
+<<<<<<< HEAD
               <div className="bg-gray-50 rounded-xl border p-4 w-72 space-y-2 text-sm">
+=======
+              <div className="w-64 bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2 text-sm">
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
                 <div className="flex justify-between text-gray-600">
                   <span>Sous-total HT</span>
                   <span className="font-mono">{fmt(totals.ht)}</span>
                 </div>
                 {totals.disc > 0 && (
-                  <div className="flex justify-between text-orange-600">
+                  <div className="flex justify-between text-green-600">
                     <span>Remises</span>
+<<<<<<< HEAD
                     <span className="font-mono">- {fmt(totals.disc)}</span>
                   </div>
                 )}
@@ -585,6 +788,18 @@ function DocumentEditor({
                 <div className="flex justify-between font-bold text-gray-900 border-t pt-2 text-lg">
                   <span>Total TTC</span>
                   <span className="text-blue-700 font-mono">{fmt(totals.ttc)}</span>
+=======
+                    <span className="font-mono">− {fmt(totals.disc)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-gray-600">
+                  <span>TVA</span>
+                  <span className="font-mono">{fmt(totals.vat)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2">
+                  <span>Total TTC</span>
+                  <span className="text-primary font-mono text-base">{fmt(totals.ttc)}</span>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
                 </div>
               </div>
             </div>
@@ -593,40 +808,61 @@ function DocumentEditor({
           {/* Notes & Conditions */}
           <div className="grid grid-cols-2 gap-4">
             <div>
+<<<<<<< HEAD
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</label>
+=======
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Notes</label>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 rows={3}
                 placeholder="Remarques, instructions de livraison..."
+<<<<<<< HEAD
                 className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Conditions de paiement</label>
+=======
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Conditions de paiement</label>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               <textarea
                 value={terms}
                 onChange={e => setTerms(e.target.value)}
                 rows={3}
+<<<<<<< HEAD
                 placeholder="Ex : Paiement à 30 jours..."
                 className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+=======
+                placeholder="Ex : Paiement à 30 jours, pénalités de retard..."
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               />
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
+          <button onClick={onClose} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors">
             Annuler
           </button>
           <button
             onClick={handleSubmit}
             disabled={mutation.isPending}
+<<<<<<< HEAD
             className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition shadow-md"
+=======
+            className="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-primary-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 transition-colors shadow-sm"
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
           >
             <Check size={16} />
-            {mutation.isPending ? 'Sauvegarde...' : (isEdit ? 'Mettre à jour' : `Créer ${type === 'invoice' ? 'la facture' : 'le devis'}`)}
+            {mutation.isPending ? 'Sauvegarde…' : (isEdit ? 'Mettre à jour' : `Créer ${type === 'invoice' ? 'la facture' : 'le devis'}`)}
           </button>
         </div>
       </div>
@@ -861,10 +1097,10 @@ function InvoiceDetail({
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b flex items-start justify-between">
+        <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-gray-100 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-bold text-gray-800 text-lg">{inv.reference}</span>
+              <span className="font-bold text-gray-800 font-mono">{inv.reference}</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusInfo.color}`}>
                 {statusInfo.label}
               </span>
@@ -874,7 +1110,7 @@ function InvoiceDetail({
           <div className="flex items-center gap-2">
             <button
               onClick={() => printDocument(inv, 'invoice', storeName)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm text-gray-600 hover:bg-gray-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
             >
               <Printer size={14} /> Imprimer
             </button>
@@ -890,28 +1126,28 @@ function InvoiceDetail({
                   setPdfLoading(false)
                 }
               }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/30 text-sm text-primary hover:bg-primary/5 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 text-sm text-primary hover:bg-primary/5 disabled:opacity-50 transition-colors"
             >
-              <FileDown size={14} /> {pdfLoading ? '...' : 'PDF'}
+              <FileDown size={14} /> {pdfLoading ? '…' : 'PDF'}
             </button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
               <X size={20} />
             </button>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-5">
           {/* KPI */}
           <div className="grid grid-cols-3 gap-3">
-            <div className="bg-gray-50 rounded-xl p-3 text-center">
+            <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 text-center">
               <div className="text-xs text-gray-500 mb-1">Total TTC</div>
               <div className="font-bold text-gray-800">{fmt(inv.total_ttc)}</div>
             </div>
-            <div className="bg-green-50 rounded-xl p-3 text-center">
+            <div className="bg-green-50 rounded-xl border border-green-100 p-3 text-center">
               <div className="text-xs text-green-600 mb-1">Payé</div>
               <div className="font-bold text-green-700">{fmt(inv.paid_amount)}</div>
             </div>
-            <div className={`rounded-xl p-3 text-center ${inv.balance > 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+            <div className={`rounded-xl border p-3 text-center ${inv.balance > 0 ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
               <div className={`text-xs mb-1 ${inv.balance > 0 ? 'text-red-600' : 'text-gray-500'}`}>Solde</div>
               <div className={`font-bold ${inv.balance > 0 ? 'text-red-700' : 'text-gray-600'}`}>{fmt(inv.balance)}</div>
             </div>
@@ -919,12 +1155,12 @@ function InvoiceDetail({
 
           {/* Dates */}
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-gray-50 rounded-lg p-3">
+            <div className="bg-gray-50 rounded-xl border border-gray-100 p-3">
               <div className="text-xs text-gray-500 mb-0.5">Date d'émission</div>
               <div className="font-medium">{fmtDate(inv.issue_date)}</div>
             </div>
             {inv.due_date && (
-              <div className={`rounded-lg p-3 ${inv.is_overdue ? 'bg-red-50' : 'bg-gray-50'}`}>
+              <div className={`rounded-xl border p-3 ${inv.is_overdue ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
                 <div className={`text-xs mb-0.5 ${inv.is_overdue ? 'text-red-500' : 'text-gray-500'}`}>Échéance</div>
                 <div className={`font-medium ${inv.is_overdue ? 'text-red-700' : ''}`}>{fmtDate(inv.due_date)}</div>
               </div>
@@ -933,48 +1169,51 @@ function InvoiceDetail({
 
           {/* Client */}
           {inv.client && (
-            <div className="rounded-xl border p-4">
-              <div className="text-xs text-gray-400 uppercase mb-1">Client</div>
-              <div className="font-semibold">{inv.client.name}</div>
-              {inv.client.phone && <div className="text-sm text-gray-500">{inv.client.phone}</div>}
+            <div className="rounded-xl border border-gray-200 p-4">
+              <div className="text-xs text-gray-400 uppercase tracking-wider mb-1.5">Client</div>
+              <div className="font-semibold text-gray-800">{inv.client.name}</div>
+              {inv.client.phone && <div className="text-sm text-gray-500 mt-0.5">{inv.client.phone}</div>}
               {inv.client.email && <div className="text-sm text-gray-500">{inv.client.email}</div>}
             </div>
           )}
 
           {/* Lignes */}
           <div>
-            <h3 className="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide">Prestations</h3>
-            <div className="rounded-xl border overflow-hidden">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1 h-4 bg-primary rounded-full" />
+              <h3 className="text-sm font-semibold text-gray-700">Prestations</h3>
+            </div>
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500">
+                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
                   <tr>
-                    <th className="px-3 py-2 text-left">Description</th>
-                    <th className="px-3 py-2 text-right">Qté</th>
-                    <th className="px-3 py-2 text-right">P.U</th>
-                    <th className="px-3 py-2 text-right">TVA</th>
-                    <th className="px-3 py-2 text-right">Total TTC</th>
+                    <th className="px-3 py-2.5 text-left">Description</th>
+                    <th className="px-3 py-2.5 text-right">Qté</th>
+                    <th className="px-3 py-2.5 text-right">P.U</th>
+                    <th className="px-3 py-2.5 text-right">TVA</th>
+                    <th className="px-3 py-2.5 text-right">Total TTC</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-gray-100">
                   {(inv.items ?? []).map((it, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
+                    <tr key={i} className="hover:bg-blue-50/20 transition-colors">
                       <td className="px-3 py-2">
-                        <div>{it.description}</div>
+                        <div className="font-medium text-gray-800">{it.description}</div>
                         {it.discount_percent > 0 && (
-                          <div className="text-xs text-orange-500">Remise {it.discount_percent}%</div>
+                          <div className="text-xs text-green-600">Remise {it.discount_percent}%</div>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right">{it.quantity} {it.unit}</td>
-                      <td className="px-3 py-2 text-right">{fmt(Number(it.unit_price))}</td>
-                      <td className="px-3 py-2 text-right">{it.vat_rate}%</td>
-                      <td className="px-3 py-2 text-right font-semibold">{fmt(Number(it.total_ttc))}</td>
+                      <td className="px-3 py-2 text-right text-gray-600">{it.quantity} {it.unit}</td>
+                      <td className="px-3 py-2 text-right text-gray-600">{fmt(Number(it.unit_price))}</td>
+                      <td className="px-3 py-2 text-right text-gray-500">{it.vat_rate}%</td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-800">{fmt(Number(it.total_ttc))}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-50 font-semibold">
+                <tfoot className="bg-gray-50 border-t border-gray-200">
                   <tr>
-                    <td colSpan={4} className="px-3 py-2 text-right text-gray-600">Total TTC</td>
-                    <td className="px-3 py-2 text-right text-blue-700">{fmt(inv.total_ttc)}</td>
+                    <td colSpan={4} className="px-3 py-2.5 text-right font-bold text-gray-700">Total TTC</td>
+                    <td className="px-3 py-2.5 text-right font-bold text-primary">{fmt(inv.total_ttc)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -984,12 +1223,15 @@ function InvoiceDetail({
           {/* Paiements */}
           {(inv.payments ?? []).length > 0 && (
             <div>
-              <h3 className="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide">Règlements</h3>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-4 bg-green-500 rounded-full" />
+                <h3 className="text-sm font-semibold text-gray-700">Règlements</h3>
+              </div>
               <div className="space-y-2">
                 {inv.payments!.map(p => (
-                  <div key={p.id} className="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2">
+                  <div key={p.id} className="flex items-center justify-between bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">
                     <div>
-                      <span className="text-sm font-medium">{PAYMENT_METHODS[p.method] ?? p.method}</span>
+                      <span className="text-sm font-medium text-gray-800">{PAYMENT_METHODS[p.method] ?? p.method}</span>
                       {p.reference && <span className="text-xs text-gray-500 ml-2">Réf. {p.reference}</span>}
                       <div className="text-xs text-gray-400">{fmtDate(p.paid_at)}</div>
                     </div>
@@ -1003,12 +1245,15 @@ function InvoiceDetail({
           {/* Relances */}
           {(inv.reminders ?? []).length > 0 && (
             <div>
-              <h3 className="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide">Relances</h3>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-4 bg-amber-500 rounded-full" />
+                <h3 className="text-sm font-semibold text-gray-700">Relances</h3>
+              </div>
               <div className="space-y-2">
                 {inv.reminders!.map(r => (
-                  <div key={r.id} className="flex items-center justify-between bg-yellow-50 rounded-lg px-3 py-2">
+                  <div key={r.id} className="flex items-center justify-between bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5">
                     <div>
-                      <span className="text-sm font-medium capitalize">{r.type} relance — {r.method}</span>
+                      <span className="text-sm font-medium text-gray-800 capitalize">{r.type} relance — {r.method}</span>
                       {r.notes && <div className="text-xs text-gray-500 mt-0.5">{r.notes}</div>}
                     </div>
                     <span className="text-xs text-gray-400">{fmtDate(r.sent_at)}</span>
@@ -1020,19 +1265,24 @@ function InvoiceDetail({
 
           {/* Actions */}
           {!['paid', 'cancelled'].includes(inv.status) && (
-            <div className="flex flex-wrap gap-2 pt-2 border-t">
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
               {inv.status === 'draft' && (
                 <button
                   onClick={() => markSentMut.mutate()}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors"
                 >
                   <Send size={14} /> Marquer envoyée
                 </button>
               )}
               {inv.balance > 0 && (
                 <button
+<<<<<<< HEAD
                   onClick={() => { setPayEntries([{ method: 'cash', amount: inv.balance }]); setPayModal(true) }}
                   className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700"
+=======
+                  onClick={() => { setPayAmount(String(inv.balance)); setPayModal(true) }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
                 >
                   <CreditCard size={14} /> Enregistrer paiement
                 </button>
@@ -1040,7 +1290,7 @@ function InvoiceDetail({
               {inv.balance > 0 && (
                 <button
                   onClick={() => setReminderModal(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-yellow-500 text-white rounded-xl text-sm font-medium hover:bg-yellow-600"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors"
                 >
                   <Bell size={14} /> Relance
                 </button>
@@ -1049,7 +1299,7 @@ function InvoiceDetail({
                 onClick={async () => {
                   if (await confirm('Annuler cette facture ?')) cancelMut.mutate()
                 }}
-                className="flex items-center gap-1.5 px-4 py-2 border text-red-600 border-red-200 rounded-xl text-sm font-medium hover:bg-red-50"
+                className="flex items-center gap-1.5 px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors"
               >
                 <XCircle size={14} /> Annuler
               </button>
@@ -1060,6 +1310,7 @@ function InvoiceDetail({
 
       {/* Modal paiement */}
       {payModal && (
+<<<<<<< HEAD
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl overflow-hidden">
             <div className="bg-gradient-to-br from-gray-900 to-gray-800 px-6 py-5 flex items-center justify-between">
@@ -1067,12 +1318,41 @@ function InvoiceDetail({
                 <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-1">Encaissement facture</p>
                 <p className="text-white text-3xl font-bold font-mono">{fmt(inv.balance)}</p>
                 {inv.client && <p className="text-indigo-300 text-xs mt-1">{inv.client.name}</p>}
+=======
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => setPayModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+              <div className="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center">
+                <CreditCard size={18} className="text-green-600" />
+              </div>
+              <h3 className="font-bold text-gray-800">Enregistrer un paiement</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Montant (FCFA)</label>
+                <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Mode de paiement</label>
+                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  {Object.entries(PAYMENT_METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Référence <span className="text-gray-400">(optionnel)</span></label>
+                <input type="text" value={payRef} onChange={e => setPayRef(e.target.value)}
+                  placeholder="N° chèque, transaction..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               </div>
               <button onClick={() => setPayModal(false)}
                 className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">
                 <X size={18} />
               </button>
             </div>
+<<<<<<< HEAD
             <div className="p-5 max-h-[60vh] overflow-y-auto">
               <PaymentPanel
                 total={inv.balance}
@@ -1094,6 +1374,16 @@ function InvoiceDetail({
                 className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg">
                 <Check size={18} />
                 {payMut.isPending ? 'Enregistrement...' : 'Valider le paiement'}
+=======
+            <div className="flex gap-2 px-6 pb-5">
+              <button onClick={() => setPayModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Annuler</button>
+              <button
+                onClick={() => payMut.mutate()}
+                disabled={payMut.isPending || !parseFloat(payAmount)}
+                className="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-green-700 transition-colors"
+              >
+                {payMut.isPending ? '…' : 'Valider'}
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               </button>
             </div>
           </div>
@@ -1102,23 +1392,28 @@ function InvoiceDetail({
 
       {/* Modal relance */}
       {reminderModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50" onClick={() => setReminderModal(false)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-gray-800 mb-4">Enregistrer une relance</h3>
-            <div className="space-y-3">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => setReminderModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+              <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center">
+                <Bell size={18} className="text-amber-600" />
+              </div>
+              <h3 className="font-bold text-gray-800">Enregistrer une relance</h3>
+            </div>
+            <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Type</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Type</label>
                 <select value={remType} onChange={e => setRemType(e.target.value as typeof remType)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm">
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
                   <option value="first">1ère relance</option>
                   <option value="second">2ème relance</option>
                   <option value="final">Relance finale (mise en demeure)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Canal</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Canal</label>
                 <select value={remMethod} onChange={e => setRemMethod(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm">
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
                   <option value="phone">Téléphone</option>
                   <option value="whatsapp">WhatsApp</option>
                   <option value="sms">SMS</option>
@@ -1127,19 +1422,19 @@ function InvoiceDetail({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Notes</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Notes</label>
                 <textarea value={remNotes} onChange={e => setRemNotes(e.target.value)} rows={3}
-                  className="w-full border rounded-lg px-3 py-2 text-sm resize-none" />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
               </div>
             </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setReminderModal(false)} className="flex-1 py-2 border rounded-xl text-sm text-gray-600">Annuler</button>
+            <div className="flex gap-2 px-6 pb-5">
+              <button onClick={() => setReminderModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Annuler</button>
               <button
                 onClick={() => reminderMut.mutate()}
                 disabled={reminderMut.isPending}
-                className="flex-1 py-2 bg-yellow-500 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                className="flex-1 py-2.5 bg-amber-500 text-white rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-amber-600 transition-colors"
               >
-                {reminderMut.isPending ? '...' : 'Enregistrer'}
+                {reminderMut.isPending ? '…' : 'Enregistrer'}
               </button>
             </div>
           </div>
@@ -1787,13 +2082,17 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Facturation & Devis</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Documents commerciaux professionnels</p>
+          <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <FileText size={20} className="text-primary" />
+            Facturation & Devis
+          </h1>
+          <p className="text-xs text-gray-500 mt-0.5">Documents commerciaux professionnels</p>
         </div>
+<<<<<<< HEAD
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImport(true)}
@@ -1812,46 +2111,65 @@ export default function InvoicesPage() {
             </button>
           )}
         </div>
+=======
+        <button
+          onClick={() => { setEditing(null); setShowEditor(true) }}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-600 transition-colors shadow-sm"
+        >
+          <Plus size={15} />
+          {tab === 'invoices' ? 'Nouvelle facture' : 'Nouveau devis'}
+        </button>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
       </div>
 
       {/* KPIs */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-2xl shadow-sm border p-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Total facturé</div>
-            <div className="text-xl font-bold text-gray-900">{fmt(stats.total_ttc)}</div>
+            <div className="text-xl font-bold text-gray-800">{fmt(stats.total_ttc)}</div>
             <div className="text-xs text-gray-400 mt-0.5">{stats.total_count} factures</div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border p-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
             <div className="text-xs text-green-600 mb-1">Encaissé</div>
             <div className="text-xl font-bold text-green-700">{fmt(stats.total_paid)}</div>
             <div className="text-xs text-gray-400 mt-0.5">{stats.paid_count} payées</div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border p-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
             <div className="text-xs text-red-500 mb-1">Solde à encaisser</div>
             <div className="text-xl font-bold text-red-600">{fmt(stats.total_balance)}</div>
             <div className="text-xs text-gray-400 mt-0.5">{stats.overdue_count} en retard</div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-xs text-blue-600 mb-1">En cours</div>
-            <div className="text-xl font-bold text-blue-700">{stats.sent_count}</div>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+            <div className="text-xs text-primary mb-1">En cours</div>
+            <div className="text-xl font-bold text-primary">{stats.sent_count}</div>
             <div className="text-xs text-gray-400 mt-0.5">{stats.draft_count} brouillons</div>
           </div>
         </div>
       )}
 
       {/* Tabs */}
+<<<<<<< HEAD
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
         <div className="flex border-b">
           {(['invoices', 'quotes', 'reminders'] as Tab[]).map(t => (
+=======
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex border-b border-gray-100">
+          {(['invoices', 'quotes'] as Tab[]).map(t => (
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
             <button
               key={t}
               onClick={() => { setTab(t); resetFilters() }}
               className={`flex-1 py-3 text-sm font-semibold transition ${
-                tab === t ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                tab === t ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
+<<<<<<< HEAD
               {t === 'invoices' ? 'Factures' : t === 'quotes' ? 'Devis' : 'Relances'}
+=======
+              {t === 'invoices' ? 'Factures' : 'Devis'}
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               {t === 'invoices' && invoicesData?.meta?.total != null && (
                 <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
                   {invoicesData.meta.total}
@@ -1871,6 +2189,7 @@ export default function InvoicesPage() {
           ))}
         </div>
 
+<<<<<<< HEAD
         {/* Filtres — masqués sur l'onglet relances */}
         {tab !== 'reminders' && <div className="px-4 py-3 border-b bg-gray-50 space-y-2.5">
           <div className="flex flex-wrap gap-2">
@@ -1941,12 +2260,40 @@ export default function InvoicesPage() {
             )}
           </div>
         </div>}
+=======
+        {/* Filtres */}
+        <div className="flex gap-3 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+          <div className="relative flex-1 max-w-xs">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">Tous statuts</option>
+            {tab === 'invoices'
+              ? Object.entries(STATUS_INVOICE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)
+              : Object.entries(STATUS_QUOTE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)
+            }
+          </select>
+        </div>
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
 
         {/* ── LISTE FACTURES ─────────────────────────────────────────────────── */}
         {tab === 'invoices' && (
           <div>
             {loadingInvoices ? (
-              <div className="p-12 text-center text-gray-400">Chargement...</div>
+              <div className="p-12 text-center">
+                <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
             ) : invoices.length === 0 ? (
               <div className="p-16 text-center">
                 <FileText size={48} className="text-gray-200 mx-auto mb-3" />
@@ -1954,68 +2301,67 @@ export default function InvoicesPage() {
                 <p className="text-gray-400 text-sm mt-1">Créez votre première facture</p>
               </div>
             ) : (
-              <div className="divide-y">
+              <div className="divide-y divide-gray-100">
                 {invoices.map(inv => {
                   const st = inv.is_overdue && !['paid', 'cancelled'].includes(inv.status) ? 'overdue' : inv.status
                   const si = STATUS_INVOICE[st as InvoiceStatus]
                   return (
                     <div
                       key={inv.id}
-                      className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 cursor-pointer"
+                      className="flex items-center gap-4 px-4 py-3 hover:bg-blue-50/30 cursor-pointer transition-colors"
                       onClick={() => setSelected(inv)}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-800 text-sm">{inv.reference}</span>
+                          <span className="font-semibold text-gray-800 text-sm font-mono">{inv.reference}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${si.color}`}>{si.label}</span>
                           {inv.is_overdue && inv.status !== 'paid' && (
-                            <AlertCircle size={14} className="text-red-500" />
+                            <AlertCircle size={13} className="text-red-500" />
                           )}
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5">
-                          {inv.client?.name ?? 'Sans client'}
-                          {inv.object && ` · ${inv.object}`}
+                          {inv.client?.name ?? <span className="text-gray-300">Sans client</span>}
+                          {inv.object && <span className="text-gray-400"> · {inv.object}</span>}
                         </div>
                       </div>
                       <div className="text-right hidden sm:block">
                         <div className="text-sm font-bold text-gray-800">{fmt(inv.total_ttc)}</div>
                         {inv.balance > 0 && (
-                          <div className="text-xs text-red-500">Solde: {fmt(inv.balance)}</div>
+                          <div className="text-xs text-red-500">Solde : {fmt(inv.balance)}</div>
                         )}
                       </div>
-                      <div className="text-xs text-gray-400 hidden md:block w-20 text-right">
+                      <div className="text-xs text-gray-400 hidden md:block w-24 text-right">
                         {fmtDate(inv.issue_date)}
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                         <button
-                          onClick={e => { e.stopPropagation(); setEditing(inv); setShowEditor(true) }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                          onClick={() => { setEditing(inv); setShowEditor(true) }}
+                          className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
                           title="Modifier"
                         >
                           <Edit2 size={14} />
                         </button>
                         <button
-                          onClick={e => { e.stopPropagation(); printFull(inv.id, 'invoice') }}
+                          onClick={() => printFull(inv.id, 'invoice')}
                           disabled={printingId === inv.id}
-                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-40"
+                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-40 transition-colors"
                           title="Imprimer"
                         >
-                          {printingId === inv.id ? <span className="text-xs">...</span> : <Printer size={14} />}
+                          {printingId === inv.id ? <span className="text-xs animate-pulse">…</span> : <Printer size={14} />}
                         </button>
                         <button
-                          onClick={e => { e.stopPropagation(); downloadDoc(inv.id, 'invoice', inv.reference) }}
+                          onClick={() => downloadDoc(inv.id, 'invoice', inv.reference)}
                           disabled={pdfIds.has(inv.id)}
-                          className="p-1.5 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-lg disabled:opacity-40"
+                          className="p-1.5 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-lg disabled:opacity-40 transition-colors"
                           title="Télécharger PDF"
                         >
-                          {pdfIds.has(inv.id) ? <span className="text-xs">...</span> : <FileDown size={14} />}
+                          {pdfIds.has(inv.id) ? <span className="text-xs animate-pulse">…</span> : <FileDown size={14} />}
                         </button>
                         <button
-                          onClick={async e => {
-                            e.stopPropagation()
+                          onClick={async () => {
                             if (await confirm(`Supprimer la facture ${inv.reference} ?`, { danger: true })) deleteInvoice.mutate(inv.id)
                           }}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Supprimer"
                         >
                           <Trash2 size={14} />
@@ -2044,7 +2390,9 @@ export default function InvoicesPage() {
         {tab === 'quotes' && (
           <div>
             {loadingQuotes ? (
-              <div className="p-12 text-center text-gray-400">Chargement...</div>
+              <div className="p-12 text-center">
+                <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
             ) : quotes.length === 0 ? (
               <div className="p-16 text-center">
                 <FileText size={48} className="text-gray-200 mx-auto mb-3" />
@@ -2052,20 +2400,20 @@ export default function InvoicesPage() {
                 <p className="text-gray-400 text-sm mt-1">Créez votre premier devis</p>
               </div>
             ) : (
-              <div className="divide-y">
+              <div className="divide-y divide-gray-100">
                 {quotes.map(q => {
                   const st  = q.is_expired && !['accepted', 'invoiced', 'cancelled'].includes(q.status) ? 'expired' : q.status
                   const si  = STATUS_QUOTE[st as QuoteStatus]
                   return (
-                    <div key={q.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50">
+                    <div key={q.id} className="flex items-center gap-4 px-4 py-3 hover:bg-blue-50/30 transition-colors">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-800 text-sm">{q.reference}</span>
+                          <span className="font-semibold text-gray-800 text-sm font-mono">{q.reference}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${si.color}`}>{si.label}</span>
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5">
-                          {q.client?.name ?? 'Sans client'}
-                          {q.object && ` · ${q.object}`}
+                          {q.client?.name ?? <span className="text-gray-300">Sans client</span>}
+                          {q.object && <span className="text-gray-400"> · {q.object}</span>}
                         </div>
                       </div>
                       <div className="text-right hidden sm:block">
@@ -2078,7 +2426,7 @@ export default function InvoicesPage() {
                         {q.status === 'draft' && (
                           <button
                             onClick={() => quoteMarkSent.mutate(q.id)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200"
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-primary hover:bg-primary/5 rounded-lg border border-primary/20 transition-colors"
                             title="Marquer envoyé"
                           >
                             <Send size={12} /> Envoyer
@@ -2089,7 +2437,7 @@ export default function InvoicesPage() {
                             onClick={async () => {
                               if (await confirm(`Convertir ${q.reference} en facture ?`)) convertQuote.mutate(q.id)
                             }}
-                            className="flex items-center gap-1 px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded-lg border border-purple-200"
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded-lg border border-purple-200 transition-colors"
                             title="Convertir en facture"
                           >
                             <ArrowRight size={12} /> Facturer
@@ -2098,22 +2446,22 @@ export default function InvoicesPage() {
                         <button
                           onClick={() => printFull(q.id, 'quote')}
                           disabled={printingId === q.id}
-                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-40"
+                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-40 transition-colors"
                           title="Imprimer"
                         >
-                          <Printer size={14} />
+                          {printingId === q.id ? <span className="text-xs animate-pulse">…</span> : <Printer size={14} />}
                         </button>
                         <button
                           onClick={() => downloadDoc(q.id, 'quote', q.reference)}
                           disabled={pdfIds.has(q.id)}
-                          className="p-1.5 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-lg disabled:opacity-40"
+                          className="p-1.5 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-lg disabled:opacity-40 transition-colors"
                           title="Télécharger PDF"
                         >
-                          {pdfIds.has(q.id) ? <span className="text-xs">...</span> : <FileDown size={14} />}
+                          {pdfIds.has(q.id) ? <span className="text-xs animate-pulse">…</span> : <FileDown size={14} />}
                         </button>
                         <button
                           onClick={() => { setEditing(q); setShowEditor(true) }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                          className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
                           title="Modifier"
                         >
                           <Edit2 size={14} />
@@ -2122,7 +2470,7 @@ export default function InvoicesPage() {
                           onClick={async () => {
                             if (await confirm(`Supprimer le devis ${q.reference} ?`, { danger: true })) deleteQuote.mutate(q.id)
                           }}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Supprimer"
                         >
                           <Trash2 size={14} />

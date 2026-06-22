@@ -23,6 +23,7 @@ interface ProductStats {
 }
 
 interface Category { id: number; name: string; type?: string; parent_id?: number | null; children?: Category[] }
+interface ClientCategory { id: number; name: string; code?: string; color: string; is_pos_default: boolean }
 interface Brand { id: number; name: string }
 interface Unit { id: number; name: string; abbreviation: string }
 
@@ -75,6 +76,7 @@ interface Product {
   purchase_price_ht: number
   sale_price_ttc: number
   vat_rate: number
+  price_tiers?: { id: number; client_category_id: number; price: number; clientCategory?: { id: number; name: string; color: string; is_pos_default: boolean } }[]
   is_active: boolean
   is_weight_based: boolean
   track_expiry: boolean
@@ -367,6 +369,10 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     queryKey: ['units'],
     queryFn: () => api.get('/units').then(r => r.data),
   })
+  const { data: clientCategories = [] } = useQuery<ClientCategory[]>({
+    queryKey: ['client-categories'],
+    queryFn: () => api.get('/client-categories').then(r => r.data),
+  })
 
   const flatCats = flattenCategories(rawCategories)
 
@@ -437,6 +443,11 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
 
   const [barcodes, setBarcodes] = useState<BarcodeEntry[]>(
     product?.barcodes?.map(b => ({ barcode: b.barcode, type: b.type as BarcodeEntry['type'] })) ?? [{ barcode: '', type: 'ean13' }]
+  )
+
+  // price tiers: { client_category_id → price string }
+  const [priceTiers, setPriceTiers] = useState<Record<number, string>>(
+    () => Object.fromEntries((product?.price_tiers ?? []).map(t => [t.client_category_id, String(t.price ?? '')]))
   )
 
   const [containers, setContainers] = useState<ContainerForm[]>(
@@ -533,6 +544,10 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
       purchase_price_ht: Number(form.purchase_price_ht),
       sale_price_ttc: Number(form.sale_price_ttc),
       vat_rate: Number(form.vat_rate),
+      price_tiers: Object.entries(priceTiers).map(([catId, price]) => ({
+        client_category_id: Number(catId),
+        price: price ? Number(price) : null,
+      })),
       min_stock: form.min_stock ? Number(form.min_stock) : undefined,
       max_stock: form.max_stock ? Number(form.max_stock) : undefined,
       stock_appro: form.stock_appro ? Number(form.stock_appro) : undefined,
@@ -677,7 +692,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
 
           {/* Prix */}
           <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><TrendingUp size={14} /> Tarification de base</h3>
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><TrendingUp size={14} /> Tarification</h3>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Prix achat HT *</label>
@@ -700,6 +715,30 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
             {marginPct !== null && (
               <div className={`text-sm font-medium ${marginPct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 Marge : {marginPct >= 0 ? '+' : ''}{marginPct}%
+              </div>
+            )}
+            {/* Prix par catégorie de client (dynamique) */}
+            {clientCategories.length > 0 && (
+              <div className="border-t border-gray-200 pt-3">
+                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Prix par catégorie client</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {clientCategories.map(cat => (
+                    <div key={cat.id}>
+                      <label className="block text-xs font-medium mb-1 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                        {cat.name}
+                        {cat.is_pos_default && <span className="text-amber-500 text-xs">(POS)</span>}
+                      </label>
+                      <input
+                        type="number"
+                        value={priceTiers[cat.id] ?? ''}
+                        onChange={e => setPriceTiers(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                        className="input"
+                        min={0} step={1} placeholder="—"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -882,6 +921,20 @@ function ProductDetailModal({ product, onClose, onEdit }: {
               <div className="flex justify-between"><span className="text-gray-500">Prix achat HT</span><span className="font-medium">{formatCurrency(p.purchase_price_ht)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Prix vente TTC</span><span className="font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">TVA</span><span>{p.vat_rate}%</span></div>
+              {(p.price_tiers ?? []).length > 0 && (
+                <div className="border-t border-gray-200 pt-2 mt-2 space-y-1">
+                  {p.price_tiers!.map(t => (
+                    <div key={t.id} className="flex justify-between items-center">
+                      <span className="text-gray-500 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.clientCategory?.color ?? '#6366f1' }} />
+                        {t.clientCategory?.name ?? `Cat. ${t.client_category_id}`}
+                        {t.clientCategory?.is_pos_default && <span className="text-xs text-amber-500">(POS)</span>}
+                      </span>
+                      <span className="font-medium">{formatCurrency(t.price)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
               <p className="font-semibold text-gray-700">Stock</p>
@@ -2089,6 +2142,7 @@ function ArticlesTab() {
     : undefined
 
   return (
+<<<<<<< HEAD
     <div className="flex gap-5 items-start">
 
       {/* ── Category sidebar ── */}
@@ -2129,6 +2183,14 @@ function ArticlesTab() {
             />
           ))}
         </div>
+=======
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={<Package size={20} className="text-white" />} label="Total articles" value={stats?.total ?? 0} color="bg-primary" />
+        <KpiCard icon={<Check size={20} className="text-white" />} label="Articles actifs" value={stats?.active ?? 0} color="bg-green-500" />
+        <KpiCard icon={<AlertTriangle size={20} className="text-white" />} label="Stock faible" value={stats?.low_stock ?? 0} color="bg-amber-500" />
+        <KpiCard icon={<X size={20} className="text-white" />} label="En rupture" value={stats?.out_of_stock ?? 0} color="bg-red-500" />
+>>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
       </div>
 
       {/* ── Main content ── */}
@@ -2669,7 +2731,7 @@ export default function ProductsPage() {
   ]
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-3 sm:p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
