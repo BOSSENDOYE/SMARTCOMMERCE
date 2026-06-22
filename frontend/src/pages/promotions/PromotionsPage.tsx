@@ -654,7 +654,7 @@ export default function PromotionsPage() {
   const hasFilters = search || statusFilter !== 'all' || typeFilter !== 'all'
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-3 sm:p-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -670,7 +670,7 @@ export default function PromotionsPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard icon={<Percent size={20} className="text-white" />} label="Total promotions"    value={stats?.total ?? 0}         color="bg-primary" />
         <KpiCard icon={<Zap size={20} className="text-white" />}     label="Actives en ce moment" value={stats?.active ?? 0}       color="bg-green-500" />
         <KpiCard icon={<AlertTriangle size={20} className="text-white" />} label="Expirent dans 7 jours" value={stats?.expiring_soon ?? 0} color="bg-amber-500" />

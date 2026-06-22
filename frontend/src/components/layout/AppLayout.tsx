@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
 import { useQuery } from '@tanstack/react-query'
@@ -10,7 +10,7 @@ import {
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
   UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target, Palette, Sun, Moon,
-  FolderOpen,
+  FolderOpen, Menu, Smartphone,
 } from 'lucide-react'
 import { usePreferencesStore } from '../../store/preferences.store'
 import { useMenuStore, type MenuNode } from '../../store/menu.store'
@@ -258,9 +258,11 @@ function StoreSwitcher({ collapsed }: { collapsed: boolean }) {
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const { user, clearAuth, can, hasLicense } = useAuthStore()
   const { activeStore } = useActiveStoreStore()
   const navigate = useNavigate()
+  const location = useLocation()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const { theme, setTheme } = usePreferencesStore()
   const { isOnline, wasOffline } = useNetworkStatus()
@@ -272,6 +274,9 @@ export default function AppLayout() {
     const interval = setInterval(() => getPendingSalesCount().then(setPendingCount), 10000)
     return () => clearInterval(interval)
   }, [])
+
+  // Close mobile sidebar on route change
+  useEffect(() => { setMobileOpen(false) }, [location.pathname])
 
   const isSuperAdmin = user?.roles?.includes('super_admin') && !user?.store_id
   const { nodes, loaded: menuLoaded, fetchConfig, getLabel, isVisible } = useMenuStore()
@@ -351,8 +356,21 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100">
+      {/* Mobile sidebar backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className={`${collapsed ? 'w-16' : 'w-64'} bg-brand text-white flex flex-col transition-all duration-200 ease-in-out flex-shrink-0`}>
+      <aside className={`
+        fixed lg:relative inset-y-0 left-0 z-50
+        ${collapsed ? 'w-16' : 'w-64'}
+        bg-brand text-white flex flex-col transition-all duration-200 ease-in-out flex-shrink-0
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
         {/* Logo */}
         <div className="flex items-center justify-between p-4 border-b border-brand-700">
           {!collapsed && (
@@ -387,6 +405,18 @@ export default function AppLayout() {
             <p className="text-[10px] text-yellow-300">Sélectionnez un magasin</p>
           </div>
         )}
+
+        {/* Caisse Mobile — accès direct terminal Android */}
+        <div className="px-2 pt-2 pb-1 border-b border-brand-700">
+          <a
+            href="/m/pos"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 bg-green-600/20 text-green-300 hover:bg-green-600/40 hover:text-white border border-green-600/30"
+            title={collapsed ? 'Caisse Mobile' : undefined}
+          >
+            <Smartphone size={18} className="flex-shrink-0" />
+            {!collapsed && <span className="truncate">Caisse Mobile</span>}
+          </a>
+        </div>
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
@@ -494,9 +524,18 @@ export default function AppLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-h-0">
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Top bar */}
-        <div className="flex-shrink-0 flex items-center justify-end px-4 h-10 bg-white border-b border-gray-100 shadow-sm relative z-40">
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 h-10 bg-white border-b border-gray-100 shadow-sm relative z-40">
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setMobileOpen(o => !o)}
+            className="lg:hidden p-1.5 text-gray-500 hover:text-gray-800 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Menu"
+          >
+            <Menu size={18} />
+          </button>
+          <div className="flex-1" />
           <NotificationBell />
         </div>
 

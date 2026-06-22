@@ -10,6 +10,7 @@ import InstallPWABanner from './components/InstallPWABanner'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import PosPage from './pages/pos/PosPage'
+import MobilePosPage from './pages/pos/MobilePosPage'
 import ProductsPage from './pages/products/ProductsPage'
 import StockPage from './pages/stock/StockPage'
 import { lazy, Suspense } from 'react'
@@ -37,7 +38,8 @@ const CrmPage             = lazy(() => import('./pages/crm/CrmPage'))
 const ProfilePage         = lazy(() => import('./pages/settings/ProfilePage'))
 const RolesPage           = lazy(() => import('./pages/settings/RolesPage'))
 const PreferencesPage     = lazy(() => import('./pages/settings/PreferencesPage'))
-const MenuSettingsPage    = lazy(() => import('./pages/settings/MenuSettingsPage'))
+const MenuSettingsPage        = lazy(() => import('./pages/settings/MenuSettingsPage'))
+const ClientCategoriesPage    = lazy(() => import('./pages/settings/ClientCategoriesPage'))
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -86,6 +88,7 @@ export default function App() {
         />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/m/pos" element={<RequireAuth><MobilePosPage /></RequireAuth>} />
           <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
             <Route index element={<DashboardPage />} />
             <Route path="pos" element={<PosPage />} />
@@ -113,6 +116,7 @@ export default function App() {
             <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />
             <Route path="preferences" element={<Suspense fallback={<PageLoader />}><PreferencesPage /></Suspense>} />
             <Route path="menu-settings" element={<Suspense fallback={<PageLoader />}><MenuSettingsPage /></Suspense>} />
+            <Route path="client-categories" element={<Suspense fallback={<PageLoader />}><ClientCategoriesPage /></Suspense>} />
             <Route path="invoices" element={<Suspense fallback={<PageLoader />}><InvoicesPage /></Suspense>} />
             <Route path="crm" element={<Suspense fallback={<PageLoader />}><CrmPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/" replace />} />

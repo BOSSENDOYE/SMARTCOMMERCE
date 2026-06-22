@@ -31,12 +31,14 @@ class ClientController extends Controller
     {
         return response()->json(
             Client::where('store_id', $request->user()->store_id)
+                ->with('category')
                 ->when($request->search, fn($q) => $q->where(fn($q2) =>
                     $q2->where('name', 'like', "%{$request->search}%")
                        ->orWhere('phone', 'like', "%{$request->search}%")
                        ->orWhere('email', 'like', "%{$request->search}%")
                 ))
                 ->when($request->type, fn($q) => $q->where('type', $request->type))
+                ->when($request->client_category_id, fn($q) => $q->where('client_category_id', $request->client_category_id))
                 ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
                 ->when($request->has_credit, fn($q) => $q->where('credit_balance', '>', 0))
                 ->withCount('sales')
@@ -48,14 +50,15 @@ class ClientController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'         => 'required|string|max:100',
-            'phone'        => 'nullable|string|max:30',
-            'email'        => 'nullable|email',
-            'address'      => 'nullable|string',
-            'type'         => 'nullable|in:individual,company',
-            'ninea'        => 'nullable|string|max:30',
-            'notes'        => 'nullable|string',
-            'credit_limit' => 'nullable|numeric|min:0',
+            'name'               => 'required|string|max:100',
+            'phone'              => 'nullable|string|max:30',
+            'email'              => 'nullable|email',
+            'address'            => 'nullable|string',
+            'type'               => 'nullable|in:individual,company',
+            'client_category_id' => 'nullable|exists:client_categories,id',
+            'ninea'              => 'nullable|string|max:30',
+            'notes'              => 'nullable|string',
+            'credit_limit'       => 'nullable|numeric|min:0',
         ]);
 
         $client = Client::create(array_merge($data, [
@@ -63,7 +66,7 @@ class ClientController extends Controller
             'is_active' => true,
         ]));
 
-        return response()->json($client, 201);
+        return response()->json($client->load('category'), 201);
     }
 
     public function show(Client $client)
@@ -74,19 +77,20 @@ class ClientController extends Controller
     public function update(Request $request, Client $client)
     {
         $data = $request->validate([
-            'name'         => 'sometimes|string|max:100',
-            'phone'        => 'nullable|string|max:30',
-            'email'        => 'nullable|email',
-            'address'      => 'nullable|string',
-            'type'         => 'nullable|in:individual,company',
-            'ninea'        => 'nullable|string|max:30',
-            'notes'        => 'nullable|string',
-            'credit_limit' => 'nullable|numeric|min:0',
-            'is_active'    => 'sometimes|boolean',
+            'name'               => 'sometimes|string|max:100',
+            'phone'              => 'nullable|string|max:30',
+            'email'              => 'nullable|email',
+            'address'            => 'nullable|string',
+            'type'               => 'nullable|in:individual,company',
+            'client_category_id' => 'nullable|exists:client_categories,id',
+            'ninea'              => 'nullable|string|max:30',
+            'notes'              => 'nullable|string',
+            'credit_limit'       => 'nullable|numeric|min:0',
+            'is_active'          => 'sometimes|boolean',
         ]);
 
         $client->update($data);
-        return response()->json($client);
+        return response()->json($client->load('category'));
     }
 
     public function destroy(Client $client)

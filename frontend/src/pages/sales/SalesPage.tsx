@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
 import api from '../../lib/api'
@@ -8,7 +9,7 @@ import toast from 'react-hot-toast'
 import {
   Plus, Trash2, User, ArrowLeft,
   Printer, X, FileText, Ban, RotateCcw, AlertTriangle,
-  Eye, Edit2, ShoppingCart, Package,
+  Eye, Edit2, ShoppingCart, Package, CreditCard,
 } from 'lucide-react'
 import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
 
@@ -168,10 +169,20 @@ interface LineRowProps {
 function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange, onRemove, canRemove }: LineRowProps) {
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([])
   const [showSug, setShowSug]         = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef  = useRef<HTMLInputElement>(null)
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null)
+
+  const updateDropPos = () => {
+    if (inputRef.current) {
+      const r = inputRef.current.getBoundingClientRect()
+      setDropPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 320) })
+    }
+  }
 
   const handleInput = (val: string) => {
     onChange({ search: val, product_id: null, product_name: '' })
+    updateDropPos()
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(async () => {
       const res = await onSearchProducts(val)
@@ -195,13 +206,14 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
       <td className="px-3 py-2 text-center text-xs text-gray-400 font-mono w-10">{index + 1}</td>
 
       {/* Produit */}
-      <td className="px-3 py-2 relative">
+      <td className="px-3 py-2">
         <div className="relative">
           <input
+            ref={inputRef}
             type="text"
             value={line.search}
             onChange={e => handleInput(e.target.value)}
-            onFocus={() => setShowSug(suggestions.length > 0)}
+            onFocus={() => { updateDropPos(); setShowSug(suggestions.length > 0) }}
             onBlur={() => setTimeout(() => setShowSug(false), 200)}
             placeholder="Saisir ou rechercher un produit…"
             className={`w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 pr-8 ${
@@ -225,9 +237,12 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
           </div>
         )}
 
-        {/* Dropdown suggestions */}
-        {showSug && (
-          <div className="absolute z-30 left-3 top-full mt-1 w-80 bg-white border border-gray-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+        {/* Dropdown portal — renders in <body> to avoid overflow clipping */}
+        {showSug && dropPos && createPortal(
+          <div
+            style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+            className="bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 overflow-y-auto"
+          >
             {suggestions.map(p => (
               <button
                 key={p.id}
@@ -246,7 +261,8 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
                 </div>
               </button>
             ))}
-          </div>
+          </div>,
+          document.body
         )}
       </td>
 
@@ -317,13 +333,8 @@ function SaleLineRow({ line, index, onSearchProducts, onSelectProduct, onChange,
         </div>
       </td>
 
-      {/* Total HT */}
-      <td className="px-3 py-2 w-32 text-right text-xs text-gray-400">
-        {formatCurrency(line.total_ht)}
-      </td>
-
       {/* Total TTC */}
-      <td className="px-3 py-2 w-32 text-right font-semibold text-gray-800">
+      <td className="px-3 py-2 w-28 text-right font-semibold text-gray-800">
         {formatCurrency(line.total_ttc)}
       </td>
 
@@ -364,7 +375,8 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
   const [note, setNote] = useState('')
 
   // Payment
-  const [payments, setPayments] = useState<PaymentEntry[]>([{ method: 'cash', amount: 0 }])
+  const [payments, setPayments]           = useState<PaymentEntry[]>([{ method: 'cash', amount: 0 }])
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
 
   // Lines
   const [lines, setLines] = useState<SaleLine[]>(
@@ -484,210 +496,177 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
             <p className="text-xs text-gray-400">Bon de vente — document comptoir</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onCancel}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <X size={14} /> Annuler
-          </button>
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
-            className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-600 transition-colors disabled:opacity-60 shadow-sm"
-          >
-            <Printer size={15} />
-            {mutation.isPending ? 'Enregistrement…' : 'Confirmer & Imprimer'}
-          </button>
-        </div>
+        <button
+          onClick={onCancel}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <X size={14} /> Annuler
+        </button>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6 space-y-4">
+      <div className="max-w-[1400px] mx-auto p-4 lg:p-6">
+        <div className="flex gap-4 items-start">
 
-        {/* ── En-tête de la vente ── */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-            <div className="w-1 h-4 bg-primary rounded-full" />
-            <h2 className="text-sm font-semibold text-gray-700">Informations de la vente</h2>
-          </div>
-          <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* ── COLONNE GAUCHE : infos + articles ── */}
+          <div className="flex-1 min-w-0 space-y-4">
 
-            {/* Date */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Date de vente</label>
-              <input
-                type="date"
-                value={saleDate}
-                onChange={e => setSaleDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-
-            {/* Client */}
-            <div className="relative">
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Client</label>
-              <div className="relative">
-                <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={clientId ? clientName : clientSearch}
-                  onChange={e => {
-                    setClientId(null); setClientName(''); setClientSearch(e.target.value); setShowClientSug(true)
-                  }}
-                  onFocus={() => setShowClientSug(true)}
-                  onBlur={() => setTimeout(() => setShowClientSug(false), 200)}
-                  placeholder="Rechercher un client…"
-                  className="w-full border border-gray-300 rounded-lg pl-8 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                {clientId && (
-                  <button onClick={() => { setClientId(null); setClientName(''); setClientSearch('') }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500">
-                    <X size={14} />
-                  </button>
-                )}
+            {/* En-tête de la vente */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                <div className="w-1 h-4 bg-primary rounded-full" />
+                <h2 className="text-sm font-semibold text-gray-700">Informations de la vente</h2>
               </div>
-              {showClientSug && clientSugs.length > 0 && (
-                <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                  {clientSugs.map(c => (
-                    <button key={c.id}
-                      onMouseDown={() => {
-                        setClientId(c.id)
-                        setClientName(c.name)
-                        setClientSearch('')
-                        setShowClientSug(false)
-                        setClientAccountBalance((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0)
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex justify-between border-b border-gray-100 last:border-0">
-                      <span className="font-medium text-gray-800">{c.name}</span>
-                      <div className="text-right">
-                        <span className="text-gray-400 text-xs block">{c.phone}</span>
-                        {(c as ClientSuggestion & { account_balance?: number }).account_balance !== undefined && (
-                          <span className={`text-[10px] font-medium ${((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0) >= 0 ? 'text-indigo-600' : 'text-red-500'}`}>
-                            Compte: {formatCurrency((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0)}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+              <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
 
-            {/* Canal */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Canal de vente</label>
-              <select value={channel} onChange={e => setChannel(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
-                {CHANNELS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
-            </div>
-
-            {/* Vendeur */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Vendeur</label>
-              <input type="text" value={user?.name ?? ''} readOnly
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-default" />
-            </div>
-
-            {/* Note (span 4 cols) */}
-            <div className="md:col-span-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Note / Référence interne <span className="text-gray-400">(optionnel)</span></label>
-              <input type="text" value={note} onChange={e => setNote(e.target.value)}
-                placeholder="Commentaire, n° de commande client, référence externe…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-            </div>
-          </div>
-        </div>
-
-        {/* ── Lignes produits ── */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-primary rounded-full" />
-              <h2 className="text-sm font-semibold text-gray-700">Détail des articles</h2>
-              <span className="text-xs text-gray-400 ml-1">({lines.filter(l => l.product_id).length} article{lines.filter(l => l.product_id).length > 1 ? 's' : ''})</span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
-              <thead>
-                <tr className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
-                  <th className="px-3 py-3 text-center w-10">#</th>
-                  <th className="px-3 py-3 text-left">Désignation du produit</th>
-                  <th className="px-3 py-3 text-center w-28">Quantité</th>
-                  <th className="px-3 py-3 text-left w-36">Unité</th>
-                  <th className="px-3 py-3 text-right w-36">Prix unit. TTC</th>
-                  <th className="px-3 py-3 text-center w-24">Remise</th>
-                  <th className="px-3 py-3 text-right w-32">Montant HT</th>
-                  <th className="px-3 py-3 text-right w-32">Montant TTC</th>
-                  <th className="w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((line, idx) => (
-                  <SaleLineRow
-                    key={line._id}
-                    line={line}
-                    index={idx}
-                    onSearchProducts={searchProducts}
-                    onSelectProduct={p => selectProduct(line._id, p)}
-                    onChange={patch => updateLine(line._id, patch)}
-                    onRemove={() => removeLine(line._id)}
-                    canRemove={lines.length > 1}
+                {/* Date */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Date de vente</label>
+                  <input
+                    type="date"
+                    value={saleDate}
+                    onChange={e => setSaleDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </div>
 
-          {/* Add line button */}
-          <div className="px-5 py-3 border-t border-gray-100">
-            <button onClick={addLine}
-              className="flex items-center gap-2 text-sm text-primary hover:text-primary-600 font-medium transition-colors group">
-              <div className="w-6 h-6 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
-                <Plus size={13} className="text-primary" />
+                {/* Client */}
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Client</label>
+                  <div className="relative">
+                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={clientId ? clientName : clientSearch}
+                      onChange={e => {
+                        setClientId(null); setClientName(''); setClientSearch(e.target.value); setShowClientSug(true)
+                      }}
+                      onFocus={() => setShowClientSug(true)}
+                      onBlur={() => setTimeout(() => setShowClientSug(false), 200)}
+                      placeholder="Rechercher un client…"
+                      className="w-full border border-gray-300 rounded-lg pl-8 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    {clientId && (
+                      <button onClick={() => { setClientId(null); setClientName(''); setClientSearch('') }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {showClientSug && clientSugs.length > 0 && (
+                    <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {clientSugs.map(c => (
+                        <button key={c.id}
+                          onMouseDown={() => {
+                            setClientId(c.id)
+                            setClientName(c.name)
+                            setClientSearch('')
+                            setShowClientSug(false)
+                            setClientAccountBalance((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0)
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex justify-between border-b border-gray-100 last:border-0">
+                          <span className="font-medium text-gray-800">{c.name}</span>
+                          <div className="text-right">
+                            <span className="text-gray-400 text-xs block">{c.phone}</span>
+                            {(c as ClientSuggestion & { account_balance?: number }).account_balance !== undefined && (
+                              <span className={`text-[10px] font-medium ${((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0) >= 0 ? 'text-indigo-600' : 'text-red-500'}`}>
+                                Compte: {formatCurrency((c as ClientSuggestion & { account_balance?: number }).account_balance ?? 0)}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Canal */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Canal de vente</label>
+                  <select value={channel} onChange={e => setChannel(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    {CHANNELS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+
+                {/* Vendeur */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Vendeur</label>
+                  <input type="text" value={user?.name ?? ''} readOnly
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-default" />
+                </div>
+
+                {/* Note */}
+                <div className="md:col-span-4">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Note / Référence interne <span className="text-gray-400">(optionnel)</span></label>
+                  <input type="text" value={note} onChange={e => setNote(e.target.value)}
+                    placeholder="Commentaire, n° de commande client, référence externe…"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
               </div>
-              Ajouter une ligne
-            </button>
-          </div>
-        </div>
-
-        {/* ── Règlement + Totaux ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-
-          {/* Payment — 3/5 */}
-          <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1 h-4 bg-primary rounded-full" />
-              <h2 className="text-sm font-semibold text-gray-700">Mode de règlement</h2>
-              {clientId && clientName && (
-                <span className="ml-auto text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-medium">
-                  Client : {clientName}
-                </span>
-              )}
             </div>
 
-            <PaymentPanel
-              total={totalTtc}
-              clientAccountBalance={clientId ? clientAccountBalance : undefined}
-              clientName={clientName}
-              value={payments}
-              onChange={setPayments}
-              compact
-            />
+            {/* Lignes produits */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-4 bg-primary rounded-full" />
+                  <h2 className="text-sm font-semibold text-gray-700">Détail des articles</h2>
+                  <span className="text-xs text-gray-400 ml-1">({lines.filter(l => l.product_id).length} article{lines.filter(l => l.product_id).length > 1 ? 's' : ''})</span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[700px]">
+                  <thead>
+                    <tr className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                      <th className="px-3 py-3 text-center w-10">#</th>
+                      <th className="px-3 py-3 text-left">Désignation du produit</th>
+                      <th className="px-3 py-3 text-center w-24">Qté</th>
+                      <th className="px-3 py-3 text-left w-32">Unité</th>
+                      <th className="px-3 py-3 text-right w-32">Prix TTC</th>
+                      <th className="px-3 py-3 text-center w-20">Remise</th>
+                      <th className="px-3 py-3 text-right w-28">Total TTC</th>
+                      <th className="w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line, idx) => (
+                      <SaleLineRow
+                        key={line._id}
+                        line={line}
+                        index={idx}
+                        onSearchProducts={searchProducts}
+                        onSelectProduct={p => selectProduct(line._id, p)}
+                        onChange={patch => updateLine(line._id, patch)}
+                        onRemove={() => removeLine(line._id)}
+                        canRemove={lines.length > 1}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-5 py-3 border-t border-gray-100">
+                <button onClick={addLine}
+                  className="flex items-center gap-2 text-sm text-primary hover:text-primary-600 font-medium transition-colors group">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
+                    <Plus size={13} className="text-primary" />
+                  </div>
+                  Ajouter une ligne
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Totals — 2/5 */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
+          {/* ── COLONNE DROITE : récap + bouton paiement ── */}
+          <div className="w-[300px] xl:w-[320px] flex-shrink-0 sticky top-[73px]">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-3">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="w-1 h-4 bg-primary rounded-full" />
                 <h2 className="text-sm font-semibold text-gray-700">Récapitulatif</h2>
               </div>
 
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <div className="flex justify-between items-center text-sm text-gray-600">
                   <span>Sous-total HT</span>
                   <span className="font-mono">{formatCurrency(subtotalHt)}</span>
@@ -702,23 +681,91 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
                     <span className="font-mono">− {formatCurrency(discountTotal)}</span>
                   </div>
                 )}
-                <div className="border-t border-gray-100 pt-3 mt-3">
+                <div className="border-t border-gray-100 pt-3">
                   <div className="flex justify-between items-center">
                     <span className="text-base font-bold text-gray-800">TOTAL TTC</span>
                     <span className="text-2xl font-bold text-primary font-mono">{formatCurrency(totalTtc)}</span>
                   </div>
                 </div>
               </div>
+
+              <div className="text-xs text-gray-400 text-center pb-1">
+                {lines.filter(l => l.product_id).length} article(s) —&nbsp;
+                {lines.filter(l => l.product_id).reduce((s, l) => s + l.qty, 0).toFixed(3)} unité(s)
+              </div>
+
+              <button
+                onClick={() => {
+                  const valid = lines.filter(l => l.product_id !== null && l.qty > 0)
+                  if (valid.length === 0) { toast.error('Ajoutez au moins un produit.'); return }
+                  setShowPaymentModal(true)
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary-600 transition-colors shadow-sm"
+              >
+                <CreditCard size={16} />
+                Passer au paiement
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Modale de paiement ── */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center">
+                  <CreditCard size={18} className="text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-800">Mode de règlement</h2>
+                  <p className="text-xs text-gray-400">
+                    Total à encaisser : <span className="font-semibold text-gray-600 font-mono">{formatCurrency(totalTtc)}</span>
+                    {clientName && <span className="ml-2 text-indigo-500">— {clientName}</span>}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                <X size={18} />
+              </button>
             </div>
 
-            {/* Nb articles */}
-            <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400 text-center">
-              {lines.filter(l => l.product_id).length} article(s) —&nbsp;
-              {lines.filter(l => l.product_id).reduce((s, l) => s + l.qty, 0).toFixed(3)} unité(s)
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <PaymentPanel
+                total={totalTtc}
+                clientAccountBalance={clientId ? clientAccountBalance : undefined}
+                clientName={clientName}
+                value={payments}
+                onChange={setPayments}
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-2 px-6 pb-5 flex-shrink-0">
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Retour
+              </button>
+              <button
+                onClick={() => mutation.mutate()}
+                disabled={mutation.isPending}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary-600 transition-colors disabled:opacity-60 shadow-sm"
+              >
+                <Printer size={15} />
+                {mutation.isPending ? 'Enregistrement…' : 'Confirmer & Imprimer'}
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -1228,7 +1275,7 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
   const meta = data?.meta ?? {}
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import {
-  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X, Palette, Menu,
+  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X, Palette, Menu, Tag,
 } from 'lucide-react'
 import { usePreferencesStore, COLOR_PALETTES } from '../../store/preferences.store'
 import ThermalPrinterPanel from '../../components/thermal/ThermalPrinterPanel'
@@ -92,12 +92,20 @@ export default function SettingsPage() {
       detail: 'Donnez vos propres appellations aux modules',
       onClick: () => navigate('/menu-settings'),
     },
+    {
+      icon: <Tag size={20} className="text-blue-600" />,
+      iconBg: 'bg-blue-100',
+      title: 'Catégories clients',
+      desc: 'Gros, Demi-Gros, Détail…',
+      detail: 'Gérer les niveaux de prix par type de client',
+      onClick: () => navigate('/client-categories'),
+    },
   ]
 
   const visibleCards = cards.filter(c => !c.adminOnly || isSuperAdmin || can('manage_stores'))
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="p-3 sm:p-6 max-w-4xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
         <Settings size={24} /> Paramètres
       </h1>

@@ -76,8 +76,8 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6 animate-pulse">
-        <div className="grid grid-cols-4 gap-4">
+      <div className="p-3 sm:p-6 space-y-6 animate-pulse">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-32 bg-gray-200 rounded-xl" />
           ))}
@@ -98,7 +98,7 @@ export default function DashboardPage() {
   }))
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

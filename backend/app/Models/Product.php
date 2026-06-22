@@ -23,8 +23,8 @@ class Product extends Model
 
     protected $casts = [
         'purchase_price_ht' => 'decimal:2',
-        'sale_price_ttc' => 'decimal:2',
-        'vat_rate' => 'decimal:2',
+        'sale_price_ttc'    => 'decimal:2',
+        'vat_rate'          => 'decimal:2',
         'min_stock'   => 'decimal:3',
         'max_stock'   => 'decimal:3',
         'stock_appro' => 'decimal:3',
@@ -49,6 +49,7 @@ class Product extends Model
     public function recipeIngredients() { return $this->hasMany(RecipeIngredient::class); }
     public function promotions() { return $this->belongsToMany(Promotion::class, 'promotion_products'); }
     public function containers() { return $this->hasMany(ProductContainer::class)->orderBy('sort_order'); }
+    public function priceTiers() { return $this->hasMany(ProductPriceTier::class); }
 
     public function getSalePriceHtAttribute(): float
     {

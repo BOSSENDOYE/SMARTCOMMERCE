@@ -717,7 +717,7 @@ function SupplierDetail({ supplierId, onBack }: { supplierId: number; onBack: ()
   ]
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-3 sm:p-6 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="flex items-center gap-2 text-gray-500 hover:text-gray-900 text-sm font-medium">

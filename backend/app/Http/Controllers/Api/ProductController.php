@@ -19,8 +19,8 @@ class ProductController extends Controller
         $products = Product::forStore($storeId)
             ->with([
                 'category', 'brand', 'unit', 'barcodes', 'section',
-                // Force le stockLevel du bon magasin
                 'stockLevel' => fn($q) => $q->where('store_id', $storeId),
+                'priceTiers.clientCategory',
             ])
             ->when($request->search, fn($q) => $q
                 ->where(fn($q2) => $q2
@@ -57,17 +57,17 @@ class ProductController extends Controller
             'unit_id'           => 'nullable|exists:units,id',
             'purchase_price_ht' => 'required|numeric|min:0',
             'sale_price_ttc'    => 'required|numeric|min:0',
-            'vat_rate'          => 'required|in:0,18',
-            'min_stock'         => 'nullable|numeric|min:0',
-            'max_stock'         => 'nullable|numeric|min:0',
-            'stock_appro'       => 'nullable|numeric|min:0',
-            'alert_stock'       => 'nullable|numeric|min:0',
-            'is_weight_based'   => 'boolean',
-            'price_per_kg'      => 'nullable|numeric|min:0',
-            'track_expiry'      => 'boolean',
-            'barcodes'          => 'nullable|array',
-            'barcodes.*.barcode' => 'required_with:barcodes|string',
-            'barcodes.*.type'   => 'required_with:barcodes|in:ean13,ean8,internal,weight_variable',
+            'vat_rate'           => 'required|in:0,18',
+            'min_stock'          => 'nullable|numeric|min:0',
+            'max_stock'          => 'nullable|numeric|min:0',
+            'stock_appro'        => 'nullable|numeric|min:0',
+            'alert_stock'        => 'nullable|numeric|min:0',
+            'is_weight_based'    => 'boolean',
+            'price_per_kg'       => 'nullable|numeric|min:0',
+            'track_expiry'       => 'boolean',
+            'barcodes'                        => 'nullable|array',
+            'barcodes.*.barcode'              => 'required_with:barcodes|string',
+            'barcodes.*.type'                 => 'required_with:barcodes|in:ean13,ean8,internal,weight_variable',
             'containers'                      => 'nullable|array',
             'containers.*.unit_id'            => 'required|exists:units,id',
             'containers.*.label'              => 'nullable|string|max:100',
@@ -81,6 +81,9 @@ class ProductController extends Controller
             'containers.*.barcode'            => 'nullable|string|max:100',
             'section_id'                      => 'nullable|exists:store_sections,id',
             'slot'                            => 'nullable|string|max:100',
+            'price_tiers'                     => 'nullable|array',
+            'price_tiers.*.client_category_id' => 'required|exists:client_categories,id',
+            'price_tiers.*.price'             => 'nullable|numeric|min:0',
         ]);
 
         $storeId = $request->user()->store_id;
@@ -88,7 +91,8 @@ class ProductController extends Controller
 
         $containers = $validated['containers'] ?? null;
         $barcodes   = $validated['barcodes'] ?? null;
-        unset($validated['containers'], $validated['barcodes']);
+        $priceTiers = $validated['price_tiers'] ?? null;
+        unset($validated['containers'], $validated['barcodes'], $validated['price_tiers']);
 
         $product = Product::create(array_merge($validated, [
             'store_id'      => $storeId,
@@ -124,10 +128,21 @@ class ProductController extends Controller
             }
         }
 
+        if (!empty($priceTiers)) {
+            foreach ($priceTiers as $tier) {
+                if (isset($tier['price']) && $tier['price'] !== null) {
+                    $product->priceTiers()->updateOrCreate(
+                        ['client_category_id' => $tier['client_category_id']],
+                        ['price' => $tier['price']]
+                    );
+                }
+            }
+        }
+
         AuditService::log('product_created', 'products', $product->id, $product->toArray());
 
         return response()->json(
-            $product->load(['category', 'brand', 'unit', 'barcodes', 'containers.unit', 'section']),
+            $product->load(['category', 'brand', 'unit', 'barcodes', 'containers.unit', 'section', 'priceTiers.clientCategory']),
             201
         );
     }
@@ -139,6 +154,7 @@ class ProductController extends Controller
             'lots', 'suppliers',
             'containers' => fn($q) => $q->with('unit')->orderBy('sort_order'),
             'priceHistory' => fn($q) => $q->latest()->limit(20),
+            'priceTiers.clientCategory',
         ]));
     }
 
@@ -173,36 +189,40 @@ class ProductController extends Controller
             'unit_id'           => 'nullable|exists:units,id',
             'sale_price_ttc'    => 'sometimes|numeric|min:0',
             'purchase_price_ht' => 'sometimes|numeric|min:0',
-            'vat_rate'          => 'sometimes|in:0,18',
-            'is_active'         => 'sometimes|boolean',
-            'is_weight_based'   => 'sometimes|boolean',
-            'track_expiry'      => 'sometimes|boolean',
-            'price_per_kg'      => 'nullable|numeric|min:0',
-            'min_stock'         => 'nullable|numeric|min:0',
-            'max_stock'         => 'nullable|numeric|min:0',
-            'stock_appro'       => 'nullable|numeric|min:0',
-            'alert_stock'       => 'nullable|numeric|min:0',
-            'barcodes'          => 'nullable|array',
-            'barcodes.*.barcode' => 'required_with:barcodes|string',
-            'barcodes.*.type'   => 'required_with:barcodes|in:ean13,ean8,internal,weight_variable',
-            'containers'                     => 'nullable|array',
-            'containers.*.unit_id'           => 'required|exists:units,id',
-            'containers.*.label'             => 'nullable|string|max:100',
-            'containers.*.conversion_factor' => 'nullable|numeric|min:0.0001',
-            'containers.*.is_purchase_unit'  => 'boolean',
-            'containers.*.is_sale_unit'      => 'boolean',
-            'containers.*.is_stock_unit'     => 'boolean',
-            'containers.*.price_a'           => 'nullable|numeric|min:0',
-            'containers.*.price_b'           => 'nullable|numeric|min:0',
-            'containers.*.price_c'           => 'nullable|numeric|min:0',
-            'containers.*.barcode'           => 'nullable|string|max:100',
-            'section_id'                     => 'nullable|exists:store_sections,id',
-            'slot'                           => 'nullable|string|max:100',
+            'vat_rate'           => 'sometimes|in:0,18',
+            'is_active'          => 'sometimes|boolean',
+            'is_weight_based'    => 'sometimes|boolean',
+            'track_expiry'       => 'sometimes|boolean',
+            'price_per_kg'       => 'nullable|numeric|min:0',
+            'min_stock'          => 'nullable|numeric|min:0',
+            'max_stock'          => 'nullable|numeric|min:0',
+            'stock_appro'        => 'nullable|numeric|min:0',
+            'alert_stock'        => 'nullable|numeric|min:0',
+            'barcodes'                         => 'nullable|array',
+            'barcodes.*.barcode'               => 'required_with:barcodes|string',
+            'barcodes.*.type'                  => 'required_with:barcodes|in:ean13,ean8,internal,weight_variable',
+            'containers'                       => 'nullable|array',
+            'containers.*.unit_id'             => 'required|exists:units,id',
+            'containers.*.label'               => 'nullable|string|max:100',
+            'containers.*.conversion_factor'   => 'nullable|numeric|min:0.0001',
+            'containers.*.is_purchase_unit'    => 'boolean',
+            'containers.*.is_sale_unit'        => 'boolean',
+            'containers.*.is_stock_unit'       => 'boolean',
+            'containers.*.price_a'             => 'nullable|numeric|min:0',
+            'containers.*.price_b'             => 'nullable|numeric|min:0',
+            'containers.*.price_c'             => 'nullable|numeric|min:0',
+            'containers.*.barcode'             => 'nullable|string|max:100',
+            'section_id'                       => 'nullable|exists:store_sections,id',
+            'slot'                             => 'nullable|string|max:100',
+            'price_tiers'                      => 'nullable|array',
+            'price_tiers.*.client_category_id' => 'required|exists:client_categories,id',
+            'price_tiers.*.price'              => 'nullable|numeric|min:0',
         ]);
 
         $barcodes   = $validated['barcodes'] ?? null;
         $containers = array_key_exists('containers', $validated) ? $validated['containers'] : false;
-        unset($validated['barcodes'], $validated['containers']);
+        $priceTiers = array_key_exists('price_tiers', $validated) ? $validated['price_tiers'] : false;
+        unset($validated['barcodes'], $validated['containers'], $validated['price_tiers']);
 
         // Track price change
         if (isset($validated['sale_price_ttc']) && $validated['sale_price_ttc'] != $product->sale_price_ttc) {
@@ -237,10 +257,23 @@ class ProductController extends Controller
             }
         }
 
+        if ($priceTiers !== false) {
+            foreach (($priceTiers ?? []) as $tier) {
+                if (isset($tier['price']) && $tier['price'] !== null) {
+                    $product->priceTiers()->updateOrCreate(
+                        ['client_category_id' => $tier['client_category_id']],
+                        ['price' => $tier['price']]
+                    );
+                } else {
+                    $product->priceTiers()->where('client_category_id', $tier['client_category_id'])->delete();
+                }
+            }
+        }
+
         AuditService::log('product_updated', 'products', $product->id, $validated, $old);
 
         return response()->json(
-            $product->fresh(['category', 'brand', 'unit', 'barcodes', 'stockLevel', 'containers.unit', 'section'])
+            $product->fresh(['category', 'brand', 'unit', 'barcodes', 'stockLevel', 'containers.unit', 'section', 'priceTiers.clientCategory'])
         );
     }
 

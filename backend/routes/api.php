@@ -110,6 +110,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('/suppliers/{supplier}/products/{product}', [\App\Http\Controllers\Api\SupplierController::class, 'unlinkProduct']);
 
         // Clients
+        Route::apiResource('/client-categories', \App\Http\Controllers\Api\ClientCategoryController::class)->except(['show']);
         Route::get('/clients/stats', [\App\Http\Controllers\Api\ClientController::class, 'stats']);
         Route::get('/clients/search', fn(\Illuminate\Http\Request $r) => response()->json(
             \App\Models\Client::where('store_id', $r->user()->store_id)

@@ -17,6 +17,7 @@ interface MethodConfig {
   label: string
   shortLabel: string
   icon: React.ReactNode
+  logoSrc?: string
   gradient: string
   ring: string
   badge: string
@@ -35,6 +36,7 @@ const ALL_METHODS: MethodConfig[] = [
   {
     key: 'wave', label: 'Wave', shortLabel: 'Wave',
     icon: <Smartphone size={22} />,
+    logoSrc: '/wave-logo.png',
     gradient: 'from-sky-500 to-blue-600',
     ring: 'ring-sky-400',
     badge: 'bg-sky-100 text-sky-700',
@@ -43,6 +45,7 @@ const ALL_METHODS: MethodConfig[] = [
   {
     key: 'orange_money', label: 'Orange Money', shortLabel: 'Orange',
     icon: <Smartphone size={22} />,
+    logoSrc: '/orange-money-logo.svg',
     gradient: 'from-orange-500 to-amber-600',
     ring: 'ring-orange-400',
     badge: 'bg-orange-100 text-orange-700',
@@ -51,6 +54,7 @@ const ALL_METHODS: MethodConfig[] = [
   {
     key: 'free_money', label: 'Free Money', shortLabel: 'Free',
     icon: <Smartphone size={22} />,
+    logoSrc: '/free-money-logo.svg',
     gradient: 'from-red-500 to-rose-600',
     ring: 'ring-red-400',
     badge: 'bg-red-100 text-red-700',
@@ -204,10 +208,20 @@ export default function PaymentPanel({
                 ${compact ? 'py-2.5' : 'py-4'}
               `}
             >
-              {/* Icon */}
-              <span className={selected ? 'text-white' : 'text-gray-400'}>
-                {m.icon}
-              </span>
+              {/* Icon or Logo */}
+              {m.logoSrc ? (
+                <div className={`rounded-md px-1.5 py-0.5 flex items-center justify-center ${selected ? 'bg-white/90' : 'bg-white border border-gray-100'}`}>
+                  <img
+                    src={m.logoSrc}
+                    alt={m.label}
+                    style={{ height: '22px', width: 'auto', maxWidth: '64px', objectFit: 'contain' }}
+                  />
+                </div>
+              ) : (
+                <span className={selected ? 'text-white' : 'text-gray-400'}>
+                  {m.icon}
+                </span>
+              )}
               {/* Label */}
               <span className={`text-xs font-semibold text-center leading-tight ${selected ? 'text-white' : 'text-gray-700'}`}>
                 {compact ? m.shortLabel : m.label}
@@ -255,7 +269,10 @@ export default function PaymentPanel({
                 <div className="flex items-center gap-2">
                   {/* Method badge */}
                   <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${m.badge}`}>
-                    {m.icon} {m.label}
+                    {m.logoSrc ? (
+                      <img src={m.logoSrc} alt="" style={{ height: '16px', width: 'auto', maxWidth: '48px', objectFit: 'contain' }} />
+                    ) : m.icon}
+                    {m.label}
                   </span>
                   <div className="flex-1" />
                   {/* Remove */}

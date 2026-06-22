@@ -1,0 +1,42 @@
+{
+  "name": "SmartCommerce POS",
+  "short_name": "SC POS",
+  "description": "Caisse enregistreuse SmartCommerce pour terminaux Android",
+  "start_url": "/m/pos",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Caisse mobile",
+      "short_name": "Caisse",
+      "description": "Ouvrir la caisse mobile",
+      "url": "/m/pos",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Caisse bureau",
+      "short_name": "POS",
+      "description": "Ouvrir la caisse bureau",
+      "url": "/pos",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

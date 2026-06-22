@@ -118,28 +118,49 @@ body {
   display: none; /* caché à l'écran */
 }
 
+@page {
+  /* Format papier thermique 80mm — adapté imprimante intégrée DIABA/Android */
+  size: 80mm auto;
+  margin: 0;
+}
+
 @media print {
   /* Masquer toute l'application */
-  #root {
-    visibility: hidden;
-  }
+  body > * { visibility: hidden; }
+  #root    { visibility: hidden; }
+
   /* Afficher uniquement le ticket */
   #receipt-print-root {
     display:    block !important;
-    visibility: visible;
+    visibility: visible !important;
     position:   fixed;
     top: 0; left: 0;
-    width: 80mm;
-    padding: 4mm 5mm;
+    width: 76mm;          /* légèrement < 80mm pour marges imprimante */
+    padding: 2mm 2mm;
     background: white;
     font-family: 'Courier New', Courier, monospace;
     font-size: 11px;
     color: #000;
     line-height: 1.5;
   }
+
+  /* Empêcher les coupures à l'intérieur d'un article */
+  #receipt-print-root > * { page-break-inside: avoid; }
+
   * {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar while keeping scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }
 

@@ -33,6 +33,11 @@ interface PosItem {
   source: 'product' | 'restaurant_item'
 }
 
+function getPosPrice(p: { sale_price_ttc: number; price_tiers?: { price: number; clientCategory?: { is_pos_default: boolean } }[] }): number {
+  const defaultTier = p.price_tiers?.find(t => t.clientCategory?.is_pos_default)
+  return defaultTier?.price ?? p.sale_price_ttc
+}
+
 
 const COURSES = [
   { value: 'starter', label: 'Entrées' },
@@ -1018,6 +1023,7 @@ export default function PosPage() {
   const [page, setPage]                     = useState(1)
   const [activeProductTab, setActiveProductTab] = useState<'favorites' | 'recent' | 'catalog'>('catalog')
   const [showPayment, setShowPayment]       = useState(false)
+  const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [processing, setProcessing]         = useState(false)
   const [showCloseSession, setShowCloseSession] = useState(false)
   const [showClientSearch, setShowClientSearch] = useState(false)
@@ -1099,7 +1105,7 @@ export default function PosPage() {
         }).then(res => ({
           items: res.data.data.map((p: any) => ({
             id: p.id, name: p.name, short_name: p.short_name,
-            sale_price_ttc: p.sale_price_ttc,
+            sale_price_ttc: getPosPrice(p),
             vat_rate: p.vat_rate, is_weight_based: p.is_weight_based,
             stock_qty: p.stock_level?.qty_on_hand ?? 0,
             category_name: p.category?.name,
@@ -1168,7 +1174,7 @@ export default function PosPage() {
           const res = await api.get('/products', { params: { search, per_page: 15, is_active: true } })
           setSearchResults(res.data.data.map((p: any) => ({
             id: p.id, name: p.name, short_name: p.short_name,
-            sale_price_ttc: p.sale_price_ttc, vat_rate: p.vat_rate,
+            sale_price_ttc: getPosPrice(p), vat_rate: p.vat_rate,
             is_weight_based: p.is_weight_based,
             stock_qty: p.stock_level?.qty_on_hand ?? 0,
             category_name: p.category?.name, image: p.image ?? null,
@@ -1436,11 +1442,30 @@ export default function PosPage() {
         </div>
       )}
 
+      {/* ── MOBILE CATEGORY STRIP ── */}
+      <div className="lg:hidden flex overflow-x-auto gap-1.5 px-2 py-1.5 bg-white border-b flex-shrink-0 scrollbar-hide">
+        {isRestaurant ? (
+          <>
+            <MobileCatBtn label="Tout" active={selectedCourse === null} onClick={() => setSelectedCourse(null)} />
+            {COURSES.map(c => (
+              <MobileCatBtn key={c.value} label={c.label} active={selectedCourse === c.value} onClick={() => setSelectedCourse(c.value)} />
+            ))}
+          </>
+        ) : (
+          <>
+            <MobileCatBtn label="Tous" active={selectedCategoryId === null} onClick={() => { setSelectedCategoryId(null); setPage(1) }} />
+            {categoryTree.map(parent => (
+              <MobileCatBtn key={parent.id} label={parent.name} active={selectedCategoryId === parent.id} onClick={() => { setSelectedCategoryId(parent.id); setPage(1) }} />
+            ))}
+          </>
+        )}
+      </div>
+
       {/* ═══ MAIN AREA ══════════════════════════════════════════════════════ */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── CATEGORY SIDEBAR ─────────────────────────────────────────── */}
-        <div className="w-44 bg-white border-r flex flex-col flex-shrink-0 shadow-sm">
+        {/* ── CATEGORY SIDEBAR (desktop only) ──────────────────────────── */}
+        <div className="hidden lg:flex w-44 bg-white border-r flex-col flex-shrink-0 shadow-sm">
           <div className="px-3 py-2.5 border-b bg-gray-50">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Catégories</p>
           </div>
@@ -1510,7 +1535,7 @@ export default function PosPage() {
                 ? <EmptyState icon={<Tag size={48} className="mx-auto mb-3 text-gray-200" />}
                     title="Aucun favori encore"
                     sub="Les articles que vous ajoutez au panier apparaissent ici, triés par fréquence." />
-                : <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+                : <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
                     {topFavorites.map(({ item, count }) => (
                       <ProductCard key={item.id} p={item} badge={count > 1 ? `×${count}` : undefined} />
                     ))}
@@ -1523,7 +1548,7 @@ export default function PosPage() {
                 ? <EmptyState icon={<Clock size={48} className="mx-auto mb-3 text-gray-200" />}
                     title="Aucun article récent"
                     sub="Les 24 derniers articles ajoutés dans cette session apparaissent ici." />
-                : <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+                : <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
                     {recentItems.map(p => <ProductCard key={p.id} p={p} />)}
                   </div>
             )}
@@ -1547,7 +1572,7 @@ export default function PosPage() {
                 )}
                 {!productsLoading && displayProducts.length > 0 && (
                   <>
-                    <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
                       {displayProducts.map(p => <ProductCard key={p.id} p={p} />)}
                     </div>
 
@@ -1591,8 +1616,18 @@ export default function PosPage() {
           </div>
         </div>
 
-        {/* ══ PANIER (always visible) ══════════════════════════════════════ */}
-        <div className="w-80 bg-white border-l flex flex-col shadow-xl flex-shrink-0">
+        {/* ══ PANIER ══════════════════════════════════════════════════════ */}
+        {/* Mobile backdrop */}
+        {mobileCartOpen && (
+          <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setMobileCartOpen(false)} />
+        )}
+        <div className={`
+          fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl max-h-[88vh]
+          lg:static lg:w-80 lg:rounded-none lg:max-h-none lg:z-auto
+          bg-white border-l flex flex-col shadow-xl flex-shrink-0
+          transition-transform duration-300 ease-in-out
+          ${mobileCartOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
+        `}>
 
           {/* Cart header */}
           <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between flex-shrink-0">
@@ -1604,11 +1639,16 @@ export default function PosPage() {
                 </span>
               )}
             </h2>
-            {client_name && (
-              <span className="text-xs bg-primary-50 text-primary px-2 py-0.5 rounded-lg font-medium truncate max-w-[100px]">
-                {client_name}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {client_name && (
+                <span className="text-xs bg-primary-50 text-primary px-2 py-0.5 rounded-lg font-medium truncate max-w-[100px]">
+                  {client_name}
+                </span>
+              )}
+              <button onClick={() => setMobileCartOpen(false)} className="lg:hidden text-gray-400 hover:text-gray-600 p-1">
+                <X size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Items */}
@@ -1686,6 +1726,21 @@ export default function PosPage() {
         </div>
       </div>
 
+      {/* ── MOBILE CART FAB ──────────────────────────────────────────────── */}
+      {!mobileCartOpen && (
+        <button
+          onClick={() => setMobileCartOpen(true)}
+          className="lg:hidden fixed bottom-5 right-5 z-30 w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center"
+        >
+          <ShoppingBag size={22} />
+          {items.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+              {items.length > 9 ? '9+' : items.length}
+            </span>
+          )}
+        </button>
+      )}
+
       {/* ═══ MODALS ══════════════════════════════════════════════════════════ */}
       {showPayment && (
         <PaymentModal
@@ -1727,6 +1782,19 @@ export default function PosPage() {
 }
 
 // ─── Small helper components (defined after PosPage to access closures) ────────
+
+function MobileCatBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+        active ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
 
 function SidebarBtn({
   label, active, onClick, indent = false, count,

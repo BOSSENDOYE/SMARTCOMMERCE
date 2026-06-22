@@ -666,7 +666,7 @@ export default function InventoryPage() {
   const lastCompleted = sessions.find(s => s.status === 'completed')
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">

@@ -21,6 +21,14 @@ interface ClientStats {
   total_loyalty: number
 }
 
+interface ClientCategory {
+  id: number
+  name: string
+  code?: string
+  color: string
+  is_pos_default: boolean
+}
+
 interface Client {
   id: number
   name: string
@@ -28,6 +36,8 @@ interface Client {
   email?: string
   address?: string
   type: 'individual' | 'company'
+  client_category_id?: number | null
+  category?: ClientCategory | null
   ninea?: string
   notes?: string
   credit_balance: number
@@ -109,12 +119,18 @@ const LOYALTY_TYPE_CFG: Record<string, { label: string; cls: string }> = {
 function ClientFormModal({ client, onClose }: { client?: Client; onClose: () => void }) {
   const qc = useQueryClient()
 
+  const { data: clientCategories = [] } = useQuery<ClientCategory[]>({
+    queryKey: ['client-categories'],
+    queryFn: () => api.get('/client-categories').then(r => r.data),
+  })
+
   const [form, setForm] = useState({
     name: client?.name ?? '',
     phone: client?.phone ?? '',
     email: client?.email ?? '',
     address: client?.address ?? '',
     type: client?.type ?? 'individual',
+    client_category_id: client?.client_category_id?.toString() ?? '',
     ninea: client?.ninea ?? '',
     notes: client?.notes ?? '',
     credit_limit: client?.credit_limit?.toString() ?? '0',
@@ -153,6 +169,7 @@ function ClientFormModal({ client, onClose }: { client?: Client; onClose: () => 
       email: form.email || undefined,
       address: form.address || undefined,
       type: form.type,
+      client_category_id: form.client_category_id ? Number(form.client_category_id) : null,
       ninea: form.ninea || undefined,
       notes: form.notes || undefined,
       credit_limit: Number(form.credit_limit),
@@ -188,6 +205,36 @@ function ClientFormModal({ client, onClose }: { client?: Client; onClose: () => 
               </button>
             ))}
           </div>
+
+          {/* Catégorie client */}
+          {clientCategories.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Catégorie</label>
+              <div className="flex flex-wrap gap-2">
+                <button type="button"
+                  onClick={() => setForm(f => ({ ...f, client_category_id: '' }))}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                    !form.client_category_id
+                      ? 'bg-gray-700 text-white border-gray-700'
+                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                  }`}>
+                  Non défini
+                </button>
+                {clientCategories.map(cat => (
+                  <button key={cat.id} type="button"
+                    onClick={() => setForm(f => ({ ...f, client_category_id: String(cat.id) }))}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      form.client_category_id === String(cat.id)
+                        ? 'text-white border-transparent'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                    }`}
+                    style={form.client_category_id === String(cat.id) ? { backgroundColor: cat.color, borderColor: cat.color } : {}}>
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -943,7 +990,7 @@ export default function ClientsPage() {
   const hasFilters = search || typeFilter !== 'all' || statusFilter !== 'all'
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-3 sm:p-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
