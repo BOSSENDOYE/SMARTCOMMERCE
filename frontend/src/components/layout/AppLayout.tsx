@@ -43,7 +43,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard',       label: 'Tableau de bord', to: '/',               icon: <LayoutDashboard size={18} /> },
+  { id: 'dashboard',       label: 'Tableau de bord', to: '/dashboard',      icon: <LayoutDashboard size={18} /> },
   { id: 'pos',             label: 'Caisse (POS)',    to: '/pos',            icon: <ShoppingCart size={18} />,      permission: 'create_sales',          hideFor: ['depot'] },
   { id: 'sales',           label: 'Vente Comptoir',  to: '/sales',          icon: <FileText size={18} />,          permission: 'create_sales',          hideFor: ['depot'] },
   { id: 'products',        label: 'Catalogue',       to: '/products',       icon: <Package size={18} />,           permission: 'manage_products',       hideFor: ['restaurant'] },

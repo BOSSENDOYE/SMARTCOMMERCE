@@ -29,9 +29,19 @@ class Organization extends Model
         return $this->hasMany(User::class);
     }
 
-    /** Nombre de magasins actifs */
     public function activeStores()
     {
         return $this->hasMany(Store::class)->where('is_active', true);
+    }
+
+    public function subscriptions()
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    /** Abonnement actif courant (le plus récent) */
+    public function subscription()
+    {
+        return $this->hasOne(Subscription::class)->latestOfMany();
     }
 }

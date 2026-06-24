@@ -10,8 +10,8 @@ class LoyaltyTransaction extends Model
     const UPDATED_AT = null;
 
     protected $fillable = [
-        'client_id', 'store_id', 'sale_id', 'type',
-        'points', 'balance_after', 'description',
+        'client_id', 'sale_id', 'type',
+        'points', 'balance_after', 'notes',
     ];
 
     public function client(): BelongsTo { return $this->belongsTo(Client::class); }

@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '../store/auth.store'
 import api from '../lib/api'
 import toast from 'react-hot-toast'
-import { ShoppingCart, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { ShoppingCart, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react'
 
 const schema = z.object({
   email: z.string().email('Email invalide'),
@@ -30,7 +30,7 @@ export default function LoginPage() {
     try {
       const res = await api.post('/auth/login', data)
       setAuth(res.data.user, res.data.token)
-      navigate('/')
+      navigate('/dashboard')
       toast.success(`Bienvenue, ${res.data.user.name} !`)
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Erreur de connexion'
@@ -50,6 +50,11 @@ export default function LoginPage() {
       </div>
 
       <div className="w-full max-w-md relative z-10">
+        {/* Back to landing */}
+        <Link to="/" className="inline-flex items-center gap-2 text-brand-300 hover:text-white text-sm mb-8 transition-colors">
+          <ArrowLeft size={14} /> Retour à l'accueil
+        </Link>
+
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-xl">
@@ -119,9 +124,12 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-brand-300 text-xs mt-6">
-          Baobab Suite · Dakar, Sénégal · Juin 2026
-        </p>
+        <div className="mt-6 flex items-center justify-between">
+          <p className="text-brand-300 text-xs">Baobab Suite · Dakar, Sénégal · 2026</p>
+          <Link to="/superadmin/login" className="text-brand-400 hover:text-brand-300 text-xs transition-colors">
+            Accès Admin →
+          </Link>
+        </div>
       </div>
     </div>
   )

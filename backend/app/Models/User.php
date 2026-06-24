@@ -14,7 +14,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name', 'email', 'password', 'pin',
-        'store_id', 'is_active',
+        'store_id', 'organization_id', 'is_active',
     ];
 
     protected $hidden = [
@@ -36,9 +36,15 @@ class User extends Authenticatable
         return $this->belongsTo(Store::class);
     }
 
+    /** Multi-store pivot (user_stores table) */
     public function stores()
     {
         return $this->belongsToMany(Store::class, 'user_stores');
+    }
+
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
     }
 
     public function auditLogs()

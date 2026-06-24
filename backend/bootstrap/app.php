@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
         $middleware->appendToGroup('api', \App\Http\Middleware\ResolveStoreContext::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\SetTenantSchema::class);
+        $middleware->alias([
+            'license'      => \App\Http\Middleware\CheckLicenseExpiry::class,
+            'subscription' => \App\Http\Middleware\CheckSubscription::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e) {

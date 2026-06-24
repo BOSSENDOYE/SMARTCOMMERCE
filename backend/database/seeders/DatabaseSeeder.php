@@ -28,12 +28,13 @@ class DatabaseSeeder extends Seeder
             RestaurantSeeder::class,
             PromotionSeeder::class,
             LossSeeder::class,
+            SaasSeeder::class,
         ]);
 
         $this->command->newLine();
         $this->command->info('🎉 SmartCommerce Suite — base de données initialisée avec succès!');
         $this->command->newLine();
-        $this->command->line('  Comptes de démonstration :');
+        $this->command->line('  Comptes de démonstration (Tenant App) :');
         $this->command->line('  ┌──────────────┬─────────────────────────────────┬────────────────┬──────┐');
         $this->command->line('  │ Rôle         │ Email                           │ Mot de passe   │ PIN  │');
         $this->command->line('  ├──────────────┼─────────────────────────────────┼────────────────┼──────┤');
@@ -44,6 +45,13 @@ class DatabaseSeeder extends Seeder
         $this->command->line('  │ Cuisinier    │ cuisine@smartcommerce.sn        │ Cuisine@2026!  │ 7890 │');
         $this->command->line('  │ Magasinier   │ stock@smartcommerce.sn          │ Stock@2026!    │ 2468 │');
         $this->command->line('  └──────────────┴─────────────────────────────────┴────────────────┴──────┘');
+        $this->command->newLine();
+        $this->command->line('  Compte SuperAdmin Plateforme :');
+        $this->command->line('  ┌──────────────┬─────────────────────────────────┬──────────────────────┐');
+        $this->command->line('  │ Rôle         │ Email                           │ Mot de passe         │');
+        $this->command->line('  ├──────────────┼─────────────────────────────────┼──────────────────────┤');
+        $this->command->line('  │ SuperAdmin   │ superadmin@baobab.sn            │ SuperAdmin@2026!     │');
+        $this->command->line('  └──────────────┴─────────────────────────────────┴──────────────────────┘');
         $this->command->newLine();
     }
 }

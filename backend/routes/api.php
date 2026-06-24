@@ -6,12 +6,71 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\Api\CashSessionController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\SuperAdmin\SuperAdminAuthController;
+use App\Http\Controllers\Api\SuperAdmin\SuperAdminDashboardController;
+use App\Http\Controllers\Api\SuperAdmin\OnboardingController;
+use App\Http\Controllers\Api\SuperAdmin\PlansController;
+use App\Http\Controllers\Api\SuperAdmin\TenantsController;
+use App\Http\Controllers\Api\SuperAdmin\LicencesController;
+use App\Http\Controllers\Api\SuperAdmin\PlatformInvoicesController;
+use App\Http\Controllers\Api\SuperAdmin\AdminsManagementController;
+use App\Http\Controllers\Api\SuperAdmin\AuditLogController;
 
 Route::prefix('v1')->group(function () {
 
-    // Auth — public
+    // ── Public — Auth commerçant ──────────────────────────────────────────
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::post('/auth/pin', [AuthController::class, 'loginByPin']);
+
+    // ── Public — Onboarding (formulaire landing page) ─────────────────────
+    Route::post('/onboarding/request', [OnboardingController::class, 'store']);
+
+    // ── SuperAdmin — Auth (guard: sanctum, model: SuperAdmin) ────────────
+    Route::prefix('superadmin')->group(function () {
+        Route::post('/auth/login', [SuperAdminAuthController::class, 'login']);
+
+        Route::middleware(['auth:sanctum'])->group(function () {
+            // Auth
+            Route::post('/auth/logout', [SuperAdminAuthController::class, 'logout']);
+            Route::get('/auth/me', [SuperAdminAuthController::class, 'me']);
+
+            // Dashboard
+            Route::get('/dashboard', [SuperAdminDashboardController::class, 'index']);
+
+            // Onboarding requests
+            Route::get('/requests', [OnboardingController::class, 'index']);
+            Route::post('/requests/{onboardingRequest}/approve', [OnboardingController::class, 'approve']);
+            Route::post('/requests/{onboardingRequest}/reject', [OnboardingController::class, 'reject']);
+
+            // Plans
+            Route::apiResource('/plans', PlansController::class);
+
+            // Tenants
+            Route::get('/tenants', [TenantsController::class, 'index']);
+            Route::get('/tenants/{organization}', [TenantsController::class, 'show']);
+            Route::post('/tenants/{organization}/activate', [TenantsController::class, 'activate']);
+            Route::post('/tenants/{organization}/suspend', [TenantsController::class, 'suspend']);
+            Route::post('/tenants/{organization}/extend', [TenantsController::class, 'extend']);
+            Route::post('/tenants/{organization}/impersonate', [TenantsController::class, 'impersonate']);
+
+            // Licences
+            Route::get('/licences', [LicencesController::class, 'index']);
+            Route::post('/licences/{subscription}/extend', [LicencesController::class, 'extend']);
+
+            // Platform invoices
+            Route::get('/invoices', [PlatformInvoicesController::class, 'index']);
+            Route::post('/invoices/{invoice}/mark-paid', [PlatformInvoicesController::class, 'markPaid']);
+
+            // Admins management
+            Route::get('/admins', [AdminsManagementController::class, 'index']);
+            Route::post('/admins', [AdminsManagementController::class, 'store']);
+            Route::put('/admins/{admin}', [AdminsManagementController::class, 'update']);
+            Route::patch('/admins/{admin}/toggle-active', [AdminsManagementController::class, 'toggleActive']);
+
+            // Audit log
+            Route::get('/audit', [AuditLogController::class, 'index']);
+        });
+    });
 
     // Offline sync — requires token
     Route::middleware('auth:sanctum')->group(function () {
