@@ -1,236 +1,342 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit2, Trash2, Check, X, PackageCheck } from 'lucide-react'
+import { Package, Plus, Pencil, Trash2, Check, X, Loader2, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react'
+import { useSuperAdminStore } from '../../store/superAdmin.store'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
-function saApi() {
-  const token = localStorage.getItem('sc_superadmin_token')
-  return axios.create({
-    baseURL: API_URL ? `${API_URL}/api/v1/superadmin` : '/api/v1/superadmin',
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
-  })
-}
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 const ALL_FEATURES = [
-  { key: 'pos',               label: 'Point de vente (POS)' },
-  { key: 'inventory',         label: 'Stock & Inventaire' },
-  { key: 'purchasing',        label: 'Achats / Fournisseurs' },
-  { key: 'invoicing',         label: 'Facturation & Devis' },
-  { key: 'crm',               label: 'CRM Pipeline' },
-  { key: 'restaurant',        label: 'Module Restaurant' },
-  { key: 'accounting',        label: 'Comptabilité SYSCOHADA' },
-  { key: 'loyalty',           label: 'Fidélité clients' },
-  { key: 'multi_store',       label: 'Multi-magasins' },
-  { key: 'offline_sync',      label: 'Sync hors-ligne (PWA)' },
-  { key: 'advanced_reports',  label: 'Rapports avancés' },
-  { key: 'api_access',        label: 'API / Webhooks' },
-  { key: 'sms_notifications', label: 'SMS / WhatsApp' },
-  { key: 'mobile_pos',        label: 'POS Mobile' },
-]
+  'pos_sales', 'stock_inventory', 'clients_loyalty', 'purchases_suppliers',
+  'invoicing_quotes', 'crm_pipeline', 'restaurant_kds', 'accounting_syscohada',
+  'multi_stores', 'offline_pwa', 'advanced_reports', 'api_webhooks',
+  'sms_whatsapp', 'mobile_money',
+] as const
+
+const FEATURE_LABELS: Record<string, string> = {
+  pos_sales: 'POS + Ventes',
+  stock_inventory: 'Stock / Inventaire',
+  clients_loyalty: 'Clients + Fidélité',
+  purchases_suppliers: 'Achats / Fournisseurs',
+  invoicing_quotes: 'Facturation / Devis',
+  crm_pipeline: 'CRM Pipeline',
+  restaurant_kds: 'Restaurant / KDS',
+  accounting_syscohada: 'Comptabilité SYSCOHADA',
+  multi_stores: 'Multi-magasins',
+  offline_pwa: 'Sync Offline PWA',
+  advanced_reports: 'Rapports avancés',
+  api_webhooks: 'API / Webhooks',
+  sms_whatsapp: 'SMS / WhatsApp',
+  mobile_money: 'Mobile Money (Wave/OM)',
+}
 
 interface Plan {
   id: number
   name: string
   slug: string
   description: string | null
-  max_stores: number | null
-  max_users: number | null
+  max_stores: number
+  max_users: number
+  features: string[]
   price_monthly: number
   price_quarterly: number
   price_yearly: number
   trial_days: number
-  features: string[]
+  grace_period_days: number
   is_active: boolean
 }
 
-const empty: Omit<Plan, 'id'> = {
+type PlanForm = Omit<Plan, 'id'>
+
+// ── API ───────────────────────────────────────────────────────────────────────
+
+const saApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
+  headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+})
+saApi.interceptors.request.use(cfg => {
+  const token = useSuperAdminStore.getState().token
+  if (token) cfg.headers.Authorization = `Bearer ${token}`
+  return cfg
+})
+
+// ── Form Modal ────────────────────────────────────────────────────────────────
+
+const BLANK_FORM: PlanForm = {
   name: '', slug: '', description: '', max_stores: 1, max_users: 5,
-  price_monthly: 0, price_quarterly: 0, price_yearly: 0, trial_days: 14,
-  features: ['pos', 'inventory', 'loyalty', 'offline_sync'],
-  is_active: true,
+  features: ['pos_sales', 'stock_inventory', 'clients_loyalty', 'offline_pwa', 'mobile_money'],
+  price_monthly: 0, price_quarterly: 0, price_yearly: 0,
+  trial_days: 14, grace_period_days: 7, is_active: true,
 }
 
-export default function PlansPage() {
-  const qc = useQueryClient()
-  const [modal, setModal] = useState<{ open: boolean; plan: Partial<Plan> }>({ open: false, plan: empty })
+function PlanModal({
+  plan,
+  onClose,
+  onSave,
+  saving,
+}: {
+  plan: Plan | null
+  onClose: () => void
+  onSave: (form: PlanForm) => void
+  saving: boolean
+}) {
+  const [form, setForm] = useState<PlanForm>(plan ? {
+    name: plan.name, slug: plan.slug, description: plan.description ?? '',
+    max_stores: plan.max_stores, max_users: plan.max_users, features: plan.features,
+    price_monthly: plan.price_monthly, price_quarterly: plan.price_quarterly,
+    price_yearly: plan.price_yearly, trial_days: plan.trial_days,
+    grace_period_days: plan.grace_period_days, is_active: plan.is_active,
+  } : BLANK_FORM)
 
-  const { data: plans = [], isLoading } = useQuery<Plan[]>({
-    queryKey: ['sa-plans'],
-    queryFn: () => saApi().get('/subscription-plans').then(r => r.data),
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: (p: Partial<Plan>) => p.id
-      ? saApi().put(`/subscription-plans/${p.id}`, p).then(r => r.data)
-      : saApi().post('/subscription-plans', p).then(r => r.data),
-    onSuccess: () => { toast.success('Plan sauvegardé'); qc.invalidateQueries({ queryKey: ['sa-plans'] }); setModal({ open: false, plan: empty }) },
-    onError:   () => toast.error('Erreur lors de la sauvegarde'),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => saApi().delete(`/subscription-plans/${id}`),
-    onSuccess: () => { toast.success('Plan supprimé'); qc.invalidateQueries({ queryKey: ['sa-plans'] }) },
-    onError:   () => toast.error('Impossible de supprimer ce plan'),
-  })
-
-  function toggleFeature(key: string) {
-    const features = modal.plan.features ?? []
-    setModal(m => ({
-      ...m,
-      plan: {
-        ...m.plan,
-        features: features.includes(key) ? features.filter(f => f !== key) : [...features, key],
-      },
+  const toggleFeature = (feat: string) => {
+    setForm(f => ({
+      ...f,
+      features: f.features.includes(feat) ? f.features.filter(x => x !== feat) : [...f.features, feat],
     }))
   }
 
-  const p = modal.plan
+  const field = (key: keyof PlanForm, label: string, type = 'text', placeholder = '') => (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <input
+        type={type}
+        className="input text-sm"
+        placeholder={placeholder}
+        value={form[key] as string | number}
+        onChange={e => setForm(f => ({ ...f, [key]: type === 'number' ? (parseFloat(e.target.value) || 0) : e.target.value }))}
+      />
+    </div>
+  )
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white">Plans d'abonnement</h1>
-          <p className="text-gray-400 text-sm">Configurez les offres proposées aux clients</p>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">{plan ? 'Modifier le plan' : 'Nouveau plan'}</h2>
         </div>
-        <button
-          onClick={() => setModal({ open: true, plan: empty })}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white transition"
-        >
-          <Plus className="w-4 h-4" /> Nouveau plan
-        </button>
-      </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {plans.map(plan => (
-            <div key={plan.id} className={`bg-gray-900 border rounded-xl p-5 space-y-3 ${plan.is_active ? 'border-gray-800' : 'border-gray-800 opacity-60'}`}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-bold text-white">{plan.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{plan.description}</p>
-                </div>
-                <PackageCheck className="w-5 h-5 text-indigo-400 shrink-0" />
-              </div>
-              <div className="text-sm space-y-1 text-gray-400">
-                <p>Magasins : <span className="text-white">{plan.max_stores ?? '∞'}</span></p>
-                <p>Utilisateurs : <span className="text-white">{plan.max_users ?? '∞'}</span></p>
-                <p>Essai : <span className="text-white">{plan.trial_days} jours</span></p>
-              </div>
-              <div className="border-t border-gray-800 pt-2 space-y-0.5">
-                <p className="text-xs text-gray-500 font-medium mb-1">Tarifs</p>
-                <div className="text-xs text-gray-300">
-                  <span className="text-gray-500">Mensuel</span> {plan.price_monthly.toLocaleString('fr-FR')} FCFA
-                </div>
-                <div className="text-xs text-gray-300">
-                  <span className="text-gray-500">Trimestriel</span> {plan.price_quarterly.toLocaleString('fr-FR')} FCFA
-                </div>
-                <div className="text-xs text-gray-300">
-                  <span className="text-gray-500">Annuel</span> {plan.price_yearly.toLocaleString('fr-FR')} FCFA
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-1 pt-1">
-                {plan.features.slice(0, 5).map(f => (
-                  <span key={f} className="bg-indigo-900/40 text-indigo-300 text-xs px-2 py-0.5 rounded-full">
-                    {ALL_FEATURES.find(a => a.key === f)?.label ?? f}
-                  </span>
-                ))}
-                {plan.features.length > 5 && (
-                  <span className="text-xs text-gray-500">+{plan.features.length - 5}</span>
-                )}
-              </div>
-              <div className="flex justify-end gap-2 pt-1">
-                <button onClick={() => setModal({ open: true, plan: { ...plan } })} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition">
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button onClick={() => deleteMutation.mutate(plan.id)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            {field('name', 'Nom du plan', 'text', 'Ex: Business')}
+            {field('slug', 'Slug (identifiant)', 'text', 'Ex: business')}
+          </div>
 
-      {modal.open && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg my-4 p-6 space-y-4">
-            <h2 className="text-lg font-bold text-white">{p.id ? 'Modifier le plan' : 'Nouveau plan'}</h2>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+            <textarea className="input resize-none text-sm" rows={2}
+              placeholder="Destiné aux PME multi-sites..."
+              value={form.description ?? ''}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            />
+          </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {([
-                ['name', 'Nom du plan', 'text'],
-                ['slug', 'Slug (identifiant)', 'text'],
-                ['max_stores', 'Max magasins', 'number'],
-                ['max_users', 'Max utilisateurs', 'number'],
-                ['trial_days', 'Jours d\'essai', 'number'],
-                ['price_monthly', 'Prix mensuel (FCFA)', 'number'],
-                ['price_quarterly', 'Prix trimestriel (FCFA)', 'number'],
-                ['price_yearly', 'Prix annuel (FCFA)', 'number'],
-              ] as [keyof Plan, string, string][]).map(([field, label, type]) => (
-                <div key={field}>
-                  <label className="block text-xs text-gray-400 mb-1">{label}</label>
-                  <input
-                    type={type}
-                    value={(p[field] as string | number) ?? ''}
-                    onChange={e => setModal(m => ({ ...m, plan: { ...m.plan, [field]: type === 'number' ? Number(e.target.value) : e.target.value } }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
+          <div className="grid grid-cols-2 gap-4">
+            {field('max_stores', 'Max magasins (-1 = illimité)', 'number')}
+            {field('max_users', 'Max utilisateurs (-1 = illimité)', 'number')}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Fonctionnalités incluses</label>
+            <div className="grid grid-cols-2 gap-2">
+              {ALL_FEATURES.map(feat => (
+                <label key={feat}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer border text-sm transition-colors ${
+                    form.features.includes(feat)
+                      ? 'bg-primary/10 border-primary/30 text-primary'
+                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <input type="checkbox" className="sr-only" checked={form.features.includes(feat)} onChange={() => toggleFeature(feat)} />
+                  {form.features.includes(feat) ? <Check size={12} /> : <X size={12} className="opacity-40" />}
+                  <span>{FEATURE_LABELS[feat]}</span>
+                </label>
               ))}
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs text-gray-400 mb-2">Fonctionnalités incluses</label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {ALL_FEATURES.map(f => {
-                  const active = (p.features ?? []).includes(f.key)
-                  return (
-                    <button
-                      key={f.key}
-                      type="button"
-                      onClick={() => toggleFeature(f.key)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition border ${
-                        active ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300' : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
-                      }`}
-                    >
-                      {active ? <Check className="w-3 h-3 shrink-0" /> : <X className="w-3 h-3 shrink-0 opacity-30" />}
-                      {f.label}
-                    </button>
-                  )
-                })}
-              </div>
+          <div>
+            <h3 className="text-xs font-semibold text-gray-600 mb-2">Tarification (FCFA)</h3>
+            <div className="grid grid-cols-3 gap-4">
+              {field('price_monthly', 'Prix mensuel', 'number', '0')}
+              {field('price_quarterly', 'Prix trimestriel', 'number', '0')}
+              {field('price_yearly', 'Prix annuel', 'number', '0')}
             </div>
+          </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_active"
-                checked={p.is_active ?? true}
-                onChange={e => setModal(m => ({ ...m, plan: { ...m.plan, is_active: e.target.checked } }))}
-                className="rounded"
-              />
-              <label htmlFor="is_active" className="text-sm text-gray-300">Plan actif (visible aux clients)</label>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setModal({ open: false, plan: empty })} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition">
-                Annuler
-              </button>
-              <button
-                onClick={() => saveMutation.mutate(p)}
-                disabled={saveMutation.isPending}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white transition disabled:opacity-50"
-              >
-                {saveMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder'}
-              </button>
+          <div className="grid grid-cols-3 gap-4">
+            {field('trial_days', "Jours d'essai gratuit", 'number', '14')}
+            {field('grace_period_days', 'Jours de grâce', 'number', '7')}
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs font-medium text-gray-600">Plan actif</span>
+                <button type="button" onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? 'bg-green-500' : 'bg-gray-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </label>
             </div>
           </div>
         </div>
+
+        <div className="p-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="btn-secondary text-sm">Annuler</button>
+          <button onClick={() => onSave(form)} disabled={saving || !form.name || !form.slug}
+            className="bg-primary hover:bg-primary-600 disabled:bg-primary-300 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors flex items-center gap-2"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            {plan ? 'Enregistrer' : 'Créer le plan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+export default function PlansPage() {
+  const qc = useQueryClient()
+  const [modal, setModal] = useState<Plan | null | 'new'>(null)
+
+  const { data: plans = [], isLoading, refetch } = useQuery<Plan[]>({
+    queryKey: ['sa-plans'],
+    queryFn: async () => {
+      const res = await saApi.get('/superadmin/plans')
+      return res.data.data ?? res.data
+    },
+  })
+
+  const createMutation = useMutation({
+    mutationFn: async (form: PlanForm) => { await saApi.post('/superadmin/plans', form) },
+    onSuccess: () => { toast.success('Plan créé !'); qc.invalidateQueries({ queryKey: ['sa-plans'] }); setModal(null) },
+    onError: () => toast.error('Erreur lors de la création'),
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, form }: { id: number; form: PlanForm }) => { await saApi.put(`/superadmin/plans/${id}`, form) },
+    onSuccess: () => { toast.success('Plan mis à jour !'); qc.invalidateQueries({ queryKey: ['sa-plans'] }); setModal(null) },
+    onError: () => toast.error('Erreur lors de la mise à jour'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => { await saApi.delete(`/superadmin/plans/${id}`) },
+    onSuccess: () => { toast.success('Plan supprimé'); qc.invalidateQueries({ queryKey: ['sa-plans'] }) },
+    onError: () => toast.error('Erreur lors de la suppression'),
+  })
+
+  const handleSave = (form: PlanForm) => {
+    if (modal === 'new') { createMutation.mutate(form) }
+    else if (modal && typeof modal === 'object') { updateMutation.mutate({ id: modal.id, form }) }
+  }
+
+  const handleDelete = (plan: Plan) => {
+    if (confirm(`Supprimer le plan "${plan.name}" ? Cette action est irréversible.`)) {
+      deleteMutation.mutate(plan.id)
+    }
+  }
+
+  const formatXOF = (n: number) => n > 0 ? new Intl.NumberFormat('fr-SN', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(n) : '—'
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Package size={22} className="text-primary" /> Plans & Tarifs
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Configurez les plans d'abonnement proposés aux clients</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => refetch()} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={() => setModal('new')}
+            className="flex items-center gap-2 bg-primary hover:bg-primary-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            <Plus size={16} /> Nouveau plan
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-primary" /></div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {plans.map(plan => (
+            <div key={plan.id} className={`bg-white rounded-xl border-2 shadow-sm p-5 ${plan.is_active ? 'border-gray-200' : 'border-dashed border-gray-300 opacity-60'}`}>
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-gray-900">{plan.name}</h3>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${plan.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {plan.is_active ? 'Actif' : 'Inactif'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5 font-mono">{plan.slug}</p>
+                </div>
+                <div className="flex gap-1">
+                  <button onClick={() => setModal(plan)} className="p-1.5 text-gray-400 hover:text-brand hover:bg-gray-100 rounded-lg transition-colors">
+                    <Pencil size={14} />
+                  </button>
+                  <button onClick={() => handleDelete(plan)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {plan.description && <p className="text-xs text-gray-500 mb-3">{plan.description}</p>}
+
+              <div className="space-y-1.5 mb-4">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Mensuel</span>
+                  <span className="font-semibold text-gray-800">{formatXOF(plan.price_monthly)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Trimestriel</span>
+                  <span className="font-semibold text-gray-800">{formatXOF(plan.price_quarterly)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Annuel</span>
+                  <span className="font-semibold text-gray-800">{formatXOF(plan.price_yearly)}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 text-xs text-gray-500 mb-4 border-t border-gray-100 pt-3">
+                <span>{plan.max_stores === -1 ? '∞ magasins' : `${plan.max_stores} mag.`}</span>
+                <span>·</span>
+                <span>{plan.max_users === -1 ? '∞ users' : `${plan.max_users} users`}</span>
+                <span>·</span>
+                <span>{plan.trial_days}j essai</span>
+              </div>
+
+              <div className="flex flex-wrap gap-1">
+                {plan.features.map(feat => (
+                  <span key={feat} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
+                    {FEATURE_LABELS[feat] ?? feat}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {plans.length === 0 && (
+            <div className="col-span-3 text-center py-16 text-gray-400">
+              <Package size={40} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Aucun plan configuré. Créez votre premier plan.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {modal !== null && (
+        <PlanModal
+          plan={modal === 'new' ? null : modal}
+          onClose={() => setModal(null)}
+          onSave={handleSave}
+          saving={createMutation.isPending || updateMutation.isPending}
+        />
       )}
     </div>
   )

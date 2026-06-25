@@ -194,6 +194,54 @@ class ClientController extends Controller
         });
     }
 
+    // ── Payer le crédit dû via le solde du compte ─────────────────────────────
+
+    public function payCreditWithAccount(Request $request, Client $client)
+    {
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'note'   => 'nullable|string|max:200',
+        ]);
+
+        $amount = (float) $data['amount'];
+
+        if ($amount > $client->account_balance) {
+            return response()->json(['message' => 'Solde compte insuffisant.'], 422);
+        }
+        if ($amount > $client->credit_balance) {
+            return response()->json(['message' => 'Montant supérieur au crédit dû.'], 422);
+        }
+
+        return DB::transaction(function () use ($client, $amount, $data, $request) {
+            $accBefore    = (float) $client->account_balance;
+            $creditBefore = (float) $client->credit_balance;
+
+            $accAfter    = $accBefore    - $amount;
+            $creditAfter = $creditBefore - $amount;
+
+            $client->update([
+                'account_balance' => $accAfter,
+                'credit_balance'  => $creditAfter,
+            ]);
+
+            // Trace dans le journal du compte
+            ClientAccountTransaction::create([
+                'client_id'      => $client->id,
+                'created_by'     => $request->user()->id,
+                'type'           => 'credit_payment',
+                'amount'         => $amount,
+                'balance_before' => $accBefore,
+                'balance_after'  => $accAfter,
+                'note'           => $data['note'] ?? 'Remboursement crédit via compte',
+            ]);
+
+            return response()->json([
+                'account_balance' => $client->fresh()->account_balance,
+                'credit_balance'  => $client->fresh()->credit_balance,
+            ]);
+        });
+    }
+
     // ── Legacy credit/debt management (kept for backward compat) ──────────────
 
     public function adjustCredit(Request $request, Client $client)

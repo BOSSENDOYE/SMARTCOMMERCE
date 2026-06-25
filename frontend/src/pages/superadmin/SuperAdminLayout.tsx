@@ -1,92 +1,120 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import {
-  ShieldCheck, LayoutDashboard, ClipboardList, PackageCheck,
-  Building2, Key, FileText, Users, ScrollText, LogOut
-} from 'lucide-react'
+import { useState } from 'react'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useSuperAdminStore } from '../../store/superAdmin.store'
+import {
+  LayoutDashboard, ClipboardList, Building2, CreditCard, Package,
+  LogOut, ShieldCheck, ChevronLeft, ChevronRight, Bell,
+  BarChart3, FileText, Settings, Users, AlertTriangle
+} from 'lucide-react'
+import toast from 'react-hot-toast'
 
-const nav = [
-  { to: '/superadmin',          label: 'Dashboard',    icon: LayoutDashboard, end: true },
-  { to: '/superadmin/requests', label: 'Demandes',     icon: ClipboardList },
-  { to: '/superadmin/plans',    label: 'Plans',        icon: PackageCheck },
-  { to: '/superadmin/tenants',  label: 'Tenants',      icon: Building2 },
-  { to: '/superadmin/licences', label: 'Licences',     icon: Key },
-  { to: '/superadmin/invoices', label: 'Facturation',  icon: FileText },
-  { to: '/superadmin/admins',   label: 'Admins',       icon: Users },
-  { to: '/superadmin/audit',    label: 'Audit Log',    icon: ScrollText },
+const navItems = [
+  { to: '/superadmin', label: 'Tableau de bord', icon: <LayoutDashboard size={18} />, end: true },
+  { to: '/superadmin/requests', label: 'Demandes', icon: <ClipboardList size={18} /> },
+  { to: '/superadmin/tenants', label: 'Organisations', icon: <Building2 size={18} /> },
+  { to: '/superadmin/plans', label: 'Plans & Tarifs', icon: <Package size={18} /> },
+  { to: '/superadmin/licences', label: 'Licences', icon: <CreditCard size={18} /> },
+  { to: '/superadmin/invoices', label: 'Facturation', icon: <FileText size={18} /> },
+  { to: '/superadmin/admins', label: 'Administrateurs', icon: <Users size={18} /> },
+  { to: '/superadmin/audit', label: 'Audit Log', icon: <AlertTriangle size={18} /> },
 ]
 
 export default function SuperAdminLayout() {
-  const navigate  = useNavigate()
-  const clearAuth = useSuperAdminStore(s => s.clearAuth)
-  const admin     = useSuperAdminStore(s => s.admin)
+  const navigate = useNavigate()
+  const { admin, clearAuth } = useSuperAdminStore()
+  const [collapsed, setCollapsed] = useState(false)
 
-  function logout() {
+  const handleLogout = () => {
     clearAuth()
-    navigate('/superadmin/login', { replace: true })
+    navigate('/superadmin/login')
+    toast.success('Déconnecté')
   }
 
   return (
-    <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-56 shrink-0 flex flex-col bg-gray-900 border-r border-gray-800">
-        {/* Brand */}
-        <div className="flex items-center gap-2.5 px-4 py-5 border-b border-gray-800">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-4 h-4 text-white" />
+      <aside className={`${collapsed ? 'w-16' : 'w-60'} bg-brand text-white flex flex-col transition-all duration-300 flex-shrink-0`}>
+        {/* Logo */}
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3 px-4'} h-16 border-b border-brand-700`}>
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+            <ShieldCheck size={16} className="text-white" />
           </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold leading-none">SuperAdmin</p>
-            <p className="text-xs text-gray-400 truncate mt-0.5">Plateforme</p>
-          </div>
+          {!collapsed && (
+            <div className="overflow-hidden">
+              <div className="font-bold text-sm leading-none">SuperAdmin</div>
+              <div className="text-brand-400 text-[10px] leading-none mt-0.5">Baobab Platform</div>
+            </div>
+          )}
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-          {nav.map(({ to, label, icon: Icon, end }) => (
+        <nav className="flex-1 py-4 overflow-y-auto">
+          {navItems.map(item => (
             <NavLink
-              key={to}
-              to={to}
-              end={end}
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              title={collapsed ? item.label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition ${
+                `flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-2.5 mx-2 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-indigo-600 text-white font-medium'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-primary text-white'
+                    : 'text-brand-300 hover:text-white hover:bg-brand-700'
                 }`
               }
             >
-              <Icon className="w-4 h-4 shrink-0" />
-              {label}
+              <span className="flex-shrink-0">{item.icon}</span>
+              {!collapsed && <span className="truncate">{item.label}</span>}
             </NavLink>
           ))}
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-gray-800">
-          <div className="flex items-center gap-2 px-2 mb-2 min-w-0">
-            <div className="w-7 h-7 bg-indigo-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
-              {admin?.name?.charAt(0).toUpperCase() ?? 'A'}
+        <div className="border-t border-brand-700 p-3">
+          {!collapsed && admin && (
+            <div className="px-1 mb-3">
+              <div className="text-xs font-semibold text-white truncate">{admin.name}</div>
+              <div className="text-[10px] text-brand-400 capitalize">{admin.role.replace('_', ' ')}</div>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium truncate">{admin?.name}</p>
-              <p className="text-xs text-gray-500 truncate">{admin?.role}</p>
-            </div>
-          </div>
+          )}
           <button
-            onClick={logout}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-red-600/20 transition"
+            onClick={handleLogout}
+            title="Déconnexion"
+            className={`flex items-center ${collapsed ? 'justify-center w-full' : 'gap-2 px-2'} py-2 text-brand-300 hover:text-red-400 text-sm rounded-lg hover:bg-brand-700 transition-colors w-full`}
           >
-            <LogOut className="w-4 h-4" />
-            Déconnexion
+            <LogOut size={16} />
+            {!collapsed && <span>Déconnexion</span>}
           </button>
         </div>
       </aside>
 
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto">
-        <Outlet />
-      </main>
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Topbar */}
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0">
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+
+          <div className="flex items-center gap-3">
+            <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors relative">
+              <Bell size={18} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+            </button>
+            <div className="w-8 h-8 bg-brand rounded-lg flex items-center justify-center text-white text-sm font-bold">
+              {admin?.name?.[0]?.toUpperCase() ?? 'A'}
+            </div>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }

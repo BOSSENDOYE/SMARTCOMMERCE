@@ -91,7 +91,7 @@ function GroupSection({ group, collapsed, storeBusinessType, depth = 0 }: GroupS
 
   const visibleChildren = (group.children ?? []).filter(child => {
     if (!child.visible) return false
-    if (child.type === 'group') return true // nested group handles its own filter
+    if (child.type === 'group') return true
     const navItem = navCatalog.get(child.builtinId ?? '')
     if (!navItem) return false
     if (navItem.permission && !can(navItem.permission)) return false
@@ -103,7 +103,6 @@ function GroupSection({ group, collapsed, storeBusinessType, depth = 0 }: GroupS
 
   if (visibleChildren.length === 0) return null
 
-  // In collapsed sidebar: show children flat (no group header), only icons
   if (collapsed) {
     return (
       <>
@@ -137,7 +136,6 @@ function GroupSection({ group, collapsed, storeBusinessType, depth = 0 }: GroupS
 
   return (
     <div className="space-y-0.5">
-      {/* Group header */}
       <button
         onClick={() => setOpen(o => !o)}
         style={{ paddingLeft: `${12 + indent}px` }}
@@ -150,7 +148,6 @@ function GroupSection({ group, collapsed, storeBusinessType, depth = 0 }: GroupS
         <ChevronDown size={13} className={`transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Children */}
       {open && (
         <div className="space-y-0.5">
           {visibleChildren.map(child => {
@@ -303,7 +300,7 @@ export default function AppLayout() {
   // Close mobile sidebar on route change
   useEffect(() => { setMobileOpen(false) }, [location.pathname])
 
-  const isSuperAdmin = user?.roles?.includes('super_admin') && !user?.store_id
+  const isSuperAdmin = user?.roles?.includes('super_admin') ?? false
 
   const handleSwitchStore = async (storeId: number) => {
     if (storeId === user?.store_id || switchingStore) return
@@ -346,10 +343,6 @@ export default function AppLayout() {
       isActive ? 'bg-primary text-white' : 'text-brand-200 hover:bg-brand-700 hover:text-white'
     }`
 
-  // ── Tree mode ─────────────────────────────────────────────────────────────
-  // Items in the tree but whose builtinId is not in navItems are silently skipped.
-  // Items in navItems but NOT in the saved tree are shown at the bottom (new items).
-
   const treeBuiltinIds = collectBuiltinIds(nodes)
 
   const renderTreeNode = (node: MenuNode): React.ReactNode => {
@@ -366,7 +359,6 @@ export default function AppLayout() {
       )
     }
 
-    // builtin
     const navItem = navCatalog.get(node.builtinId ?? '')
     if (!navItem || !isItemAllowed(navItem)) return null
 
@@ -383,8 +375,6 @@ export default function AppLayout() {
       </NavLink>
     )
   }
-
-  // ── Flat mode (no saved config) ───────────────────────────────────────────
 
   const flatVisibleNav = navItems.filter(item => isItemAllowed(item) && isVisible(item.id))
 
@@ -433,7 +423,6 @@ export default function AppLayout() {
           </button>
         </div>
 
-
         {/* Super-admin store switcher */}
         {isSuperAdmin && !collapsed && (
           <div className="border-b border-brand-700 pt-2">
@@ -448,7 +437,7 @@ export default function AppLayout() {
           </div>
         )}
 
-        {/* Caisse Mobile */}
+        {/* Caisse Mobile — accès direct terminal Android */}
         <div className="px-2 pt-2 pb-1 border-b border-brand-700">
           <a
             href="/m/pos"
@@ -463,7 +452,6 @@ export default function AppLayout() {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
           {nodes.length === 0 ? (
-            // ── Flat mode (no saved config) ──────────────────────────────────
             flatVisibleNav.map(item => (
               <NavLink
                 key={item.to}
@@ -477,11 +465,8 @@ export default function AppLayout() {
               </NavLink>
             ))
           ) : (
-            // ── Tree mode ────────────────────────────────────────────────────
             <>
               {nodes.map(renderTreeNode)}
-
-              {/* New nav items not yet in saved config appear at the bottom */}
               {navItems
                 .filter(item => !treeBuiltinIds.has(item.id) && isItemAllowed(item))
                 .map(item => (
@@ -549,6 +534,7 @@ export default function AppLayout() {
               >
                 <Palette size={13} /> Préférences
               </button>
+
               {/* Store switcher for users assigned to multiple stores */}
               {user?.stores && user.stores.length > 1 && (
                 <>
@@ -607,7 +593,6 @@ export default function AppLayout() {
       <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Top bar */}
         <div className="flex-shrink-0 flex items-center gap-2 px-3 h-10 bg-white border-b border-gray-100 shadow-sm relative z-40">
-          {/* Hamburger — mobile only */}
           <button
             onClick={() => setMobileOpen(o => !o)}
             className="lg:hidden p-1.5 text-gray-500 hover:text-gray-800 rounded-lg hover:bg-gray-100 transition-colors"
