@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { formatCurrency, formatNumber, imageUrl } from '../../lib/format'
@@ -23,7 +23,6 @@ interface ProductStats {
 }
 
 interface Category { id: number; name: string; type?: string; parent_id?: number | null; children?: Category[] }
-interface ClientCategory { id: number; name: string; code?: string; color: string; is_pos_default: boolean }
 interface Brand { id: number; name: string }
 interface Unit { id: number; name: string; abbreviation: string }
 
@@ -76,7 +75,6 @@ interface Product {
   purchase_price_ht: number
   sale_price_ttc: number
   vat_rate: number
-  price_tiers?: { id: number; client_category_id: number; price: number; clientCategory?: { id: number; name: string; color: string; is_pos_default: boolean } }[]
   is_active: boolean
   is_weight_based: boolean
   track_expiry: boolean
@@ -369,10 +367,6 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     queryKey: ['units'],
     queryFn: () => api.get('/units').then(r => r.data),
   })
-  const { data: clientCategories = [] } = useQuery<ClientCategory[]>({
-    queryKey: ['client-categories'],
-    queryFn: () => api.get('/client-categories').then(r => r.data),
-  })
 
   const flatCats = flattenCategories(rawCategories)
 
@@ -430,7 +424,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
     unit_id: product?.unit?.id?.toString() ?? '',
     purchase_price_ht: product?.purchase_price_ht?.toString() ?? '0',
     sale_price_ttc: product?.sale_price_ttc?.toString() ?? '0',
-    vat_rate: product?.vat_rate?.toString() ?? '0',
+    vat_rate: product?.vat_rate?.toString() ?? '18',
     min_stock: product?.min_stock?.toString() ?? '',
     max_stock: product?.max_stock?.toString() ?? '',
     stock_appro: product?.stock_appro?.toString() ?? '',
@@ -443,11 +437,6 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
 
   const [barcodes, setBarcodes] = useState<BarcodeEntry[]>(
     product?.barcodes?.map(b => ({ barcode: b.barcode, type: b.type as BarcodeEntry['type'] })) ?? [{ barcode: '', type: 'ean13' }]
-  )
-
-  // price tiers: { client_category_id → price string }
-  const [priceTiers, setPriceTiers] = useState<Record<number, string>>(
-    () => Object.fromEntries((product?.price_tiers ?? []).map(t => [t.client_category_id, String(t.price ?? '')]))
   )
 
   const [containers, setContainers] = useState<ContainerForm[]>(
@@ -544,10 +533,6 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
       purchase_price_ht: Number(form.purchase_price_ht),
       sale_price_ttc: Number(form.sale_price_ttc),
       vat_rate: Number(form.vat_rate),
-      price_tiers: Object.entries(priceTiers).map(([catId, price]) => ({
-        client_category_id: Number(catId),
-        price: price ? Number(price) : null,
-      })),
       min_stock: form.min_stock ? Number(form.min_stock) : undefined,
       max_stock: form.max_stock ? Number(form.max_stock) : undefined,
       stock_appro: form.stock_appro ? Number(form.stock_appro) : undefined,
@@ -692,7 +677,7 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
 
           {/* Prix */}
           <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><TrendingUp size={14} /> Tarification</h3>
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><TrendingUp size={14} /> Tarification de base</h3>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Prix achat HT *</label>
@@ -707,38 +692,14 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">TVA</label>
                 <select value={form.vat_rate} onChange={set('vat_rate')} className="input">
-                  <option value={0}>Exonéré 0%</option>
                   <option value={18}>18% standard</option>
+                  <option value={0}>Exonéré 0%</option>
                 </select>
               </div>
             </div>
             {marginPct !== null && (
               <div className={`text-sm font-medium ${marginPct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 Marge : {marginPct >= 0 ? '+' : ''}{marginPct}%
-              </div>
-            )}
-            {/* Prix par catégorie de client (dynamique) */}
-            {clientCategories.length > 0 && (
-              <div className="border-t border-gray-200 pt-3">
-                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Prix par catégorie client</p>
-                <div className="grid grid-cols-3 gap-3">
-                  {clientCategories.map(cat => (
-                    <div key={cat.id}>
-                      <label className="block text-xs font-medium mb-1 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                        {cat.name}
-                        {cat.is_pos_default && <span className="text-amber-500 text-xs">(POS)</span>}
-                      </label>
-                      <input
-                        type="number"
-                        value={priceTiers[cat.id] ?? ''}
-                        onChange={e => setPriceTiers(prev => ({ ...prev, [cat.id]: e.target.value }))}
-                        className="input"
-                        min={0} step={1} placeholder="—"
-                      />
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
           </div>
@@ -921,20 +882,6 @@ function ProductDetailModal({ product, onClose, onEdit }: {
               <div className="flex justify-between"><span className="text-gray-500">Prix achat HT</span><span className="font-medium">{formatCurrency(p.purchase_price_ht)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Prix vente TTC</span><span className="font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">TVA</span><span>{p.vat_rate}%</span></div>
-              {(p.price_tiers ?? []).length > 0 && (
-                <div className="border-t border-gray-200 pt-2 mt-2 space-y-1">
-                  {p.price_tiers!.map(t => (
-                    <div key={t.id} className="flex justify-between items-center">
-                      <span className="text-gray-500 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.clientCategory?.color ?? '#6366f1' }} />
-                        {t.clientCategory?.name ?? `Cat. ${t.client_category_id}`}
-                        {t.clientCategory?.is_pos_default && <span className="text-xs text-amber-500">(POS)</span>}
-                      </span>
-                      <span className="font-medium">{formatCurrency(t.price)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
               <p className="font-semibold text-gray-700">Stock</p>
@@ -1388,202 +1335,12 @@ function SectionFormModal({ section, onClose }: {
   )
 }
 
-// ─── BulkAssignModal ──────────────────────────────────────────────────────────
-
-function BulkAssignModal({ sectionId, sectionName, onClose }: {
-  sectionId: number
-  sectionName: string
-  onClose: () => void
-}) {
-  const qc = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [categoryId, setCategoryId] = useState<number | ''>('')
-  const [page, setPage] = useState(1)
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-
-  const { data: rawCategories = [] } = useQuery<Category[]>({
-    queryKey: ['categories'],
-    queryFn: () => api.get('/categories').then(r => r.data),
-  })
-  const flatCats = flattenCategories(rawCategories)
-
-  const params = { search: search || undefined, category_id: categoryId || undefined, is_active: true, page, per_page: 20 }
-  const { data, isLoading } = useQuery<Paginated<Product>>({
-    queryKey: ['products-bulk-assign', params],
-    queryFn: () => api.get('/products', { params }).then(r => r.data),
-    placeholderData: prev => prev,
-  })
-  const products = data?.data ?? []
-  const allPageSelected = products.length > 0 && products.every(p => selectedIds.has(p.id))
-
-  const toggle = (id: number) => setSelectedIds(prev => {
-    const next = new Set(prev)
-    next.has(id) ? next.delete(id) : next.add(id)
-    return next
-  })
-
-  const toggleAll = () => setSelectedIds(prev => {
-    const next = new Set(prev)
-    if (allPageSelected) products.forEach(p => next.delete(p.id))
-    else products.forEach(p => next.add(p.id))
-    return next
-  })
-
-  const assignMut = useMutation({
-    mutationFn: () => api.post(`/sections/${sectionId}/assign-bulk`, { product_ids: [...selectedIds] }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['section-products'] })
-      qc.invalidateQueries({ queryKey: ['sections'] })
-      qc.invalidateQueries({ queryKey: ['products'] })
-      toast.success(`${selectedIds.size} produit(s) affecté(s) au rayon "${sectionName}"`)
-      onClose()
-    },
-    onError: () => toast.error('Erreur lors de l\'affectation'),
-  })
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '85vh' }}>
-        {/* Header */}
-        <div className="p-5 border-b flex items-start justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <MapPin size={18} className="text-indigo-500" /> Affecter des produits
-            </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Rayon : <span className="font-semibold text-gray-800">{sectionName}</span>
-            </p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 mt-0.5"><X size={18} /></button>
-        </div>
-
-        {/* Filtres */}
-        <div className="px-5 py-3 border-b flex gap-3 flex-shrink-0">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-            <input
-              type="text" value={search} autoFocus
-              onChange={e => { setSearch(e.target.value); setPage(1) }}
-              className="input pl-9 py-2 text-sm"
-              placeholder="Rechercher par nom ou code…"
-            />
-          </div>
-          <select
-            value={categoryId}
-            onChange={e => { setCategoryId(e.target.value ? Number(e.target.value) : ''); setPage(1) }}
-            className="input py-2 text-sm w-52"
-          >
-            <option value="">Toutes catégories</option>
-            {flatCats.map(c => (
-              <option key={c.id} value={c.id}>{c.parent_id ? `  └ ${c.name}` : c.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Tableau produits */}
-        <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-40">
-              <Loader2 size={24} className="animate-spin text-indigo-400" />
-            </div>
-          ) : products.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <Package size={36} className="mx-auto mb-3 opacity-20" />
-              <p className="text-sm">Aucun produit trouvé</p>
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b text-xs sticky top-0">
-                <tr>
-                  <th className="px-4 py-2.5 w-10 text-center">
-                    <input type="checkbox" checked={allPageSelected} onChange={toggleAll} className="rounded cursor-pointer" />
-                  </th>
-                  <th className="text-left px-3 py-2.5 font-medium text-gray-500">Produit</th>
-                  <th className="text-left px-3 py-2.5 font-medium text-gray-500">Catégorie</th>
-                  <th className="text-left px-3 py-2.5 font-medium text-gray-500">Code</th>
-                  <th className="text-left px-3 py-2.5 font-medium text-gray-500">Rayon actuel</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {products.map(p => (
-                  <tr
-                    key={p.id}
-                    onClick={() => toggle(p.id)}
-                    className={`cursor-pointer transition-colors ${selectedIds.has(p.id) ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
-                  >
-                    <td className="px-4 py-2.5 text-center" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggle(p.id)} className="rounded cursor-pointer" />
-                    </td>
-                    <td className="px-3 py-2.5 font-medium text-gray-900">{p.name}</td>
-                    <td className="px-3 py-2.5">
-                      {p.category && (
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">{p.category.name}</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-gray-400">{p.internal_code}</td>
-                    <td className="px-3 py-2.5">
-                      {p.section ? (
-                        <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{p.section.name}</span>
-                      ) : (
-                        <span className="text-xs text-gray-300 italic">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* Pagination */}
-        {data && data.last_page > 1 && (
-          <div className="px-5 py-2 border-t flex items-center justify-between text-xs text-gray-500 flex-shrink-0">
-            <span>{data.total} produit(s) au total</span>
-            <div className="flex items-center gap-2">
-              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronLeft size={14} /></button>
-              <span className="font-medium">{page} / {data.last_page}</span>
-              <button disabled={page >= data.last_page} onClick={() => setPage(p => p + 1)}
-                className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronRight size={14} /></button>
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="p-4 border-t bg-gray-50 rounded-b-2xl flex items-center justify-between flex-shrink-0">
-          <div className="text-sm">
-            {selectedIds.size > 0
-              ? <span className="font-semibold text-indigo-600">{selectedIds.size} produit(s) sélectionné(s)</span>
-              : <span className="text-gray-400">Aucune sélection</span>}
-          </div>
-          <div className="flex gap-2">
-            <button onClick={onClose} className="btn-secondary text-sm">Annuler</button>
-            <button
-              onClick={() => assignMut.mutate()}
-              disabled={selectedIds.size === 0 || assignMut.isPending}
-              className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50">
-              {assignMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              Affecter {selectedIds.size > 0 ? `${selectedIds.size} produit(s)` : ''}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── RangementTab ─────────────────────────────────────────────────────────────
-
 function RangementTab() {
   const qc = useQueryClient()
   const confirm = useConfirm()
   const [selectedSectionId, setSelectedSectionId] = useState<number | 'unassigned' | null>(null)
   const [editSection, setEditSection] = useState<StoreSection | null | undefined>(undefined)
   const [editingSlot, setEditingSlot] = useState<{ id: number; value: string } | null>(null)
-  const [showBulkAssign, setShowBulkAssign] = useState(false)
-  const [unassignedSearch, setUnassignedSearch] = useState('')
-  const [selectedForAssign, setSelectedForAssign] = useState<Set<number>>(new Set())
-  const [targetSectionId, setTargetSectionId] = useState<number | ''>('')
 
   const { data: sections = [], isLoading: sectLoading } = useQuery<StoreSection[]>({
     queryKey: ['sections'],
@@ -1631,19 +1388,6 @@ function RangementTab() {
     onError: () => toast.error('Erreur lors du retrait'),
   })
 
-  const bulkFromUnassigned = useMutation({
-    mutationFn: () => api.post(`/sections/${targetSectionId}/assign-bulk`, { product_ids: [...selectedForAssign] }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['section-products'] })
-      qc.invalidateQueries({ queryKey: ['sections'] })
-      qc.invalidateQueries({ queryKey: ['products'] })
-      toast.success(`${selectedForAssign.size} produit(s) affecté(s)`)
-      setSelectedForAssign(new Set())
-      setTargetSectionId('')
-    },
-    onError: () => toast.error('Erreur lors de l\'affectation'),
-  })
-
   const saveSlot = (product: SectionProduct) => {
     if (!editingSlot || editingSlot.id !== product.id) return
     if (typeof selectedSectionId === 'number') {
@@ -1658,21 +1402,6 @@ function RangementTab() {
   }
 
   const totalProducts = sections.reduce((sum, s) => sum + (s.products_count ?? 0), 0)
-
-  const filteredUnassigned = selectedSectionId === 'unassigned'
-    ? sectionProducts.filter(p =>
-        !unassignedSearch ||
-        p.name.toLowerCase().includes(unassignedSearch.toLowerCase()) ||
-        (p.internal_code ?? '').toLowerCase().includes(unassignedSearch.toLowerCase()) ||
-        (p.category?.name ?? '').toLowerCase().includes(unassignedSearch.toLowerCase())
-      )
-    : sectionProducts
-
-  const allUnassignedSelected = filteredUnassigned.length > 0 && filteredUnassigned.every(p => selectedForAssign.has(p.id))
-
-  const toggleUnassigned = (id: number) => setSelectedForAssign(prev => {
-    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
-  })
 
   return (
     <div className="flex gap-4 min-h-[500px]">
@@ -1700,7 +1429,7 @@ function RangementTab() {
 
         {/* Section "Non affectés" */}
         <button
-          onClick={() => { setSelectedSectionId('unassigned'); setSelectedForAssign(new Set()); setUnassignedSearch(''); setTargetSectionId('') }}
+          onClick={() => setSelectedSectionId('unassigned')}
           className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-2.5 text-sm transition-colors border ${
             selectedSectionId === 'unassigned'
               ? 'bg-amber-50 border-amber-200 text-amber-800'
@@ -1719,7 +1448,7 @@ function RangementTab() {
         {sections.map(s => (
           <button
             key={s.id}
-            onClick={() => { setSelectedSectionId(s.id); setSelectedForAssign(new Set()); setUnassignedSearch('') }}
+            onClick={() => setSelectedSectionId(s.id)}
             className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-2.5 text-sm transition-colors border group ${
               selectedSectionId === s.id
                 ? 'border-transparent shadow-sm'
@@ -1769,106 +1498,27 @@ function RangementTab() {
         ) : (
           <div className="card p-0 overflow-hidden">
             {/* Header du panel */}
-            <div style={selectedSectionId !== 'unassigned' && sections.find(s => s.id === selectedSectionId) ? {
-              backgroundColor: (sections.find(s => s.id === selectedSectionId)!.color) + '12'
-            } : {}}>
-              <div className="px-4 py-3 border-b flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {selectedSectionId !== 'unassigned' && sections.find(s => s.id === selectedSectionId) && (
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold"
-                      style={{ backgroundColor: sections.find(s => s.id === selectedSectionId)!.color }}>
-                      {sections.find(s => s.id === selectedSectionId)!.icon ||
-                       sections.find(s => s.id === selectedSectionId)!.name.charAt(0)}
-                    </div>
-                  )}
-                  {selectedSectionId === 'unassigned' && (
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-100 flex-shrink-0">
-                      <AlertTriangle size={16} className="text-amber-500" />
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="font-semibold text-gray-900">
-                      {selectedSectionId === 'unassigned' ? 'Produits non affectés' : sections.find(s => s.id === selectedSectionId)?.name}
-                    </h3>
-                    <p className="text-xs text-gray-500">
-                      {selectedSectionId === 'unassigned'
-                        ? `${filteredUnassigned.length} produit(s)${unassignedSearch ? ` sur ${sectionProducts.length}` : ''}`
-                        : `${sectionProducts.length} produit(s)`}
-                    </p>
+            <div className="px-4 py-3 border-b flex items-center justify-between"
+              style={selectedSectionId !== 'unassigned' && sections.find(s => s.id === selectedSectionId) ? {
+                backgroundColor: (sections.find(s => s.id === selectedSectionId)!.color) + '12'
+              } : { backgroundColor: '#fef3c720' }}>
+              <div className="flex items-center gap-3">
+                {selectedSectionId !== 'unassigned' && sections.find(s => s.id === selectedSectionId) && (
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold"
+                    style={{ backgroundColor: sections.find(s => s.id === selectedSectionId)!.color }}>
+                    {sections.find(s => s.id === selectedSectionId)!.icon ||
+                     sections.find(s => s.id === selectedSectionId)!.name.charAt(0)}
                   </div>
-                </div>
-                {typeof selectedSectionId === 'number' && (
-                  <button
-                    onClick={() => setShowBulkAssign(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm">
-                    <Plus size={13} /> Affecter des produits
-                  </button>
                 )}
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    {selectedSectionId === 'unassigned'
+                      ? 'Produits non affectés'
+                      : sections.find(s => s.id === selectedSectionId)?.name}
+                  </h3>
+                  <p className="text-xs text-gray-500">{sectionProducts.length} produit(s)</p>
+                </div>
               </div>
-
-              {/* Vue non-affectés : barre de recherche */}
-              {selectedSectionId === 'unassigned' && (
-                <div className="px-4 py-2.5 border-b bg-white flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={unassignedSearch}
-                      onChange={e => setUnassignedSearch(e.target.value)}
-                      placeholder="Filtrer par nom, code ou catégorie…"
-                      className="input pl-8 py-1.5 text-sm w-full"
-                    />
-                    {unassignedSearch && (
-                      <button onClick={() => setUnassignedSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                        <X size={13} />
-                      </button>
-                    )}
-                  </div>
-                  <span className="text-xs text-gray-400 whitespace-nowrap">
-                    {selectedForAssign.size > 0
-                      ? <span className="font-semibold text-indigo-600">{selectedForAssign.size} sélectionné(s)</span>
-                      : 'Cliquez sur une ligne pour sélectionner'}
-                  </span>
-                </div>
-              )}
-
-              {/* Vue non-affectés : barre d'action (visible quand sélection active) */}
-              {selectedSectionId === 'unassigned' && selectedForAssign.size > 0 && (
-                <div className="px-4 py-2.5 bg-indigo-600 flex items-center gap-3 flex-wrap">
-                  <span className="text-white text-sm font-semibold">
-                    {selectedForAssign.size} produit(s) sélectionné(s)
-                  </span>
-                  <div className="ml-auto flex items-center gap-2">
-                    <select
-                      value={targetSectionId}
-                      onChange={e => setTargetSectionId(e.target.value ? Number(e.target.value) : '')}
-                      className="rounded-lg px-3 py-1.5 text-sm bg-indigo-700 border border-indigo-400 text-white focus:outline-none focus:ring-2 focus:ring-white/40"
-                    >
-                      <option value="">— Choisir un rayon —</option>
-                      {sections.map(s => (
-                        <option key={s.id} value={s.id}>{s.icon ? `${s.icon} ` : ''}{s.name}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => bulkFromUnassigned.mutate()}
-                      disabled={!targetSectionId || bulkFromUnassigned.isPending}
-                      className="flex items-center gap-1.5 px-4 py-1.5 bg-white text-indigo-700 rounded-lg text-sm font-bold hover:bg-indigo-50 disabled:opacity-50 transition-colors shadow-sm"
-                    >
-                      {bulkFromUnassigned.isPending
-                        ? <Loader2 size={13} className="animate-spin" />
-                        : <MapPin size={13} />}
-                      Affecter au rayon
-                    </button>
-                    <button
-                      onClick={() => setSelectedForAssign(new Set())}
-                      title="Désélectionner tout"
-                      className="text-indigo-200 hover:text-white p-1 rounded transition-colors"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {prodLoading ? (
@@ -1881,111 +1531,72 @@ function RangementTab() {
               </div>
             ) : (
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b text-xs sticky top-0 z-10">
+                <thead className="bg-gray-50 border-b text-xs">
                   <tr>
-                    {selectedSectionId === 'unassigned' && (
-                      <th className="px-3 py-2.5 w-10 text-center">
-                        <input
-                          type="checkbox"
-                          checked={allUnassignedSelected}
-                          onChange={() => {
-                            if (allUnassignedSelected) setSelectedForAssign(new Set())
-                            else setSelectedForAssign(new Set(filteredUnassigned.map(p => p.id)))
-                          }}
-                          className="rounded cursor-pointer accent-indigo-600"
-                          title="Tout sélectionner"
-                        />
-                      </th>
-                    )}
                     <th className="text-left px-4 py-2.5 font-medium text-gray-500">Code</th>
                     <th className="text-left px-4 py-2.5 font-medium text-gray-500">Produit</th>
                     <th className="text-left px-4 py-2.5 font-medium text-gray-500">Catégorie</th>
-                    {selectedSectionId !== 'unassigned' && (
-                      <th className="text-left px-4 py-2.5 font-medium text-gray-500">
-                        <span className="flex items-center gap-1"><Move size={10} /> Position</span>
-                      </th>
-                    )}
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 flex items-center gap-1">
+                      <Move size={10} /> Emplacement / Position
+                    </th>
                     <th className="text-right px-4 py-2.5 font-medium text-gray-500">Stock</th>
-                    <th className="px-4 py-2.5 w-12" />
+                    <th className="px-4 py-2.5 w-16" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {(selectedSectionId === 'unassigned' ? filteredUnassigned : sectionProducts).map(p => {
-                    const isSelected = selectedForAssign.has(p.id)
-                    return (
-                      <tr
-                        key={p.id}
-                        onClick={selectedSectionId === 'unassigned' ? () => toggleUnassigned(p.id) : undefined}
-                        className={`group transition-colors ${
-                          selectedSectionId === 'unassigned'
-                            ? `cursor-pointer ${isSelected ? 'bg-indigo-50 hover:bg-indigo-100' : 'hover:bg-gray-50'}`
-                            : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        {selectedSectionId === 'unassigned' && (
-                          <td className="px-3 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                  {sectionProducts.map(p => (
+                    <tr key={p.id} className="hover:bg-gray-50 group">
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{p.internal_code}</td>
+                      <td className="px-4 py-2.5">
+                        <p className="font-medium text-gray-900">{p.name}</p>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {p.category && (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">{p.category.name}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {editingSlot?.id === p.id ? (
+                          <div className="flex items-center gap-2">
                             <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleUnassigned(p.id)}
-                              className="rounded cursor-pointer accent-indigo-600"
+                              value={editingSlot.value}
+                              onChange={e => setEditingSlot({ id: p.id, value: e.target.value })}
+                              onKeyDown={e => { if (e.key === 'Enter') saveSlot(p); if (e.key === 'Escape') setEditingSlot(null) }}
+                              className="input text-xs py-1 h-7 flex-1"
+                              placeholder="ex: Allée A - Étagère 2"
+                              autoFocus
                             />
-                          </td>
+                            <button onClick={() => saveSlot(p)} className="text-green-500 hover:text-green-700"><Check size={13} /></button>
+                            <button onClick={() => setEditingSlot(null)} className="text-gray-400 hover:text-gray-600"><X size={13} /></button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setEditingSlot({ id: p.id, value: p.slot ?? '' })}
+                            className="text-left group/slot flex items-center gap-1.5 w-full">
+                            {p.slot
+                              ? <span className="text-xs text-gray-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 group-hover/slot:border-indigo-300">{p.slot}</span>
+                              : <span className="text-xs text-gray-300 italic group-hover/slot:text-indigo-400">+ Ajouter position</span>
+                            }
+                          </button>
                         )}
-                        <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{p.internal_code}</td>
-                        <td className="px-4 py-2.5">
-                          <p className={`font-medium ${isSelected ? 'text-indigo-800' : 'text-gray-900'}`}>{p.name}</p>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {p.category && (
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">{p.category.name}</span>
-                          )}
-                        </td>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`text-xs font-semibold ${p.qty_on_hand <= 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                          {formatNumber(p.qty_on_hand, 0)} {p.unit?.abbreviation ?? ''}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
                         {selectedSectionId !== 'unassigned' && (
-                          <td className="px-4 py-2.5">
-                            {editingSlot?.id === p.id ? (
-                              <div className="flex items-center gap-2">
-                                <input
-                                  value={editingSlot.value}
-                                  onChange={e => setEditingSlot({ id: p.id, value: e.target.value })}
-                                  onKeyDown={e => { if (e.key === 'Enter') saveSlot(p); if (e.key === 'Escape') setEditingSlot(null) }}
-                                  className="input text-xs py-1 h-7 flex-1"
-                                  placeholder="ex: Allée A - Étagère 2"
-                                  autoFocus
-                                />
-                                <button onClick={() => saveSlot(p)} className="text-green-500 hover:text-green-700"><Check size={13} /></button>
-                                <button onClick={() => setEditingSlot(null)} className="text-gray-400 hover:text-gray-600"><X size={13} /></button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => setEditingSlot({ id: p.id, value: p.slot ?? '' })}
-                                className="text-left group/slot flex items-center gap-1.5 w-full">
-                                {p.slot
-                                  ? <span className="text-xs text-gray-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 group-hover/slot:border-indigo-300">{p.slot}</span>
-                                  : <span className="text-xs text-gray-300 italic group-hover/slot:text-indigo-400">+ Ajouter position</span>
-                                }
-                              </button>
-                            )}
-                          </td>
+                          <button
+                            onClick={() => unassignMut.mutate(p.id)}
+                            title="Retirer du rayon"
+                            className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                            <X size={14} />
+                          </button>
                         )}
-                        <td className="px-4 py-2.5 text-right">
-                          <span className={`text-xs font-semibold ${p.qty_on_hand <= 0 ? 'text-red-500' : 'text-gray-700'}`}>
-                            {formatNumber(p.qty_on_hand, 0)} {p.unit?.abbreviation ?? ''}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          {selectedSectionId !== 'unassigned' && (
-                            <button
-                              onClick={() => unassignMut.mutate(p.id)}
-                              title="Retirer du rayon"
-                              className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                              <X size={14} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}
@@ -1997,68 +1608,7 @@ function RangementTab() {
       {editSection !== undefined && (
         <SectionFormModal section={editSection} onClose={() => setEditSection(undefined)} />
       )}
-      {showBulkAssign && typeof selectedSectionId === 'number' && (
-        <BulkAssignModal
-          sectionId={selectedSectionId}
-          sectionName={sections.find(s => s.id === selectedSectionId)?.name ?? ''}
-          onClose={() => setShowBulkAssign(false)}
-        />
-      )}
     </div>
-  )
-}
-
-// ─── Category Sidebar Item ────────────────────────────────────────────────────
-
-function CategorySidebarItem({
-  cat, depth, selectedId, onSelect,
-}: {
-  cat: Category
-  depth: number
-  selectedId: number | ''
-  onSelect: (id: number | '') => void
-}) {
-  const [expanded, setExpanded] = useState(depth === 0)
-  const hasChildren = (cat.children ?? []).length > 0
-  const isSelected = selectedId === cat.id
-
-  return (
-    <>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onSelect(cat.id)}
-        onKeyDown={e => e.key === 'Enter' && onSelect(cat.id)}
-        className={`flex items-center gap-1 rounded-lg cursor-pointer transition-colors text-sm select-none ${
-          isSelected ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100'
-        }`}
-        style={{ paddingLeft: `${8 + depth * 14}px`, paddingTop: 6, paddingBottom: 6, paddingRight: 8 }}
-      >
-        {hasChildren ? (
-          <span
-            className="flex-shrink-0 w-4 h-4 flex items-center justify-center"
-            onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
-          >
-            <ChevronRight
-              size={12}
-              className={`transition-transform ${expanded ? 'rotate-90' : ''} ${isSelected ? 'text-white/70' : 'text-gray-400'}`}
-            />
-          </span>
-        ) : (
-          <span className="w-4 flex-shrink-0" />
-        )}
-        <span className="flex-1 truncate">{cat.name}</span>
-      </div>
-      {hasChildren && expanded && cat.children!.map(child => (
-        <CategorySidebarItem
-          key={child.id}
-          cat={child}
-          depth={depth + 1}
-          selectedId={selectedId}
-          onSelect={onSelect}
-        />
-      ))}
-    </>
   )
 }
 
@@ -2100,6 +1650,8 @@ function ArticlesTab() {
     queryFn: () => api.get('/sections').then(r => r.data),
   })
 
+  const flatCats = flattenCategories(rawCategories)
+
   const queryParams = {
     search: search || undefined,
     page,
@@ -2125,9 +1677,9 @@ function ArticlesTab() {
   })
 
   const STATUS_LABELS: Record<StatusFilter, string> = {
-    all: 'Tous',
-    active: 'Actifs',
-    inactive: 'Inactifs',
+    all: 'Tous les articles',
+    active: 'Actifs uniquement',
+    inactive: 'Inactifs uniquement',
     low_stock: 'Stock faible',
   }
 
@@ -2137,128 +1689,37 @@ function ArticlesTab() {
 
   const hasFilters = search || selectedCategoryId !== '' || selectedSectionId !== '' || statusFilter !== 'all'
 
-  const selectedCatName = selectedCategoryId !== ''
-    ? flattenCategories(rawCategories).find(c => c.id === selectedCategoryId)?.name
-    : undefined
-
   return (
-<<<<<<< HEAD
-    <div className="flex gap-5 items-start">
-
-      {/* ── Category sidebar ── */}
-      <div className="w-52 flex-shrink-0 card p-0 overflow-hidden">
-        <div className="px-3 py-2.5 border-b bg-gray-50 flex items-center gap-2">
-          <Tag size={13} className="text-gray-400" />
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Catégories</span>
-        </div>
-        <div className="overflow-y-auto p-1.5 space-y-0.5" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => { setSelectedCategoryId(''); setPage(1) }}
-            onKeyDown={e => e.key === 'Enter' && (setSelectedCategoryId(''), setPage(1))}
-            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors text-sm select-none ${
-              selectedCategoryId === ''
-                ? 'bg-primary text-white font-medium'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Package size={13} className={selectedCategoryId === '' ? 'text-white/80' : 'text-gray-400'} />
-            <span className="flex-1">Toutes</span>
-            {stats && (
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium tabular-nums ${
-                selectedCategoryId === '' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {stats.total}
-              </span>
-            )}
-          </div>
-          {rawCategories.map(cat => (
-            <CategorySidebarItem
-              key={cat.id}
-              cat={cat}
-              depth={0}
-              selectedId={selectedCategoryId}
-              onSelect={id => { setSelectedCategoryId(id); setPage(1) }}
-            />
-          ))}
-        </div>
-=======
     <div className="space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <KpiCard icon={<Package size={20} className="text-white" />} label="Total articles" value={stats?.total ?? 0} color="bg-primary" />
         <KpiCard icon={<Check size={20} className="text-white" />} label="Articles actifs" value={stats?.active ?? 0} color="bg-green-500" />
         <KpiCard icon={<AlertTriangle size={20} className="text-white" />} label="Stock faible" value={stats?.low_stock ?? 0} color="bg-amber-500" />
         <KpiCard icon={<X size={20} className="text-white" />} label="En rupture" value={stats?.out_of_stock ?? 0} color="bg-red-500" />
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
       </div>
 
-      {/* ── Main content ── */}
-      <div className="flex-1 min-w-0 space-y-4">
-
-        {/* KPIs */}
-        <div className="grid grid-cols-4 gap-4">
-          <KpiCard icon={<Package size={20} className="text-white" />} label="Total articles" value={stats?.total ?? 0} color="bg-primary" />
-          <KpiCard icon={<Check size={20} className="text-white" />} label="Articles actifs" value={stats?.active ?? 0} color="bg-green-500" />
-          <KpiCard icon={<AlertTriangle size={20} className="text-white" />} label="Stock faible" value={stats?.low_stock ?? 0} color="bg-amber-500" />
-          <KpiCard icon={<X size={20} className="text-white" />} label="En rupture" value={stats?.out_of_stock ?? 0} color="bg-red-500" />
-        </div>
-
-        {/* Search + filters */}
-        <div className="card p-3 flex gap-2 flex-wrap items-center">
-          <div className="relative flex-1 min-w-[200px]">
-            <input
-              type="text"
-              value={search}
+      <div className="card p-4 space-y-3">
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <input type="text" value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
-              className="input pl-9 text-sm"
-              placeholder="Rechercher par nom, code ou code-barres…"
-            />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-            {search && (
-              <button onClick={() => { setSearch(''); setPage(1) }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                <X size={13} />
-              </button>
-            )}
+              className="input pl-10" placeholder="Rechercher par nom, code interne ou code-barres..." />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           </div>
 
-          {sections.length > 0 && (
-            <select
-              value={selectedSectionId}
-              onChange={e => { setSelectedSectionId(e.target.value ? Number(e.target.value) : ''); setPage(1) }}
-              className="input text-sm w-44"
-            >
-              <option value="">Tous les rayons</option>
-              {sections.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.icon ? `${s.icon} ` : ''}{s.name}
-                </option>
-              ))}
-            </select>
-          )}
-
           <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setShowStatusMenu(s => !s)}
-              className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm whitespace-nowrap transition-colors ${
-                statusFilter !== 'all'
-                  ? 'bg-primary-50 border-primary-200 text-primary'
-                  : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'
-              }`}
-            >
-              <Filter size={14} />
+            <button onClick={() => setShowStatusMenu(s => !s)}
+              className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50 bg-white border-gray-200 whitespace-nowrap">
+              <Filter size={15} className="text-gray-500" />
               {STATUS_LABELS[statusFilter]}
-              <ChevronDown size={13} className="text-gray-400" />
+              <ChevronDown size={14} className="text-gray-400" />
             </button>
             {showStatusMenu && (
-              <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-10 py-1">
+              <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-10 py-1">
                 {(Object.keys(STATUS_LABELS) as StatusFilter[]).map(k => (
-                  <button
-                    key={k}
+                  <button key={k}
                     onClick={() => { setStatusFilter(k); setPage(1); setShowStatusMenu(false) }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === k ? 'text-primary font-medium' : 'text-gray-700'}`}
-                  >
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === k ? 'text-primary font-medium' : 'text-gray-700'}`}>
                     {STATUS_LABELS[k]}
                   </button>
                 ))}
@@ -2267,160 +1728,186 @@ function ArticlesTab() {
           </div>
 
           {hasFilters && (
-            <button
-              onClick={resetFilters}
-              className="flex items-center gap-1 px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50"
-            >
-              <X size={13} /> Réinitialiser
+            <button onClick={resetFilters}
+              className="flex items-center gap-1 px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <X size={14} /> Réinitialiser
             </button>
           )}
         </div>
 
-        {/* Breadcrumb catégorie active */}
-        {selectedCatName && (
-          <div className="flex items-center gap-2 text-sm text-gray-500 -mt-1">
-            <Tag size={13} className="text-primary" />
-            <span>Catégorie : <strong className="text-gray-800">{selectedCatName}</strong></span>
-            {data && <span className="text-gray-400">· {data.total} article(s)</span>}
+        {flatCats.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => { setSelectedCategoryId(''); setPage(1) }}
+              className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedCategoryId === '' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}>
+              Toutes catégories
+            </button>
+            {flatCats.map(c => (
+              <button key={c.id}
+                onClick={() => { setSelectedCategoryId(c.id); setPage(1) }}
+                className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedCategoryId === c.id ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}>
+                {c.name}
+              </button>
+            ))}
           </div>
         )}
 
-        {/* Products table */}
-        <div className="card p-0 overflow-hidden">
-          {isLoading ? (
-            <div className="p-8 text-center text-gray-400">Chargement...</div>
-          ) : (data?.data ?? []).length === 0 ? (
-            <div className="p-12 text-center text-gray-400">
-              <Package size={40} className="mx-auto mb-3 opacity-30" />
-              <p className="font-medium">Aucun article trouvé</p>
-              {hasFilters && <button onClick={resetFilters} className="mt-2 text-primary text-sm hover:underline">Réinitialiser les filtres</button>}
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Désignation</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Catégorie</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Rayon</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Achat HT</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Vente TTC</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Marge</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Stock</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">TVA</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">Statut</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {(data?.data ?? []).map((p: Product) => {
-                  const stock = p.stock_level?.qty_on_hand ?? 0
-                  const htVente = p.sale_price_ttc / (1 + p.vat_rate / 100)
-                  const margin = p.purchase_price_ht > 0
-                    ? Math.round(((htVente - p.purchase_price_ht) / p.purchase_price_ht) * 100)
-                    : null
+        {sections.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1 border-t border-gray-100">
+            <span className="flex items-center gap-1 text-xs text-gray-400 self-center">
+              <MapPin size={11} /> Rayon :
+            </span>
+            <button
+              onClick={() => { setSelectedSectionId(''); setPage(1) }}
+              className={`px-3 py-1 rounded-full text-sm border transition-colors ${selectedSectionId === '' ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}>
+              Tous
+            </button>
+            {sections.map(s => (
+              <button key={s.id}
+                onClick={() => { setSelectedSectionId(s.id); setPage(1) }}
+                className={`px-3 py-1 rounded-full text-sm border transition-colors flex items-center gap-1.5 ${selectedSectionId === s.id ? 'text-white border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
+                style={selectedSectionId === s.id ? { backgroundColor: s.color, borderColor: s.color } : {}}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedSectionId === s.id ? 'rgba(255,255,255,0.6)' : s.color }} />
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
-                  return (
-                    <tr key={p.id} className="hover:bg-gray-50 transition-colors group">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.internal_code}</td>
-                      <td className="px-4 py-3">
-                        <button onClick={() => setViewProduct(p)} className="text-left hover:text-primary transition-colors flex items-center gap-2">
-                          {p.image && <img src={imageUrl(p.image)!} alt="" className="w-8 h-8 rounded-lg object-cover border flex-shrink-0" />}
-                          <div>
-                            <p className="font-medium text-gray-900">{p.name}</p>
-                            {p.barcodes?.find(b => b.is_primary) && (
-                              <p className="text-xs text-gray-400 font-mono">{p.barcodes.find(b => b.is_primary)?.barcode}</p>
-                            )}
-                          </div>
-                        </button>
-                      </td>
-                      <td className="px-4 py-3">
-                        {p.category && (
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">{p.category.name}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {p.section && (
-                          <span className="flex items-center gap-1.5 text-xs">
-                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.section.color }} />
-                            <span className="text-gray-600">{p.section.name}</span>
-                          </span>
-                        )}
-                        {p.slot && <p className="text-[10px] text-gray-400 mt-0.5 pl-3.5">{p.slot}</p>}
-                      </td>
-                      <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(p.purchase_price_ht)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(p.sale_price_ttc)}</td>
-                      <td className="px-4 py-3 text-right">
-                        {margin !== null && (
-                          <span className={`text-xs font-medium ${margin >= 20 ? 'text-green-600' : margin >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
-                            {margin >= 0 ? '+' : ''}{margin}%
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={stock <= 0 ? 'text-red-600 font-semibold' : stock <= (p.alert_stock ?? 5) ? 'text-amber-600 font-semibold' : 'text-gray-700'}>
-                          {formatNumber(stock, 0)} {p.unit?.abbreviation ?? ''}
-                          {stock <= 0 && <AlertTriangle size={12} className="inline ml-1" />}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.vat_rate > 0 ? 'bg-primary-50 text-primary-600' : 'bg-gray-100 text-gray-500'}`}>
-                          {p.vat_rate}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button onClick={() => toggleActive.mutate(p)} className="transition-colors" title={p.is_active ? 'Désactiver' : 'Activer'}>
-                          {p.is_active
-                            ? <ToggleRight className="text-green-500" size={22} />
-                            : <ToggleLeft className="text-gray-300" size={22} />}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => setViewProduct(p)} title="Voir le détail"
-                            className="text-gray-400 hover:text-primary transition-colors">
-                            <Eye size={15} />
-                          </button>
-                          <button onClick={() => { setEditProduct(p); setShowForm(true) }} title="Modifier"
-                            className="text-gray-400 hover:text-primary transition-colors">
-                            <Edit2 size={15} />
-                          </button>
+      <div className="card p-0 overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-center text-gray-400">Chargement...</div>
+        ) : (data?.data ?? []).length === 0 ? (
+          <div className="p-12 text-center text-gray-400">
+            <Package size={40} className="mx-auto mb-3 opacity-30" />
+            <p className="font-medium">Aucun article trouvé</p>
+            {hasFilters && <button onClick={resetFilters} className="mt-2 text-primary text-sm hover:underline">Réinitialiser les filtres</button>}
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Désignation</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Catégorie</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Rayon</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Achat HT</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Vente TTC</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Marge</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Stock</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">Statut</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {(data?.data ?? []).map((p: Product) => {
+                const stock = p.stock_level?.qty_on_hand ?? 0
+                const htVente = p.sale_price_ttc / (1 + p.vat_rate / 100)
+                const margin = p.purchase_price_ht > 0
+                  ? Math.round(((htVente - p.purchase_price_ht) / p.purchase_price_ht) * 100)
+                  : null
+
+                return (
+                  <tr key={p.id} className="hover:bg-gray-50 transition-colors group">
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.internal_code}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setViewProduct(p)} className="text-left hover:text-primary transition-colors flex items-center gap-2">
+                        {p.image && <img src={imageUrl(p.image)!} alt="" className="w-8 h-8 rounded-lg object-cover border flex-shrink-0" />}
+                        <div>
+                          <p className="font-medium text-gray-900">{p.name}</p>
+                          {p.barcodes?.find(b => b.is_primary) && (
+                            <p className="text-xs text-gray-400 font-mono">{p.barcodes.find(b => b.is_primary)?.barcode}</p>
+                          )}
                         </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.category && (
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">{p.category.name}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.section && (
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.section.color }} />
+                          <span className="text-gray-600">{p.section.name}</span>
+                        </span>
+                      )}
+                      {p.slot && <p className="text-[10px] text-gray-400 mt-0.5 pl-3.5">{p.slot}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(p.purchase_price_ht)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(p.sale_price_ttc)}</td>
+                    <td className="px-4 py-3 text-right">
+                      {margin !== null && (
+                        <span className={`text-xs font-medium ${margin >= 20 ? 'text-green-600' : margin >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                          {margin >= 0 ? '+' : ''}{margin}%
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={stock <= 0 ? 'text-red-600 font-semibold' : stock <= (p.alert_stock ?? 5) ? 'text-amber-600 font-semibold' : 'text-gray-700'}>
+                        {formatNumber(stock, 0)} {p.unit?.abbreviation ?? ''}
+                        {stock <= 0 && <AlertTriangle size={12} className="inline ml-1" />}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.vat_rate > 0 ? 'bg-primary-50 text-primary-600' : 'bg-gray-100 text-gray-500'}`}>
+                        {p.vat_rate}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => toggleActive.mutate(p)} className="transition-colors" title={p.is_active ? 'Désactiver' : 'Activer'}>
+                        {p.is_active
+                          ? <ToggleRight className="text-green-500" size={22} />
+                          : <ToggleLeft className="text-gray-300" size={22} />}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setViewProduct(p)} title="Voir le détail"
+                          className="text-gray-400 hover:text-primary transition-colors">
+                          <Eye size={15} />
+                        </button>
+                        <button onClick={() => { setEditProduct(p); setShowForm(true) }} title="Modifier"
+                          className="text-gray-400 hover:text-primary transition-colors">
+                          <Edit2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
 
-          {data && data.last_page > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-              <p className="text-sm text-gray-500">
-                Page {data.current_page} / {data.last_page} · {data.total} articles
-              </p>
-              <div className="flex gap-1">
-                <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
-                  className="p-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100">
-                  <ChevronLeft size={16} />
-                </button>
-                {Array.from({ length: Math.min(data.last_page, 7) }, (_, i) => {
-                  const p = i + 1
-                  return (
-                    <button key={p} onClick={() => setPage(p)}
-                      className={`px-3 py-1 rounded border text-sm ${page === p ? 'bg-primary text-white border-primary' : 'border-gray-200 hover:bg-gray-100'}`}>
-                      {p}
-                    </button>
-                  )
-                })}
-                <button disabled={page === data.last_page} onClick={() => setPage(p => p + 1)}
-                  className="p-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100">
-                  <ChevronRight size={16} />
-                </button>
-              </div>
+        {data && data.last_page > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+            <p className="text-sm text-gray-500">
+              Page {data.current_page} / {data.last_page} · {data.total} articles
+            </p>
+            <div className="flex gap-1">
+              <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
+                className="p-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100">
+                <ChevronLeft size={16} />
+              </button>
+              {Array.from({ length: Math.min(data.last_page, 7) }, (_, i) => {
+                const p = i + 1
+                return (
+                  <button key={p} onClick={() => setPage(p)}
+                    className={`px-3 py-1 rounded border text-sm ${page === p ? 'bg-primary text-white border-primary' : 'border-gray-200 hover:bg-gray-100'}`}>
+                    {p}
+                  </button>
+                )
+              })}
+              <button disabled={page === data.last_page} onClick={() => setPage(p => p + 1)}
+                className="p-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100">
+                <ChevronRight size={16} />
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -2497,15 +1984,11 @@ function ProductImportModal({ onClose, onDone }: { onClose: () => void; onDone: 
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const { data } = await api.post<PreviewData>('/products/import/preview', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const { data } = await api.post<PreviewData>('/products/import/preview', fd)
       setPreview(data)
       setStep(2)
     } catch (e: any) {
-      const errors = e.response?.data?.errors
-      const firstError = errors ? Object.values(errors).flat().at(0) : null
-      toast.error(String(firstError ?? e.response?.data?.message ?? "Erreur lors de l'analyse"))
+      toast.error(e.response?.data?.message ?? "Erreur lors de l'analyse")
     } finally { setLoading(false) }
   }
 
@@ -2520,9 +2003,7 @@ function ProductImportModal({ onClose, onDone }: { onClose: () => void; onDone: 
       setStep(3)
       onDone()
     } catch (e: any) {
-      const errors = e.response?.data?.errors
-      const firstError = errors ? Object.values(errors).flat().at(0) : null
-      toast.error(String(firstError ?? e.response?.data?.message ?? "Erreur lors de l'import"))
+      toast.error(e.response?.data?.message ?? "Erreur lors de l'import")
     } finally { setLoading(false) }
   }
 
@@ -2731,7 +2212,7 @@ export default function ProductsPage() {
   ]
 
   return (
-    <div className="p-3 sm:p-6 space-y-5">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">

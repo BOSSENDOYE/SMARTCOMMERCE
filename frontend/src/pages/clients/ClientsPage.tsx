@@ -362,64 +362,119 @@ function ClientFormModal({ client, onClose }: { client?: Client; onClose: () => 
 
 function AdjustCreditModal({ client, onClose }: { client: Client; onClose: () => void }) {
   const qc = useQueryClient()
-  const [type, setType] = useState<'add' | 'deduct'>('deduct')
+  const [mode, setMode] = useState<'deduct' | 'account' | 'add'>('deduct')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
 
-  const mutation = useMutation({
-    mutationFn: () => api.post(`/clients/${client.id}/adjust-credit`, { amount: Number(amount), type, reason }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['clients'] })
-      qc.invalidateQueries({ queryKey: ['client-stats'] })
-      qc.invalidateQueries({ queryKey: ['client', client.id] })
-      toast.success('Crédit mis à jour')
-      onClose()
-    },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Erreur'),
+  const canPayWithAccount = client.account_balance > 0 && client.credit_balance > 0
+  const maxWithAccount = Math.min(client.credit_balance, client.account_balance)
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['clients'] })
+    qc.invalidateQueries({ queryKey: ['client-stats'] })
+    qc.invalidateQueries({ queryKey: ['client', client.id] })
+    qc.invalidateQueries({ queryKey: ['account-tx', client.id] })
+  }
+
+  const mutationCredit = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/adjust-credit`, { amount: Number(amount), type: mode === 'add' ? 'add' : 'deduct', reason }),
+    onSuccess: () => { invalidate(); toast.success('Crédit mis à jour'); onClose() },
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message ?? 'Erreur'),
   })
+
+  const mutationAccount = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/pay-credit-with-account`, { amount: Number(amount), note: reason }),
+    onSuccess: () => { invalidate(); toast.success('Crédit remboursé via le compte'); onClose() },
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message ?? 'Erreur'),
+  })
+
+  const isPending = mutationCredit.isPending || mutationAccount.isPending
+  const handleSubmit = () => mode === 'account' ? mutationAccount.mutate() : mutationCredit.mutate()
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
-        <div className="p-6 border-b flex items-center justify-between">
-          <h3 className="font-bold text-lg flex items-center gap-2"><CreditCard size={18} /> Ajuster le crédit</h3>
+        <div className="p-5 border-b flex items-center justify-between">
+          <h3 className="font-bold text-lg flex items-center gap-2"><CreditCard size={18} className="text-orange-500" /> Gérer le crédit</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
-        <div className="p-6 space-y-4">
-          <div className="bg-orange-50 rounded-xl p-3 text-sm">
-            <p className="text-gray-500">Solde actuel</p>
-            <p className="text-2xl font-bold text-orange-600">{formatCurrency(client.credit_balance)}</p>
-            {client.credit_limit > 0 && <p className="text-xs text-gray-400">Plafond : {formatCurrency(client.credit_limit)}</p>}
+
+        <div className="p-5 space-y-4">
+          {/* Résumé des deux soldes */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-orange-50 rounded-xl p-3">
+              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">Crédit dû</p>
+              <p className={`text-lg font-bold ${client.credit_balance > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                {formatCurrency(client.credit_balance)}
+              </p>
+            </div>
+            <div className={`rounded-xl p-3 ${client.account_balance > 0 ? 'bg-indigo-50' : 'bg-gray-50'}`}>
+              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">Avoir compte</p>
+              <p className={`text-lg font-bold ${client.account_balance > 0 ? 'text-indigo-600' : 'text-gray-400'}`}>
+                {formatCurrency(client.account_balance)}
+              </p>
+            </div>
           </div>
-          <div className="flex gap-2">
-            {(['deduct', 'add'] as const).map(t => (
-              <button key={t} type="button" onClick={() => setType(t)}
-                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                  type === t
-                    ? t === 'deduct' ? 'bg-green-600 text-white border-green-600' : 'bg-red-500 text-white border-red-500'
-                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+
+          {/* Modes */}
+          <div className="flex gap-2 flex-wrap">
+            <button type="button" onClick={() => { setMode('deduct'); setAmount('') }}
+              className={`flex-1 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                mode === 'deduct' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+              }`}>
+              ↓ Encaisser
+            </button>
+            {canPayWithAccount && (
+              <button type="button" onClick={() => { setMode('account'); setAmount(String(maxWithAccount)) }}
+                className={`flex-1 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                  mode === 'account' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
                 }`}>
-                {t === 'deduct' ? '↓ Encaisser (réduire)' : '↑ Ajouter du crédit'}
+                ⇄ Compte
               </button>
-            ))}
+            )}
+            <button type="button" onClick={() => { setMode('add'); setAmount('') }}
+              className={`flex-1 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                mode === 'add' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+              }`}>
+              ↑ Ajouter
+            </button>
           </div>
+
+          {/* Explication contextuelle */}
+          {mode === 'account' && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 text-xs text-indigo-700">
+              Débite <span className="font-bold">{formatCurrency(Number(amount) || 0)}</span> du compte client
+              et réduit le crédit dû du même montant.
+              {maxWithAccount > 0 && <span className="block text-indigo-400 mt-0.5">Max disponible : {formatCurrency(maxWithAccount)}</span>}
+            </div>
+          )}
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Montant (FCFA)</label>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
-              className="input" min={1} step={100} autoFocus />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Montant (FCFA){mode === 'account' && <span className="text-indigo-500 ml-1">— max {formatCurrency(maxWithAccount)}</span>}
+            </label>
+            <input
+              type="number" value={amount} onChange={e => setAmount(e.target.value)}
+              className="input" min={1} max={mode === 'account' ? maxWithAccount : undefined}
+              step={100} autoFocus
+            />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Motif *</label>
-            <input value={reason} onChange={e => setReason(e.target.value)} className="input" placeholder="Ex: Paiement reçu le..." />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {mode === 'account' ? 'Note (optionnelle)' : 'Motif *'}
+            </label>
+            <input value={reason} onChange={e => setReason(e.target.value)}
+              className="input" placeholder={mode === 'account' ? 'Remboursement crédit…' : 'Ex: Paiement reçu le…'} />
           </div>
         </div>
-        <div className="p-6 border-t flex gap-3">
+
+        <div className="p-5 border-t flex gap-3">
           <button onClick={onClose} className="btn-secondary flex-1">Annuler</button>
-          <button onClick={() => mutation.mutate()}
-            disabled={!amount || !reason || mutation.isPending}
+          <button onClick={handleSubmit}
+            disabled={!amount || (mode !== 'account' && !reason) || isPending}
             className="btn-primary flex-1 disabled:opacity-50">
-            {mutation.isPending ? 'Traitement...' : 'Confirmer'}
+            {isPending ? 'Traitement…' : 'Confirmer'}
           </button>
         </div>
       </div>
@@ -786,7 +841,7 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
               </div>
 
               {/* Credit */}
-              <div className="bg-orange-50 rounded-2xl p-4 space-y-2">
+              <div className={`rounded-2xl p-4 space-y-2 ${client.credit_balance > 0 ? 'bg-orange-50' : 'bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
                     <CreditCard size={12} className="text-orange-500" /> Crédit dû
@@ -809,6 +864,13 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
                       </div>
                     )}
                   </>
+                )}
+                {/* Bouton rapide : payer le crédit via le compte quand les deux coexistent */}
+                {client.credit_balance > 0 && client.account_balance > 0 && (
+                  <button onClick={() => setShowCreditModal(true)}
+                    className="w-full mt-1 text-[11px] font-semibold text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 rounded-lg py-1.5 flex items-center justify-center gap-1.5 transition-colors">
+                    ⇄ Régler avec le compte ({formatCurrency(Math.min(client.credit_balance, client.account_balance))})
+                  </button>
                 )}
               </div>
 

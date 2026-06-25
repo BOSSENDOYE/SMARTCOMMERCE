@@ -173,13 +173,10 @@ Route::prefix('v1')->group(function () {
         Route::delete('/suppliers/{supplier}/products/{product}', [\App\Http\Controllers\Api\SupplierController::class, 'unlinkProduct']);
 
         // Clients
-<<<<<<< HEAD
         Route::get('/clients/import-template', [\App\Http\Controllers\Api\ClientImportController::class, 'template']);
         Route::post('/clients/import/preview', [\App\Http\Controllers\Api\ClientImportController::class, 'preview']);
         Route::post('/clients/import/confirm', [\App\Http\Controllers\Api\ClientImportController::class, 'confirm']);
-=======
         Route::apiResource('/client-categories', \App\Http\Controllers\Api\ClientCategoryController::class)->except(['show']);
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
         Route::get('/clients/stats', [\App\Http\Controllers\Api\ClientController::class, 'stats']);
         Route::get('/clients/search', function (\Illuminate\Http\Request $r) {
             $term = trim((string) $r->input('q', ''));
@@ -197,6 +194,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/clients/{client}/sales', [\App\Http\Controllers\Api\ClientController::class, 'sales']);
         Route::get('/clients/{client}/loyalty-transactions', [\App\Http\Controllers\Api\ClientController::class, 'loyaltyTransactions']);
         Route::post('/clients/{client}/adjust-credit', [\App\Http\Controllers\Api\ClientController::class, 'adjustCredit']);
+        Route::post('/clients/{client}/pay-credit-with-account', [\App\Http\Controllers\Api\ClientController::class, 'payCreditWithAccount']);
         Route::post('/clients/{client}/adjust-loyalty', [\App\Http\Controllers\Api\ClientController::class, 'adjustLoyalty']);
         // Client account (wallet/avoir/dette)
         Route::get('/clients/{client}/account-transactions', [\App\Http\Controllers\Api\ClientController::class, 'accountTransactions']);
@@ -464,10 +462,10 @@ Route::prefix('v1')->group(function () {
         // Organizations, Stores & Users (admin)
         Route::apiResource('/organizations', \App\Http\Controllers\Api\OrganizationController::class);
         Route::post('/organizations/{organization}/logo', [\App\Http\Controllers\Api\OrganizationController::class, 'uploadLogo']);
-        Route::apiResource('/stores', \App\Http\Controllers\Api\StoreController::class);
-        Route::post('/stores/{store}/logo',      [\App\Http\Controllers\Api\StoreController::class, 'uploadLogo']);
         Route::get('/stores/menu-config',        [\App\Http\Controllers\Api\StoreController::class, 'getMenuConfig']);
         Route::put('/stores/menu-config',        [\App\Http\Controllers\Api\StoreController::class, 'updateMenuConfig']);
+        Route::apiResource('/stores', \App\Http\Controllers\Api\StoreController::class);
+        Route::post('/stores/{store}/logo',      [\App\Http\Controllers\Api\StoreController::class, 'uploadLogo']);
         Route::apiResource('/users', \App\Http\Controllers\Api\UserController::class);
         Route::put('/profile', [\App\Http\Controllers\Api\UserController::class, 'updateProfile']);
         // Roles & Permissions management

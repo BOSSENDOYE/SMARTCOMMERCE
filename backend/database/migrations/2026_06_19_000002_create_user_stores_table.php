@@ -9,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::dropIfExists('user_stores');
         Schema::create('user_stores', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
@@ -18,13 +19,14 @@ return new class extends Migration
         });
 
         // Seed existing users into the pivot (their current store_id becomes their only assignment)
-        DB::statement('
+        $ts = DB::getDriverName() === 'sqlite' ? "datetime('now')" : 'NOW()';
+        DB::statement("
             INSERT INTO user_stores (user_id, store_id, created_at)
-            SELECT id, store_id, NOW()
+            SELECT id, store_id, {$ts}
             FROM users
             WHERE store_id IS NOT NULL
             ON CONFLICT DO NOTHING
-        ');
+        ");
     }
 
     public function down(): void
