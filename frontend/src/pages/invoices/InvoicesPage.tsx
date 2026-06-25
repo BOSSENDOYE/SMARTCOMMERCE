@@ -338,7 +338,6 @@ function DocumentEditor({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4">
 
         {/* Header */}
-<<<<<<< HEAD
         <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl">
           <div>
             <h2 className="text-lg font-bold text-white">
@@ -350,28 +349,11 @@ function DocumentEditor({
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">
             <X size={18} />
-=======
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
-              <FileText size={18} className="text-primary" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-800">
-                {isEdit ? 'Modifier' : 'Nouveau'} {type === 'invoice' ? 'Facture' : 'Devis'}
-              </h2>
-              <p className="text-xs text-gray-400">{isEdit ? 'Modification du document' : 'Création d\'un nouveau document'}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
-            <X size={20} />
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
           </button>
         </div>
 
         <div className="p-6 space-y-6">
           {/* Infos générales */}
-<<<<<<< HEAD
           <div className="grid grid-cols-2 gap-4">
             {/* Client autocomplete */}
             <div>
@@ -446,77 +428,16 @@ function DocumentEditor({
                 onChange={e => type === 'invoice' ? setDueDate(e.target.value) : setValidUntil(e.target.value)}
                 className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
               />
-=======
-          <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 bg-primary rounded-full" />
-              <h3 className="text-sm font-semibold text-gray-700">Informations générales</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Client</label>
-                <select
-                  value={clientId}
-                  onChange={e => setClientId(e.target.value ? Number(e.target.value) : '')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
-                >
-                  <option value="">— Sans client —</option>
-                  {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Objet</label>
-                <input
-                  type="text"
-                  value={object}
-                  onChange={e => setObject(e.target.value)}
-                  placeholder="Ex : Livraison matériaux mois de juin"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Date d'émission</label>
-                <input
-                  type="date"
-                  value={issueDate}
-                  onChange={e => setIssueDate(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                  {type === 'invoice' ? 'Date d\'échéance' : 'Valide jusqu\'au'}
-                </label>
-                <input
-                  type="date"
-                  value={type === 'invoice' ? dueDate : validUntil}
-                  onChange={e => type === 'invoice' ? setDueDate(e.target.value) : setValidUntil(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
             </div>
           </div>
 
           {/* Lignes */}
           <div>
             <div className="flex items-center justify-between mb-3">
-<<<<<<< HEAD
               <h3 className="font-semibold text-gray-800">Lignes</h3>
               <button
                 onClick={addLine}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold transition"
-=======
-              <div className="flex items-center gap-2">
-                <div className="w-1 h-4 bg-primary rounded-full" />
-                <h3 className="text-sm font-semibold text-gray-700">Détail des lignes</h3>
-              </div>
-              <button
-                onClick={addLine}
-                className="flex items-center gap-1.5 text-sm text-primary hover:text-primary-600 font-medium transition-colors group"
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               >
                 <div className="w-5 h-5 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
                   <Plus size={12} className="text-primary" />
@@ -525,7 +446,6 @@ function DocumentEditor({
               </button>
             </div>
 
-<<<<<<< HEAD
             <div className="space-y-2">
               {items.map((it, i) => {
                 const { ttc } = calcLine(it)
@@ -644,130 +564,11 @@ function DocumentEditor({
                   </div>
                 )
               })}
-=======
-            <div className="rounded-xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
-                  <tr>
-                    <th className="px-3 py-2.5 text-center w-8">#</th>
-                    <th className="px-3 py-2.5 text-left">Produit / Description</th>
-                    <th className="px-3 py-2.5 text-right w-20">Qté</th>
-                    <th className="px-3 py-2.5 text-left w-20">Unité</th>
-                    <th className="px-3 py-2.5 text-right w-24">P.U HT</th>
-                    <th className="px-3 py-2.5 text-right w-16">Remise%</th>
-                    <th className="px-3 py-2.5 text-right w-16">TVA%</th>
-                    <th className="px-3 py-2.5 text-right w-28">Total TTC</th>
-                    <th className="px-2 py-2.5 w-8"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {items.map((it, i) => {
-                    const { ttc } = calcLine(it)
-                    return (
-                      <tr key={i} className="hover:bg-blue-50/20 transition-colors">
-                        <td className="px-3 py-2 text-gray-400 text-xs text-center">{i + 1}</td>
-                        <td className="px-3 py-1.5">
-                          <select
-                            className="w-full text-xs border-0 bg-transparent text-primary mb-1 cursor-pointer"
-                            value=""
-                            onChange={e => e.target.value && pickProduct(i, e.target.value)}
-                          >
-                            <option value="">— Sélectionner dans le catalogue —</option>
-                            {catalogProducts.length > 0 && (
-                              <optgroup label="📦 Produits">
-                                {catalogProducts.map(p => (
-                                  <option key={`product:${p.id}`} value={`product:${p.id}`}>{p.name}</option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {catalogRestaurant.length > 0 && (
-                              <optgroup label="🍽️ Menu Restaurant">
-                                {catalogRestaurant.map(r => (
-                                  <option key={`restaurant:${r.id}`} value={`restaurant:${r.id}`}>{r.name}</option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </select>
-                          <input
-                            type="text"
-                            value={it.description}
-                            onChange={e => updateLine(i, 'description', e.target.value)}
-                            placeholder="Description de la prestation..."
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="number"
-                            min="0.001"
-                            step="0.001"
-                            value={it.quantity}
-                            onChange={e => updateLine(i, 'quantity', parseFloat(e.target.value) || 0)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="text"
-                            value={it.unit}
-                            onChange={e => updateLine(i, 'unit', e.target.value)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="number"
-                            min="0"
-                            value={it.unit_price}
-                            onChange={e => updateLine(i, 'unit_price', parseFloat(e.target.value) || 0)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={it.discount_percent}
-                            onChange={e => updateLine(i, 'discount_percent', parseFloat(e.target.value) || 0)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={it.vat_rate}
-                            onChange={e => updateLine(i, 'vat_rate', parseFloat(e.target.value) || 0)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          />
-                        </td>
-                        <td className="px-3 py-1.5 text-right font-semibold text-gray-800">
-                          {fmt(ttc)}
-                        </td>
-                        <td className="px-2 py-1.5 text-center">
-                          {items.length > 1 && (
-                            <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-500 transition-colors">
-                              <X size={14} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
             </div>
 
             {/* Totaux */}
             <div className="mt-4 flex justify-end">
-<<<<<<< HEAD
               <div className="bg-gray-50 rounded-xl border p-4 w-72 space-y-2 text-sm">
-=======
-              <div className="w-64 bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2 text-sm">
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
                 <div className="flex justify-between text-gray-600">
                   <span>Sous-total HT</span>
                   <span className="font-mono">{fmt(totals.ht)}</span>
@@ -775,7 +576,6 @@ function DocumentEditor({
                 {totals.disc > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Remises</span>
-<<<<<<< HEAD
                     <span className="font-mono">- {fmt(totals.disc)}</span>
                   </div>
                 )}
@@ -788,18 +588,6 @@ function DocumentEditor({
                 <div className="flex justify-between font-bold text-gray-900 border-t pt-2 text-lg">
                   <span>Total TTC</span>
                   <span className="text-blue-700 font-mono">{fmt(totals.ttc)}</span>
-=======
-                    <span className="font-mono">− {fmt(totals.disc)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-gray-600">
-                  <span>TVA</span>
-                  <span className="font-mono">{fmt(totals.vat)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2">
-                  <span>Total TTC</span>
-                  <span className="text-primary font-mono text-base">{fmt(totals.ttc)}</span>
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
                 </div>
               </div>
             </div>
@@ -808,40 +596,23 @@ function DocumentEditor({
           {/* Notes & Conditions */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-<<<<<<< HEAD
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</label>
-=======
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Notes</label>
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 rows={3}
                 placeholder="Remarques, instructions de livraison..."
-<<<<<<< HEAD
                 className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Conditions de paiement</label>
-=======
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Conditions de paiement</label>
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               <textarea
                 value={terms}
                 onChange={e => setTerms(e.target.value)}
                 rows={3}
-<<<<<<< HEAD
                 placeholder="Ex : Paiement à 30 jours..."
                 className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
-=======
-                placeholder="Ex : Paiement à 30 jours, pénalités de retard..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               />
             </div>
           </div>
@@ -855,11 +626,7 @@ function DocumentEditor({
           <button
             onClick={handleSubmit}
             disabled={mutation.isPending}
-<<<<<<< HEAD
             className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition shadow-md"
-=======
-            className="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-primary-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 transition-colors shadow-sm"
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
           >
             <Check size={16} />
             {mutation.isPending ? 'Sauvegarde…' : (isEdit ? 'Mettre à jour' : `Créer ${type === 'invoice' ? 'la facture' : 'le devis'}`)}
@@ -1276,13 +1043,8 @@ function InvoiceDetail({
               )}
               {inv.balance > 0 && (
                 <button
-<<<<<<< HEAD
                   onClick={() => { setPayEntries([{ method: 'cash', amount: inv.balance }]); setPayModal(true) }}
                   className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700"
-=======
-                  onClick={() => { setPayAmount(String(inv.balance)); setPayModal(true) }}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
                 >
                   <CreditCard size={14} /> Enregistrer paiement
                 </button>
@@ -1310,7 +1072,6 @@ function InvoiceDetail({
 
       {/* Modal paiement */}
       {payModal && (
-<<<<<<< HEAD
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl overflow-hidden">
             <div className="bg-gradient-to-br from-gray-900 to-gray-800 px-6 py-5 flex items-center justify-between">
@@ -1318,41 +1079,12 @@ function InvoiceDetail({
                 <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-1">Encaissement facture</p>
                 <p className="text-white text-3xl font-bold font-mono">{fmt(inv.balance)}</p>
                 {inv.client && <p className="text-indigo-300 text-xs mt-1">{inv.client.name}</p>}
-=======
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => setPayModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
-              <div className="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center">
-                <CreditCard size={18} className="text-green-600" />
-              </div>
-              <h3 className="font-bold text-gray-800">Enregistrer un paiement</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Montant (FCFA)</label>
-                <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right font-mono" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Mode de paiement</label>
-                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
-                  {Object.entries(PAYMENT_METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Référence <span className="text-gray-400">(optionnel)</span></label>
-                <input type="text" value={payRef} onChange={e => setPayRef(e.target.value)}
-                  placeholder="N° chèque, transaction..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               </div>
               <button onClick={() => setPayModal(false)}
                 className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">
                 <X size={18} />
               </button>
             </div>
-<<<<<<< HEAD
             <div className="p-5 max-h-[60vh] overflow-y-auto">
               <PaymentPanel
                 total={inv.balance}
@@ -1374,16 +1106,6 @@ function InvoiceDetail({
                 className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg">
                 <Check size={18} />
                 {payMut.isPending ? 'Enregistrement...' : 'Valider le paiement'}
-=======
-            <div className="flex gap-2 px-6 pb-5">
-              <button onClick={() => setPayModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Annuler</button>
-              <button
-                onClick={() => payMut.mutate()}
-                disabled={payMut.isPending || !parseFloat(payAmount)}
-                className="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-green-700 transition-colors"
-              >
-                {payMut.isPending ? '…' : 'Valider'}
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               </button>
             </div>
           </div>
@@ -2092,7 +1814,6 @@ export default function InvoicesPage() {
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">Documents commerciaux professionnels</p>
         </div>
-<<<<<<< HEAD
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImport(true)}
@@ -2111,15 +1832,6 @@ export default function InvoicesPage() {
             </button>
           )}
         </div>
-=======
-        <button
-          onClick={() => { setEditing(null); setShowEditor(true) }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-600 transition-colors shadow-sm"
-        >
-          <Plus size={15} />
-          {tab === 'invoices' ? 'Nouvelle facture' : 'Nouveau devis'}
-        </button>
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
       </div>
 
       {/* KPIs */}
@@ -2149,15 +1861,9 @@ export default function InvoicesPage() {
       )}
 
       {/* Tabs */}
-<<<<<<< HEAD
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
         <div className="flex border-b">
           {(['invoices', 'quotes', 'reminders'] as Tab[]).map(t => (
-=======
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="flex border-b border-gray-100">
-          {(['invoices', 'quotes'] as Tab[]).map(t => (
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
             <button
               key={t}
               onClick={() => { setTab(t); resetFilters() }}
@@ -2165,11 +1871,7 @@ export default function InvoicesPage() {
                 tab === t ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-<<<<<<< HEAD
               {t === 'invoices' ? 'Factures' : t === 'quotes' ? 'Devis' : 'Relances'}
-=======
-              {t === 'invoices' ? 'Factures' : 'Devis'}
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
               {t === 'invoices' && invoicesData?.meta?.total != null && (
                 <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
                   {invoicesData.meta.total}
@@ -2189,7 +1891,6 @@ export default function InvoicesPage() {
           ))}
         </div>
 
-<<<<<<< HEAD
         {/* Filtres — masqués sur l'onglet relances */}
         {tab !== 'reminders' && <div className="px-4 py-3 border-b bg-gray-50 space-y-2.5">
           <div className="flex flex-wrap gap-2">
@@ -2260,32 +1961,6 @@ export default function InvoicesPage() {
             )}
           </div>
         </div>}
-=======
-        {/* Filtres */}
-        <div className="flex gap-3 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-          <div className="relative flex-1 max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Rechercher..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="">Tous statuts</option>
-            {tab === 'invoices'
-              ? Object.entries(STATUS_INVOICE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)
-              : Object.entries(STATUS_QUOTE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)
-            }
-          </select>
-        </div>
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
 
         {/* ── LISTE FACTURES ─────────────────────────────────────────────────── */}
         {tab === 'invoices' && (

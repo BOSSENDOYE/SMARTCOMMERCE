@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 import { useState, useEffect, useRef } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-=======
-import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -16,11 +11,7 @@ import {
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
   UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target, Palette, Sun, Moon,
-<<<<<<< HEAD
-  FolderOpen, MapPin, Banknote,
-=======
-  FolderOpen, Menu, Smartphone,
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
+  FolderOpen, MapPin, Banknote, Menu, Smartphone,
 } from 'lucide-react'
 import { usePreferencesStore } from '../../store/preferences.store'
 import { useMenuStore, type MenuNode } from '../../store/menu.store'
@@ -269,18 +260,12 @@ function StoreSwitcher({ collapsed }: { collapsed: boolean }) {
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
-<<<<<<< HEAD
+  const [mobileOpen, setMobileOpen] = useState(false)
   const { user, clearAuth, can, hasLicense, setUser } = useAuthStore()
   const { activeStore } = useActiveStoreStore()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-=======
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const { user, clearAuth, can, hasLicense } = useAuthStore()
-  const { activeStore } = useActiveStoreStore()
-  const navigate = useNavigate()
   const location = useLocation()
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
+  const queryClient = useQueryClient()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [switchingStore, setSwitchingStore] = useState(false)
   const userBarRef = useRef<HTMLDivElement>(null)
@@ -315,8 +300,10 @@ export default function AppLayout() {
     return () => clearInterval(interval)
   }, [])
 
-<<<<<<< HEAD
-  const isSuperAdmin = user?.roles?.includes('super_admin') ?? false
+  // Close mobile sidebar on route change
+  useEffect(() => { setMobileOpen(false) }, [location.pathname])
+
+  const isSuperAdmin = user?.roles?.includes('super_admin') && !user?.store_id
 
   const handleSwitchStore = async (storeId: number) => {
     if (storeId === user?.store_id || switchingStore) return
@@ -335,12 +322,6 @@ export default function AppLayout() {
     }
   }
 
-=======
-  // Close mobile sidebar on route change
-  useEffect(() => { setMobileOpen(false) }, [location.pathname])
-
-  const isSuperAdmin = user?.roles?.includes('super_admin') && !user?.store_id
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
   const { nodes, loaded: menuLoaded, fetchConfig, getLabel, isVisible } = useMenuStore()
 
   useEffect(() => {
@@ -452,8 +433,7 @@ export default function AppLayout() {
           </button>
         </div>
 
-<<<<<<< HEAD
-=======
+
         {/* Super-admin store switcher */}
         {isSuperAdmin && !collapsed && (
           <div className="border-b border-brand-700 pt-2">
@@ -468,7 +448,7 @@ export default function AppLayout() {
           </div>
         )}
 
-        {/* Caisse Mobile — accès direct terminal Android */}
+        {/* Caisse Mobile */}
         <div className="px-2 pt-2 pb-1 border-b border-brand-700">
           <a
             href="/m/pos"
@@ -480,7 +460,6 @@ export default function AppLayout() {
           </a>
         </div>
 
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
           {nodes.length === 0 ? (
