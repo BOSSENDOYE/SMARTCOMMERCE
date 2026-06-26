@@ -1,16 +1,19 @@
-﻿import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import {
-  FileText, Plus, Search, Send, AlertCircle, ChevronRight, ArrowRight,
+  FileText, Plus, Search, Send, AlertCircle, ChevronRight, ChevronLeft, ArrowRight,
   Printer, CreditCard, Bell, Trash2, Edit2, X, Check, XCircle, FileDown,
+  Upload, Loader2, CheckCircle2, AlertTriangle, ChevronDown, Package,
+  MessageCircle, SkipForward, Settings, ExternalLink, Smartphone,
 } from 'lucide-react'
 import { downloadPdf } from '../../lib/format'
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
 import { useConfirm } from '../../hooks/useConfirm'
+import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -186,6 +189,8 @@ function DocumentEditor({
   const isEdit = !!initial
 
   const [clientId, setClientId]     = useState<number | ''>(initial?.client?.id ?? prefill?.client_id ?? '')
+  const [clientQ, setClientQ]       = useState(initial?.client?.name ?? prefill?.client?.name ?? '')
+  const [showClientDrop, setShowClientDrop] = useState(false)
   const [object, setObject]         = useState(initial?.object ?? prefill?.object ?? '')
   const [issueDate, setIssueDate]   = useState(initial?.issue_date ?? new Date().toISOString().slice(0, 10))
   const [dueDate, setDueDate]       = useState((initial as Invoice)?.due_date ?? '')
@@ -203,53 +208,62 @@ function DocumentEditor({
           discount_percent: Number(i.discount_percent),
           vat_rate: Number(i.vat_rate),
         }))
-      : [{ description: '', quantity: 1, unit: 'unité', unit_price: 0, discount_percent: 0, vat_rate: 18 }]
+      : [{ description: '', quantity: 1, unit: 'unité', unit_price: 0, discount_percent: 0, vat_rate: 0 }]
   )
+
+  const [prodQ, setProdQ]           = useState<Record<number, string>>({})
+  const [openProdLine, setOpenProdLine] = useState<number | null>(null)
 
   const { data: clients = [] } = useQuery<ClientEntry[]>({
     queryKey: ['clients-list'],
-    queryFn: () => api.get('/clients', { params: { per_page: 200 } }).then(r => r.data.data ?? r.data),
+    queryFn: () => api.get('/clients', { params: { per_page: 500 } }).then(r => r.data.data ?? r.data),
     staleTime: 60_000,
   })
 
-  // Produits boutique — exclus pour les magasins purement restaurant
   const isRestaurantOnly = businessType === 'restaurant'
   const isBoutiqueOnly   = businessType === 'grande_surface' || businessType === 'depot'
 
   const { data: rawProducts = [] } = useQuery<{ id: number; name: string; sale_price_ttc: number; vat_rate: number }[]>({
     queryKey: ['products-short', storeId],
-    queryFn: () => api.get('/products', { params: { per_page: 500, active: 1 } })
-      .then(r => r.data.data ?? r.data),
+    queryFn: () => api.get('/products', { params: { per_page: 500, active: 1 } }).then(r => r.data.data ?? r.data),
     staleTime: 60_000,
-    enabled: !isRestaurantOnly, // pas besoin pour restaurant pur
+    enabled: !isRestaurantOnly,
   })
 
-  // Articles restaurant — exclus pour les magasins purement boutique
   const { data: rawRestaurantItems = [] } = useQuery<{ id: number; name: string; price_ht: number; vat_rate: number }[]>({
     queryKey: ['restaurant-items-short', storeId],
-    queryFn: () => api.get('/restaurant-items', { params: { per_page: 500 } })
-      .then(r => r.data.data ?? r.data),
+    queryFn: () => api.get('/restaurant-items', { params: { per_page: 500 } }).then(r => r.data.data ?? r.data),
     staleTime: 60_000,
-    enabled: !isBoutiqueOnly, // pas besoin pour boutique pure
+    enabled: !isBoutiqueOnly,
   })
 
-  // Normalisation en CatalogItem avec prix HT
-  const catalogProducts: CatalogItem[] = rawProducts.map(p => ({
-    id: p.id,
-    name: p.name,
-    // Convertir TTC → HT
+  const catalogProducts: CatalogItem[] = useMemo(() => rawProducts.map(p => ({
+    id: p.id, name: p.name,
     unit_price_ht: Math.round(Number(p.sale_price_ttc) / (1 + Number(p.vat_rate || 18) / 100)),
-    vat_rate: Number(p.vat_rate || 18),
-    source: 'product' as const,
-  }))
+    vat_rate: Number(p.vat_rate || 18), source: 'product' as const,
+  })), [rawProducts])
 
-  const catalogRestaurant: CatalogItem[] = rawRestaurantItems.map(r => ({
-    id: r.id,
-    name: r.name,
+  const catalogRestaurant: CatalogItem[] = useMemo(() => rawRestaurantItems.map(r => ({
+    id: r.id, name: r.name,
     unit_price_ht: Math.round(Number(r.price_ht)),
-    vat_rate: Number(r.vat_rate || 18),
-    source: 'restaurant' as const,
-  }))
+    vat_rate: Number(r.vat_rate || 18), source: 'restaurant' as const,
+  })), [rawRestaurantItems])
+
+  const allCatalog = useMemo(() => [...catalogProducts, ...catalogRestaurant], [catalogProducts, catalogRestaurant])
+
+  const filteredClients = useMemo(() => {
+    const q = clientQ.toLowerCase().trim()
+    if (!q) return clients.slice(0, 8)
+    return clients.filter(c =>
+      c.name.toLowerCase().includes(q) || (c.phone ?? '').includes(q)
+    ).slice(0, 8)
+  }, [clients, clientQ])
+
+  const filteredProds = (lineIdx: number) => {
+    const q = (prodQ[lineIdx] ?? '').toLowerCase().trim()
+    if (!q) return allCatalog.slice(0, 10)
+    return allCatalog.filter(p => p.name.toLowerCase().includes(q)).slice(0, 12)
+  }
 
   const mutation = useMutation({
     mutationFn: (payload: object) => {
@@ -264,47 +278,33 @@ function DocumentEditor({
       const err = e as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } }
       const errors = err?.response?.data?.errors
       const msg    = err?.response?.data?.message
-      if (errors) {
-        toast.error(Object.values(errors).flat().slice(0, 2).join(' · '))
-      } else {
-        toast.error(msg ?? 'Erreur lors de la sauvegarde')
-      }
-      console.error('[DocumentEditor] save error:', err?.response?.data ?? e)
+      toast.error(errors ? Object.values(errors).flat().slice(0, 2).join(' · ') : (msg ?? 'Erreur lors de la sauvegarde'))
     },
   })
 
   const addLine = () =>
-    setItems(prev => [...prev, { description: '', quantity: 1, unit: 'unité', unit_price: 0, discount_percent: 0, vat_rate: 18 }])
+    setItems(prev => [...prev, { description: '', quantity: 1, unit: 'unité', unit_price: 0, discount_percent: 0, vat_rate: 0 }])
 
   const removeLine = (i: number) => setItems(prev => prev.filter((_, idx) => idx !== i))
 
-  const updateLine = (i: number, field: keyof LineItem, value: string | number) => {
+  const updateLine = (i: number, field: keyof LineItem, value: string | number) =>
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: value } : it))
-  }
 
-  const allCatalog: CatalogItem[] = [...catalogProducts, ...catalogRestaurant]
-
-  const pickProduct = (i: number, itemKey: string) => {
-    // itemKey = "product:123" ou "restaurant:456"
-    const [source, idStr] = itemKey.split(':')
-    const id = Number(idStr)
-    const p = source === 'restaurant'
-      ? catalogRestaurant.find(x => x.id === id)
-      : catalogProducts.find(x => x.id === id)
-    if (!p) return
-    setItems(prev => prev.map((it, idx) => idx === i ? {
+  const pickProduct = (lineIdx: number, p: CatalogItem) => {
+    setItems(prev => prev.map((it, idx) => idx === lineIdx ? {
       ...it,
       product_id: p.source === 'product' ? p.id : null,
       description: p.name,
       unit_price: p.unit_price_ht,
       vat_rate: p.vat_rate,
     } : it))
+    setProdQ(prev => { const n = { ...prev }; delete n[lineIdx]; return n })
+    setOpenProdLine(null)
   }
 
   const totals = items.reduce((acc, it) => {
     const { ht, ttc } = calcLine(it)
-    const disc = it.quantity * it.unit_price * (it.discount_percent / 100)
-    return { ht: acc.ht + ht, ttc: acc.ttc + ttc, disc: acc.disc + disc, vat: acc.vat + (ttc - ht) }
+    return { ht: acc.ht + ht, ttc: acc.ttc + ttc, disc: acc.disc + it.quantity * it.unit_price * (it.discount_percent / 100), vat: acc.vat + (ttc - ht) }
   }, { ht: 0, ttc: 0, disc: 0, vat: 0 })
 
   const handleSubmit = () => {
@@ -335,212 +335,256 @@ function DocumentEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4">
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-lg font-bold text-gray-800">
-            {isEdit ? 'Modifier' : 'Nouveau'} {type === 'invoice' ? 'Facture' : 'Devis'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={20} />
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl">
+          <div>
+            <h2 className="text-lg font-bold text-white">
+              {isEdit ? 'Modifier' : 'Nouveau'} {type === 'invoice' ? 'Facture' : 'Devis'}
+            </h2>
+            <p className="text-blue-200 text-xs mt-0.5">
+              {isEdit ? `Réf. ${(initial as Invoice).reference ?? ''}` : 'Nouveau document commercial'}
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">
+            <X size={18} />
           </button>
         </div>
 
         <div className="p-6 space-y-6">
           {/* Infos générales */}
           <div className="grid grid-cols-2 gap-4">
+            {/* Client autocomplete */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
-              <select
-                value={clientId}
-                onChange={e => setClientId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">— Sans client —</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Client</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={clientQ}
+                  onChange={e => { setClientQ(e.target.value); setShowClientDrop(true); if (!e.target.value) setClientId('') }}
+                  onFocus={() => setShowClientDrop(true)}
+                  onBlur={() => setTimeout(() => setShowClientDrop(false), 200)}
+                  placeholder="Rechercher un client..."
+                  className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
+                />
+                <ChevronDown size={14} className="absolute right-3 top-3.5 text-gray-400 pointer-events-none" />
+                {showClientDrop && (
+                  <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                    <button
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); setClientId(''); setClientQ(''); setShowClientDrop(false) }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50 italic"
+                    >
+                      — Sans client —
+                    </button>
+                    {filteredClients.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={e => { e.preventDefault(); setClientId(c.id); setClientQ(c.name); setShowClientDrop(false) }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between ${clientId === c.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                      >
+                        <span className="font-medium">{c.name}</span>
+                        {c.phone && <span className="text-xs text-gray-400">{c.phone}</span>}
+                      </button>
+                    ))}
+                    {filteredClients.length === 0 && clientQ.length > 0 && (
+                      <p className="px-3 py-2 text-sm text-gray-400">Aucun client trouvé</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Objet */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Objet</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Objet</label>
               <input
-                type="text"
                 value={object}
                 onChange={e => setObject(e.target.value)}
                 placeholder="Ex : Livraison matériaux mois de juin"
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date d'émission</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date d'émission</label>
               <input
                 type="date"
                 value={issueDate}
                 onChange={e => setIssueDate(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {type === 'invoice' ? 'Date d\'échéance' : 'Valide jusqu\'au'}
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                {type === 'invoice' ? "Date d'échéance" : "Valide jusqu'au"}
               </label>
               <input
                 type="date"
                 value={type === 'invoice' ? dueDate : validUntil}
                 onChange={e => type === 'invoice' ? setDueDate(e.target.value) : setValidUntil(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
           {/* Lignes */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold text-gray-700">Lignes</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-800">Lignes</h3>
               <button
                 onClick={addLine}
-                className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold transition"
               >
                 <Plus size={14} /> Ajouter une ligne
               </button>
             </div>
 
-            <div className="rounded-xl border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                  <tr>
-                    <th className="px-3 py-2 text-left w-8">#</th>
-                    <th className="px-3 py-2 text-left">Produit / Description</th>
-                    <th className="px-3 py-2 text-right w-20">Qté</th>
-                    <th className="px-3 py-2 text-left w-20">Unité</th>
-                    <th className="px-3 py-2 text-right w-24">P.U HT</th>
-                    <th className="px-3 py-2 text-right w-16">Remise%</th>
-                    <th className="px-3 py-2 text-right w-16">TVA%</th>
-                    <th className="px-3 py-2 text-right w-24">Total TTC</th>
-                    <th className="px-2 py-2 w-8"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {items.map((it, i) => {
-                    const { ttc } = calcLine(it)
-                    return (
-                      <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-400 text-xs">{i + 1}</td>
-                        <td className="px-3 py-1">
-                          <select
-                            className="w-full text-xs border-0 bg-transparent text-blue-600 mb-1"
-                            value=""
-                            onChange={e => e.target.value && pickProduct(i, e.target.value)}
-                          >
-                            <option value="">— Sélectionner dans le catalogue —</option>
-                            {catalogProducts.length > 0 && (
-                              <optgroup label="📦 Produits">
-                                {catalogProducts.map(p => (
-                                  <option key={`product:${p.id}`} value={`product:${p.id}`}>{p.name}</option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {catalogRestaurant.length > 0 && (
-                              <optgroup label="🍽️ Menu Restaurant">
-                                {catalogRestaurant.map(r => (
-                                  <option key={`restaurant:${r.id}`} value={`restaurant:${r.id}`}>{r.name}</option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </select>
-                          <input
-                            type="text"
-                            value={it.description}
-                            onChange={e => updateLine(i, 'description', e.target.value)}
-                            placeholder="Description de la prestation..."
-                            className="w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            min="0.001"
-                            step="0.001"
-                            value={it.quantity}
-                            onChange={e => updateLine(i, 'quantity', parseFloat(e.target.value) || 0)}
-                            className="w-full border rounded px-2 py-1 text-sm text-right focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="text"
-                            value={it.unit}
-                            onChange={e => updateLine(i, 'unit', e.target.value)}
-                            className="w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            min="0"
-                            value={it.unit_price}
-                            onChange={e => updateLine(i, 'unit_price', parseFloat(e.target.value) || 0)}
-                            className="w-full border rounded px-2 py-1 text-sm text-right focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={it.discount_percent}
-                            onChange={e => updateLine(i, 'discount_percent', parseFloat(e.target.value) || 0)}
-                            className="w-full border rounded px-2 py-1 text-sm text-right focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={it.vat_rate}
-                            onChange={e => updateLine(i, 'vat_rate', parseFloat(e.target.value) || 0)}
-                            className="w-full border rounded px-2 py-1 text-sm text-right focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-3 py-1 text-right font-semibold text-gray-800">
-                          {fmt(ttc)}
-                        </td>
-                        <td className="px-2 py-1">
-                          {items.length > 1 && (
-                            <button onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600">
-                              <X size={14} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            <div className="space-y-2">
+              {items.map((it, i) => {
+                const { ttc } = calcLine(it)
+                const prodList = filteredProds(i)
+                const isSearching = prodQ[i] !== undefined
+
+                return (
+                  <div key={i} className="border rounded-xl p-3 bg-gray-50/50 hover:bg-white transition">
+                    {/* Row 1: numéro + autocomplete produit + qty + unit + supprimer */}
+                    <div className="flex gap-2 items-start mb-2">
+                      <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-2">{i + 1}</span>
+
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={isSearching ? (prodQ[i] ?? '') : it.description}
+                          onChange={e => {
+                            setProdQ(prev => ({ ...prev, [i]: e.target.value }))
+                            updateLine(i, 'description', e.target.value)
+                            setOpenProdLine(i)
+                          }}
+                          onFocus={() => {
+                            setProdQ(prev => ({ ...prev, [i]: prev[i] ?? '' }))
+                            setOpenProdLine(i)
+                          }}
+                          onBlur={() => setTimeout(() => {
+                            setOpenProdLine(null)
+                            setProdQ(prev => { const n = { ...prev }; delete n[i]; return n })
+                          }, 200)}
+                          placeholder="Tapez pour rechercher un produit ou saisir une description..."
+                          className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        />
+                        {openProdLine === i && prodList.length > 0 && (
+                          <div className="absolute z-20 left-0 right-0 top-full mt-0.5 bg-white border rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                            {prodList.map(p => (
+                              <button
+                                key={`${p.source}:${p.id}`}
+                                type="button"
+                                onMouseDown={e => { e.preventDefault(); pickProduct(i, p) }}
+                                className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 flex items-center justify-between border-b last:border-0"
+                              >
+                                <div>
+                                  <span className="font-medium text-gray-800">{p.name}</span>
+                                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${p.source === 'restaurant' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                                    {p.source === 'restaurant' ? 'Menu' : 'Produit'}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-semibold text-gray-600 font-mono">{fmt(p.unit_price_ht)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="w-20">
+                        <input
+                          type="number" min="0.001" step="any"
+                          value={it.quantity}
+                          onChange={e => updateLine(i, 'quantity', parseFloat(e.target.value) || 0)}
+                          className="w-full border rounded-lg px-2 py-2 text-sm text-center focus:ring-2 focus:ring-blue-500 bg-white"
+                          placeholder="Qté"
+                        />
+                      </div>
+
+                      <div className="w-20">
+                        <input
+                          type="text"
+                          value={it.unit}
+                          onChange={e => updateLine(i, 'unit', e.target.value)}
+                          className="w-full border rounded-lg px-2 py-2 text-sm text-center focus:ring-2 focus:ring-blue-500 bg-white"
+                          placeholder="unité"
+                        />
+                      </div>
+
+                      {items.length > 1 && (
+                        <button onClick={() => removeLine(i)} className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition mt-0.5">
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Row 2: prix + remise + tva + total */}
+                    <div className="flex gap-2 items-end pl-8">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-400 uppercase block mb-0.5">P.U HT</label>
+                        <input
+                          type="number" min="0" step="any"
+                          value={it.unit_price}
+                          onChange={e => updateLine(i, 'unit_price', parseFloat(e.target.value) || 0)}
+                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                      <div className="w-24">
+                        <label className="text-[10px] text-gray-400 uppercase block mb-0.5">Remise %</label>
+                        <input
+                          type="number" min="0" max="100"
+                          value={it.discount_percent}
+                          onChange={e => updateLine(i, 'discount_percent', parseFloat(e.target.value) || 0)}
+                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                      <div className="w-24">
+                        <label className="text-[10px] text-gray-400 uppercase block mb-0.5">TVA %</label>
+                        <input
+                          type="number" min="0" max="100"
+                          value={it.vat_rate}
+                          onChange={e => updateLine(i, 'vat_rate', parseFloat(e.target.value) || 0)}
+                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                      <div className="w-36 text-right pb-1.5">
+                        <label className="text-[10px] text-gray-400 uppercase block mb-0.5">Total TTC</label>
+                        <span className="font-bold text-gray-800 text-sm font-mono">{fmt(ttc)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
 
             {/* Totaux */}
-            <div className="mt-3 flex justify-end">
-              <div className="w-64 space-y-1 text-sm">
+            <div className="mt-4 flex justify-end">
+              <div className="bg-gray-50 rounded-xl border p-4 w-72 space-y-2 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Sous-total HT</span>
-                  <span>{fmt(totals.ht)}</span>
+                  <span className="font-mono">{fmt(totals.ht)}</span>
                 </div>
                 {totals.disc > 0 && (
                   <div className="flex justify-between text-orange-600">
                     <span>Remises</span>
-                    <span>− {fmt(totals.disc)}</span>
+                    <span className="font-mono">- {fmt(totals.disc)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-gray-600">
-                  <span>TVA</span>
-                  <span>{fmt(totals.vat)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-gray-900 border-t pt-1 text-base">
+                {totals.vat > 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>TVA</span>
+                    <span className="font-mono">{fmt(totals.vat)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-gray-900 border-t pt-2 text-lg">
                   <span>Total TTC</span>
-                  <span className="text-blue-700">{fmt(totals.ttc)}</span>
+                  <span className="text-blue-700 font-mono">{fmt(totals.ttc)}</span>
                 </div>
               </div>
             </div>
@@ -549,23 +593,23 @@ function DocumentEditor({
           {/* Notes & Conditions */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</label>
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 rows={3}
                 placeholder="Remarques, instructions de livraison..."
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Conditions de paiement</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Conditions de paiement</label>
               <textarea
                 value={terms}
                 onChange={e => setTerms(e.target.value)}
                 rows={3}
-                placeholder="Ex : Paiement à 30 jours, pénalités de retard..."
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+                placeholder="Ex : Paiement à 30 jours..."
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
           </div>
@@ -579,7 +623,7 @@ function DocumentEditor({
           <button
             onClick={handleSubmit}
             disabled={mutation.isPending}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition"
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition shadow-md"
           >
             <Check size={16} />
             {mutation.isPending ? 'Sauvegarde...' : (isEdit ? 'Mettre à jour' : `Créer ${type === 'invoice' ? 'la facture' : 'le devis'}`)}
@@ -749,9 +793,7 @@ function InvoiceDetail({
   const [pdfLoading, setPdfLoading] = useState(false)
   const [payModal, setPayModal] = useState(false)
   const [reminderModal, setReminderModal] = useState(false)
-  const [payAmount, setPayAmount] = useState(String(invoice.balance))
-  const [payMethod, setPayMethod] = useState('cash')
-  const [payRef, setPayRef]     = useState('')
+  const [payEntries, setPayEntries] = useState<PaymentEntry[]>([{ method: 'cash', amount: 0 }])
   const [remType, setRemType]   = useState<'first' | 'second' | 'final'>('first')
   const [remMethod, setRemMethod] = useState('phone')
   const [remNotes, setRemNotes] = useState('')
@@ -775,16 +817,22 @@ function InvoiceDetail({
   })
 
   const payMut = useMutation({
-    mutationFn: () => api.post(`/invoices/${invoice.id}/payments`, {
-      amount: parseFloat(payAmount),
-      method: payMethod,
-      reference: payRef || null,
-    }).then(r => r.data),
+    mutationFn: async (entries: PaymentEntry[]) => {
+      for (const e of entries) {
+        if (e.amount > 0 && e.method !== 'credit') {
+          await api.post(`/invoices/${invoice.id}/payments`, { amount: e.amount, method: e.method })
+        } else if (e.method === 'credit' && e.amount > 0) {
+          await api.post(`/invoices/${invoice.id}/payments`, { amount: e.amount, method: 'other', notes: 'Crédit' })
+        }
+      }
+    },
     onSuccess: () => {
       toast.success('Paiement enregistré')
       qc.invalidateQueries({ queryKey: ['invoice', invoice.id] })
       qc.invalidateQueries({ queryKey: ['invoices'] })
+      qc.invalidateQueries({ queryKey: ['invoice-stats'] })
       setPayModal(false)
+      setPayEntries([{ method: 'cash', amount: 0 }])
       onRefresh()
     },
     onError: () => toast.error('Erreur lors du paiement'),
@@ -983,7 +1031,7 @@ function InvoiceDetail({
               )}
               {inv.balance > 0 && (
                 <button
-                  onClick={() => { setPayAmount(String(inv.balance)); setPayModal(true) }}
+                  onClick={() => { setPayEntries([{ method: 'cash', amount: inv.balance }]); setPayModal(true) }}
                   className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700"
                 >
                   <CreditCard size={14} /> Enregistrer paiement
@@ -1012,37 +1060,40 @@ function InvoiceDetail({
 
       {/* Modal paiement */}
       {payModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50" onClick={() => setPayModal(false)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-gray-800 mb-4">Enregistrer un paiement</h3>
-            <div className="space-y-3">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-br from-gray-900 to-gray-800 px-6 py-5 flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium mb-1">Montant</label>
-                <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-1">Encaissement facture</p>
+                <p className="text-white text-3xl font-bold font-mono">{fmt(inv.balance)}</p>
+                {inv.client && <p className="text-indigo-300 text-xs mt-1">{inv.client.name}</p>}
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Mode de paiement</label>
-                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
-                  {Object.entries(PAYMENT_METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Référence (optionnel)</label>
-                <input type="text" value={payRef} onChange={e => setPayRef(e.target.value)}
-                  placeholder="N° chèque, transaction..."
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
-              </div>
+              <button onClick={() => setPayModal(false)}
+                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">
+                <X size={18} />
+              </button>
             </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setPayModal(false)} className="flex-1 py-2 border rounded-xl text-sm text-gray-600">Annuler</button>
+            <div className="p-5 max-h-[60vh] overflow-y-auto">
+              <PaymentPanel
+                total={inv.balance}
+                clientName={inv.client?.name}
+                value={payEntries}
+                onChange={setPayEntries}
+                hideCredit={false}
+                compact={false}
+              />
+            </div>
+            <div className="p-4 border-t bg-gray-50 flex gap-3">
+              <button onClick={() => setPayModal(false)}
+                className="flex-1 py-3 rounded-2xl border-2 border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-100">
+                Annuler
+              </button>
               <button
-                onClick={() => payMut.mutate()}
-                disabled={payMut.isPending || !parseFloat(payAmount)}
-                className="flex-1 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
-              >
-                {payMut.isPending ? '...' : 'Valider'}
+                onClick={() => payMut.mutate(payEntries)}
+                disabled={payMut.isPending || payEntries.every(e => e.amount <= 0)}
+                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg">
+                <Check size={18} />
+                {payMut.isPending ? 'Enregistrement...' : 'Valider le paiement'}
               </button>
             </div>
           </div>
@@ -1099,28 +1150,442 @@ function InvoiceDetail({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// IMPORT INVOICES MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface ImportRow {
+  row: number
+  action: string
+  full_name: string
+  client_id: number | null
+  client_name: string | null
+  reference: string | null
+  issue_date: string
+  total_ttc: number
+  deja_paye: number
+  reste: number
+  status: string
+  method: string
+  num_cheque: string | null
+  notes: string | null
+  errors: string[]
+  warnings: string[]
+  row_status: 'ok' | 'error' | 'skip'
+}
+
+interface ImportPreview {
+  rows: ImportRow[]
+  total: number
+  ok: number
+  errors: number
+  skipped: number
+}
+
+const STATUS_LABELS_FR: Record<string, string> = {
+  sent: 'Non payé', partial: 'Partiel', paid: 'Payé', overdue: 'En retard',
+}
+
+function ImportInvoicesModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const qc = useQueryClient()
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<ImportPreview | null>(null)
+  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
+  const [result, setResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null)
+
+  const previewMutation = useMutation({
+    mutationFn: (f: File) => {
+      const fd = new FormData()
+      fd.append('file', f)
+      return api.post<ImportPreview>('/invoices/import/preview', fd)
+    },
+    onSuccess: (res) => {
+      setPreview(res.data)
+      setStep('preview')
+    },
+    onError: (err: unknown) => {
+      const data = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
+      const fieldErrors: string[] = data?.errors ? (Object.values(data.errors).flat() as string[]) : []
+      toast.error(fieldErrors[0] ?? data?.message ?? 'Erreur lors de la lecture du fichier')
+    },
+  })
+
+  const confirmMutation = useMutation({
+    mutationFn: (rows: ImportRow[]) =>
+      api.post('/invoices/import/confirm', { rows }),
+    onSuccess: (res) => {
+      setResult(res.data)
+      setStep('done')
+      qc.invalidateQueries({ queryKey: ['invoices'] })
+      qc.invalidateQueries({ queryKey: ['invoice-stats'] })
+      onSuccess()
+    },
+    onError: (err: unknown) => {
+      const data = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
+      const fieldErrors: string[] = data?.errors ? (Object.values(data.errors).flat() as string[]) : []
+      toast.error(fieldErrors[0] ?? data?.message ?? "Erreur lors de l'import")
+    },
+  })
+
+  const okRows = preview?.rows.filter(r => r.row_status === 'ok') ?? []
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div className="flex items-center gap-2">
+            <Upload size={18} className="text-blue-600" />
+            <h2 className="text-lg font-bold text-gray-900">Importer des factures</h2>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-6">
+          {/* Step: upload */}
+          {step === 'upload' && (
+            <div className="space-y-5">
+              <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl text-sm text-blue-800">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold mb-1">Format attendu des colonnes :</p>
+                  <p className="text-xs text-blue-700">
+                    <strong>full_name</strong> (nom du client), NumeroFC, DateFC, <strong>montantapaye</strong>, dejapaye, etatFC, modepaye, numcheque
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">Les clients doivent déjà exister dans le système (correspondance par nom).</p>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await api.get('/invoices/import-template', { responseType: 'blob' })
+                      const url = URL.createObjectURL(res.data)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = 'modele_import_factures.xlsx'
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    } catch {
+                      toast.error('Erreur lors du téléchargement du modèle')
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+                >
+                  <FileDown size={14} /> Télécharger le modèle Excel
+                </button>
+              </div>
+
+              <label className="block cursor-pointer">
+                <div className={`border-2 border-dashed rounded-xl p-8 text-center transition ${
+                  file ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                }`}>
+                  <Upload size={28} className={`mx-auto mb-2 ${file ? 'text-blue-500' : 'text-gray-300'}`} />
+                  {file ? (
+                    <p className="text-sm font-medium text-blue-700">{file.name}</p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-500">Glissez ou cliquez pour choisir un fichier</p>
+                      <p className="text-xs text-gray-400 mt-1">.xlsx, .xls, .csv — max 10 Mo</p>
+                    </>
+                  )}
+                </div>
+                <input type="file" className="hidden" accept=".xlsx,.xls,.csv,.txt"
+                  onChange={e => setFile(e.target.files?.[0] ?? null)} />
+              </label>
+            </div>
+          )}
+
+          {/* Step: preview */}
+          {step === 'preview' && preview && (
+            <div className="space-y-4">
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-green-50 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-green-700">{preview.ok}</div>
+                  <div className="text-xs text-green-600">À importer</div>
+                </div>
+                <div className="bg-red-50 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-red-600">{preview.errors}</div>
+                  <div className="text-xs text-red-500">Erreurs</div>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-gray-500">{preview.skipped}</div>
+                  <div className="text-xs text-gray-400">Ignorées (doublons)</div>
+                </div>
+              </div>
+
+              {/* Rows table */}
+              <div className="border rounded-xl overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-500 uppercase text-[10px]">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Ligne</th>
+                      <th className="px-3 py-2 text-left">Client</th>
+                      <th className="px-3 py-2 text-left">Réf</th>
+                      <th className="px-3 py-2 text-right">Total</th>
+                      <th className="px-3 py-2 text-right">Payé</th>
+                      <th className="px-3 py-2 text-right">Reste</th>
+                      <th className="px-3 py-2 text-center">Statut</th>
+                      <th className="px-3 py-2 text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {preview.rows.map((r, idx) => (
+                      <tr key={idx} className={
+                        r.row_status === 'error' ? 'bg-red-50' :
+                        r.row_status === 'skip' ? 'bg-gray-50 opacity-60' : ''
+                      }>
+                        <td className="px-3 py-2 text-gray-400">{r.row}</td>
+                        <td className="px-3 py-2">
+                          <span className={r.client_id ? 'text-gray-800' : 'text-red-600 font-medium'}>
+                            {r.full_name || '—'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-gray-500">{r.reference || '—'}</td>
+                        <td className="px-3 py-2 text-right font-medium">{r.total_ttc.toLocaleString('fr-SN')}</td>
+                        <td className="px-3 py-2 text-right text-green-700">{r.deja_paye > 0 ? r.deja_paye.toLocaleString('fr-SN') : '—'}</td>
+                        <td className="px-3 py-2 text-right text-red-600 font-semibold">{r.reste.toLocaleString('fr-SN')}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700">
+                            {STATUS_LABELS_FR[r.status] ?? r.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {r.row_status === 'ok' && <CheckCircle2 size={14} className="text-green-500 mx-auto" />}
+                          {r.row_status === 'error' && (
+                            <span title={r.errors.join(', ')}>
+                              <AlertTriangle size={14} className="text-red-500 mx-auto" />
+                            </span>
+                          )}
+                          {r.row_status === 'skip' && <span className="text-gray-400 text-[10px]">doublon</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Error detail */}
+              {preview.rows.some(r => r.errors.length > 0 || r.warnings.length > 0) && (
+                <div className="space-y-1.5">
+                  {preview.rows.filter(r => r.errors.length > 0 || r.warnings.length > 0).map((r, i) => (
+                    <div key={i} className="text-xs">
+                      {r.errors.map((e, j) => (
+                        <p key={j} className="text-red-600">Ligne {r.row}: {e}</p>
+                      ))}
+                      {r.warnings.map((w, j) => (
+                        <p key={j} className="text-yellow-600">Ligne {r.row}: ⚠ {w}</p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step: done */}
+          {step === 'done' && result && (
+            <div className="text-center py-8 space-y-4">
+              <CheckCircle2 size={48} className="text-green-500 mx-auto" />
+              <div>
+                <p className="text-xl font-bold text-gray-900">{result.created} facture(s) importée(s)</p>
+                {result.skipped > 0 && <p className="text-sm text-gray-500 mt-1">{result.skipped} ligne(s) ignorée(s)</p>}
+              </div>
+              {result.errors.length > 0 && (
+                <div className="text-left bg-red-50 rounded-xl p-3 text-xs text-red-600 space-y-1">
+                  {result.errors.map((e, i) => <p key={i}>{e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t px-6 py-4 flex justify-end gap-3">
+          {step === 'upload' && (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
+              <button
+                onClick={() => file && previewMutation.mutate(file)}
+                disabled={!file || previewMutation.isPending}
+                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {previewMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                Analyser
+              </button>
+            </>
+          )}
+          {step === 'preview' && (
+            <>
+              <button onClick={() => { setStep('upload'); setPreview(null) }}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                ← Retour
+              </button>
+              <button
+                onClick={() => confirmMutation.mutate(okRows)}
+                disabled={okRows.length === 0 || confirmMutation.isPending}
+                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {confirmMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                Importer {okRows.length} facture(s)
+              </button>
+            </>
+          )}
+          {step === 'done' && (
+            <button onClick={onClose}
+              className="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700">
+              Fermer
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PAGE PRINCIPALE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type Tab = 'invoices' | 'quotes'
+// ─── PaginationBar ────────────────────────────────────────────────────────────
+
+function PaginationBar({
+  currentPage, lastPage, total, onPage,
+}: {
+  currentPage: number; lastPage: number; total: number; onPage: (p: number) => void
+}) {
+  const pages: (number | null)[] = []
+  if (lastPage <= 7) {
+    for (let i = 1; i <= lastPage; i++) pages.push(i)
+  } else {
+    pages.push(1)
+    if (currentPage > 3) pages.push(null)
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(lastPage - 1, currentPage + 1); i++) pages.push(i)
+    if (currentPage < lastPage - 2) pages.push(null)
+    pages.push(lastPage)
+  }
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50 text-sm">
+      <span className="text-gray-500">
+        Page <strong>{currentPage}</strong> sur <strong>{lastPage}</strong> · {total} résultat(s)
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPage(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="flex items-center gap-1 px-3 py-1.5 border rounded-lg disabled:opacity-40 hover:bg-gray-100 transition text-gray-600"
+        >
+          <ChevronLeft size={14} /> Précédent
+        </button>
+        {pages.map((p, i) =>
+          p === null ? (
+            <span key={`e-${i}`} className="px-2 text-gray-400">…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPage(p)}
+              className={`w-8 h-8 rounded-lg text-xs font-medium transition ${
+                p === currentPage
+                  ? 'bg-blue-600 text-white'
+                  : 'border hover:bg-gray-100 text-gray-600'
+              }`}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          onClick={() => onPage(currentPage + 1)}
+          disabled={currentPage === lastPage}
+          className="flex items-center gap-1 px-3 py-1.5 border rounded-lg disabled:opacity-40 hover:bg-gray-100 transition text-gray-600"
+        >
+          Suivant <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+type Tab = 'invoices' | 'quotes' | 'reminders'
+
+interface ReminderQueueItem {
+  id: number
+  invoice_id: number
+  channel: 'whatsapp' | 'sms' | 'email'
+  phone: string | null
+  client_name: string | null
+  message: string
+  scheduled_date: string
+  status: 'pending' | 'sent' | 'skipped'
+  invoice?: {
+    id: number
+    reference: string
+    total_ttc: number
+    paid_amount: number
+    due_date?: string
+    client?: { id: number; name: string; phone?: string }
+  }
+  rule?: { id: number; type: string; offset_days?: number; day_of_month?: number } | null
+}
 
 export default function InvoicesPage() {
   const { activeStore } = useActiveStoreStore()
   const { user } = useAuthStore()
   const confirm = useConfirm()
   const location = useLocation()
+  const navigate = useNavigate()
   // Fallback: si pas de magasin actif sélectionné, utiliser le magasin de l'utilisateur
   const storeId      = activeStore?.id ?? (user?.store_id ?? undefined)
   const storeName    = activeStore?.name ?? user?.store?.name ?? 'Baobab'
   const businessType: BusinessType = (user?.store?.business_type as BusinessType) ?? 'grande_surface'
   const qc = useQueryClient()
 
-  const [tab, setTab]         = useState<Tab>('invoices')
-  const [search, setSearch]   = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  const [tab, setTab] = useState<Tab>('invoices')
+
+  // Draft filter states (inputs — not sent to API until "Rechercher" is clicked)
+  const [draftSearch,   setDraftSearch]   = useState('')
+  const [draftStatus,   setDraftStatus]   = useState('')
+  const [draftDateFrom, setDraftDateFrom] = useState('')
+  const [draftDateTo,   setDraftDateTo]   = useState('')
+
+  // Active filter states (actually used in queries)
+  const [activeSearch,   setActiveSearch]   = useState('')
+  const [activeStatus,   setActiveStatus]   = useState('')
+  const [activeDateFrom, setActiveDateFrom] = useState('')
+  const [activeDateTo,   setActiveDateTo]   = useState('')
+  const [page, setPage] = useState(1)
+
+  const handleSearch = () => {
+    setActiveSearch(draftSearch)
+    setActiveStatus(draftStatus)
+    setActiveDateFrom(draftDateFrom)
+    setActiveDateTo(draftDateTo)
+    setPage(1)
+  }
+
+  const handleClear = () => {
+    setDraftSearch(''); setDraftStatus(''); setDraftDateFrom(''); setDraftDateTo('')
+    setActiveSearch(''); setActiveStatus(''); setActiveDateFrom(''); setActiveDateTo('')
+    setPage(1)
+  }
+
+  const resetFilters = () => {
+    setDraftSearch(''); setDraftStatus(''); setDraftDateFrom(''); setDraftDateTo('')
+    setActiveSearch(''); setActiveStatus(''); setActiveDateFrom(''); setActiveDateTo('')
+    setPage(1)
+  }
+
+  const hasActiveFilters = !!(activeSearch || activeStatus || activeDateFrom || activeDateTo)
+
   const [showEditor, setShowEditor]     = useState(false)
   const [editing, setEditing]           = useState<Invoice | Quote | null>(null)
   const [crmPrefill, setCrmPrefill]     = useState<CrmPrefill | undefined>(undefined)
+  const [showImport, setShowImport]     = useState(false)
 
   // Pré-remplissage depuis le CRM (navigation state)
   useEffect(() => {
@@ -1173,13 +1638,85 @@ export default function InvoicesPage() {
     staleTime: 30_000,
   })
 
+  // ── Twilio status ─────────────────────────────────────────────────────────
+  const { data: twilioStatus } = useQuery<{ configured: boolean; has_sms: boolean; has_whatsapp: boolean }>({
+    queryKey: ['twilio-status'],
+    queryFn: () => api.get('/twilio/status').then(r => r.data),
+    staleTime: 5 * 60_000,
+  })
+
+  // ── File relances ─────────────────────────────────────────────────────────
+  const { data: reminderQueue, isLoading: loadingQueue, refetch: refetchQueue } = useQuery<{
+    data: ReminderQueueItem[]; meta: { total: number; current_page: number; last_page: number }
+  }>({
+    queryKey: ['invoice-reminder-queue', storeId, 'pending'],
+    queryFn: () => api.get('/invoice-reminder-queue', { params: { status: 'pending' } }).then(r => r.data),
+    enabled: !!storeId && tab === 'reminders',
+    staleTime: 30_000,
+  })
+
+  const reminderPendingCount = reminderQueue?.meta?.total ?? 0
+
+  const [sendingIds, setSendingIds] = useState<Set<number>>(new Set())
+
+  const markReminderSent = useMutation({
+    mutationFn: (id: number) => api.post(`/invoice-reminder-queue/${id}/send`).then(r => r.data),
+    onSuccess: (_data, id) => {
+      setSendingIds(prev => { const s = new Set(prev); s.delete(id); return s })
+      qc.invalidateQueries({ queryKey: ['invoice-reminder-queue'] })
+      toast.success('Message envoyé via Twilio')
+    },
+    onError: (e: { response?: { data?: { error?: string } } }, id) => {
+      setSendingIds(prev => { const s = new Set(prev); s.delete(id); return s })
+      toast.error(e.response?.data?.error ?? 'Erreur d\'envoi Twilio')
+    },
+  })
+
+  const markReminderSkipped = useMutation({
+    mutationFn: (id: number) => api.post(`/invoice-reminder-queue/${id}/skip`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoice-reminder-queue'] })
+    },
+    onError: () => toast.error('Erreur'),
+  })
+
+  const handleSend = (item: ReminderQueueItem) => {
+    const channel   = item.channel
+    const twilioOk  = channel === 'whatsapp' ? twilioStatus?.has_whatsapp : (channel === 'sms' ? twilioStatus?.has_sms : false)
+
+    if (twilioOk) {
+      // Send via Twilio API
+      setSendingIds(prev => new Set(prev).add(item.id))
+      markReminderSent.mutate(item.id)
+    } else if (channel === 'whatsapp') {
+      // Fallback: open wa.me link + mark sent manually
+      const phone = (item.phone ?? '').replace(/\D/g, '')
+      if (!phone) {
+        toast.error('Numéro de téléphone manquant pour ce client')
+        return
+      }
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(item.message)}`, '_blank')
+      markReminderSent.mutate(item.id)
+    } else {
+      toast.error('Twilio non configuré pour ce canal')
+    }
+  }
+
   // ── Factures ───────────────────────────────────────────────────────────────
   const { data: invoicesData, isLoading: loadingInvoices, refetch: refetchInvoices } = useQuery<{
-    data: Invoice[]; meta: { total: number }
+    data: Invoice[]; meta: { total: number; current_page: number; last_page: number; per_page: number }
   }>({
-    queryKey: ['invoices', storeId, statusFilter, search],
+    queryKey: ['invoices', storeId, activeStatus, activeSearch, activeDateFrom, activeDateTo, page],
     queryFn: () => api.get('/invoices', {
-      params: { store_id: storeId, status: statusFilter || undefined, search: search || undefined, per_page: 50 }
+      params: {
+        store_id:  storeId,
+        status:    activeStatus   || undefined,
+        search:    activeSearch   || undefined,
+        date_from: activeDateFrom || undefined,
+        date_to:   activeDateTo   || undefined,
+        page,
+        per_page:  20,
+      }
     }).then(r => r.data),
     enabled: !!storeId && tab === 'invoices',
     staleTime: 30_000,
@@ -1187,11 +1724,19 @@ export default function InvoicesPage() {
 
   // ── Devis ──────────────────────────────────────────────────────────────────
   const { data: quotesData, isLoading: loadingQuotes, refetch: refetchQuotes } = useQuery<{
-    data: Quote[]; meta: { total: number }
+    data: Quote[]; meta: { total: number; current_page: number; last_page: number; per_page: number }
   }>({
-    queryKey: ['quotes', storeId, statusFilter, search],
+    queryKey: ['quotes', storeId, activeStatus, activeSearch, activeDateFrom, activeDateTo, page],
     queryFn: () => api.get('/quotes', {
-      params: { store_id: storeId, status: statusFilter || undefined, search: search || undefined, per_page: 50 }
+      params: {
+        store_id:  storeId,
+        status:    activeStatus   || undefined,
+        search:    activeSearch   || undefined,
+        date_from: activeDateFrom || undefined,
+        date_to:   activeDateTo   || undefined,
+        page,
+        per_page:  20,
+      }
     }).then(r => r.data),
     enabled: !!storeId && tab === 'quotes',
     staleTime: 30_000,
@@ -1249,13 +1794,24 @@ export default function InvoicesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Facturation & Devis</h1>
           <p className="text-sm text-gray-500 mt-0.5">Documents commerciaux professionnels</p>
         </div>
-        <button
-          onClick={() => { setEditing(null); setShowEditor(true) }}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
-        >
-          <Plus size={16} />
-          Nouveau {tab === 'invoices' ? 'Facture' : 'Devis'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 px-4 py-2.5 border border-blue-200 text-blue-700 rounded-xl text-sm font-semibold hover:bg-blue-50 transition"
+          >
+            <Upload size={15} />
+            Importer
+          </button>
+          {tab !== 'reminders' && (
+            <button
+              onClick={() => { setEditing(null); setShowEditor(true) }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+            >
+              <Plus size={16} />
+              Nouveau {tab === 'invoices' ? 'Facture' : 'Devis'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* KPIs */}
@@ -1287,15 +1843,15 @@ export default function InvoicesPage() {
       {/* Tabs */}
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
         <div className="flex border-b">
-          {(['invoices', 'quotes'] as Tab[]).map(t => (
+          {(['invoices', 'quotes', 'reminders'] as Tab[]).map(t => (
             <button
               key={t}
-              onClick={() => { setTab(t); setStatusFilter(''); setSearch('') }}
+              onClick={() => { setTab(t); resetFilters() }}
               className={`flex-1 py-3 text-sm font-semibold transition ${
                 tab === t ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {t === 'invoices' ? `Factures` : `Devis`}
+              {t === 'invoices' ? 'Factures' : t === 'quotes' ? 'Devis' : 'Relances'}
               {t === 'invoices' && invoicesData?.meta?.total != null && (
                 <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
                   {invoicesData.meta.total}
@@ -1306,34 +1862,85 @@ export default function InvoicesPage() {
                   {quotesData.meta.total}
                 </span>
               )}
+              {t === 'reminders' && reminderPendingCount > 0 && (
+                <span className="ml-1.5 text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-bold">
+                  {reminderPendingCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        {/* Filtres */}
-        <div className="flex gap-3 px-4 py-3 border-b bg-gray-50">
-          <div className="relative flex-1 max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Rechercher..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+        {/* Filtres — masqués sur l'onglet relances */}
+        {tab !== 'reminders' && <div className="px-4 py-3 border-b bg-gray-50 space-y-2.5">
+          <div className="flex flex-wrap gap-2">
+            {/* Recherche texte */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Référence, client, objet..."
+                value={draftSearch}
+                onChange={e => setDraftSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                className="w-full pl-8 pr-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            {/* Date de */}
+            <div className="flex items-center gap-1">
+              <label className="text-xs text-gray-500 whitespace-nowrap">Du</label>
+              <input
+                type="date"
+                value={draftDateFrom}
+                onChange={e => setDraftDateFrom(e.target.value)}
+                className="border rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 w-36"
+              />
+            </div>
+            {/* Date au */}
+            <div className="flex items-center gap-1">
+              <label className="text-xs text-gray-500 whitespace-nowrap">Au</label>
+              <input
+                type="date"
+                value={draftDateTo}
+                onChange={e => setDraftDateTo(e.target.value)}
+                className="border rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 w-36"
+              />
+            </div>
+            {/* Statut */}
+            <select
+              value={draftStatus}
+              onChange={e => setDraftStatus(e.target.value)}
+              className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Tous les statuts</option>
+              {tab === 'invoices'
+                ? Object.entries(STATUS_INVOICE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)
+                : Object.entries(STATUS_QUOTE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)
+              }
+            </select>
           </div>
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Tous statuts</option>
-            {tab === 'invoices'
-              ? Object.entries(STATUS_INVOICE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)
-              : Object.entries(STATUS_QUOTE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)
-            }
-          </select>
-        </div>
+
+          {/* Boutons d'action */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSearch}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+            >
+              <Search size={14} /> Rechercher
+            </button>
+            <button
+              onClick={handleClear}
+              className="flex items-center gap-1.5 px-4 py-2 border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-100 transition"
+            >
+              <X size={14} /> Effacer
+            </button>
+            {hasActiveFilters && (
+              <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full">
+                Filtre actif
+              </span>
+            )}
+          </div>
+        </div>}
 
         {/* ── LISTE FACTURES ─────────────────────────────────────────────────── */}
         {tab === 'invoices' && (
@@ -1419,6 +2026,16 @@ export default function InvoicesPage() {
                   )
                 })}
               </div>
+            )}
+
+            {/* Pagination factures */}
+            {invoicesData?.meta && invoicesData.meta.last_page > 1 && (
+              <PaginationBar
+                currentPage={invoicesData.meta.current_page}
+                lastPage={invoicesData.meta.last_page}
+                total={invoicesData.meta.total}
+                onPage={setPage}
+              />
             )}
           </div>
         )}
@@ -1516,14 +2133,162 @@ export default function InvoicesPage() {
                 })}
               </div>
             )}
+
+            {/* Pagination devis */}
+            {quotesData?.meta && quotesData.meta.last_page > 1 && (
+              <PaginationBar
+                currentPage={quotesData.meta.current_page}
+                lastPage={quotesData.meta.last_page}
+                total={quotesData.meta.total}
+                onPage={setPage}
+              />
+            )}
+          </div>
+        )}
+
+        {/* ── Onglet Relances ─────────────────────────────────────────────── */}
+        {tab === 'reminders' && (
+          <div>
+            {/* Sub-header */}
+            <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                {reminderPendingCount > 0
+                  ? <><span className="font-semibold text-orange-600">{reminderPendingCount}</span> relance(s) en attente d'envoi</>
+                  : 'Aucune relance en attente'}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => refetchQueue()}
+                  className="text-xs text-gray-500 hover:text-primary flex items-center gap-1 border rounded-lg px-3 py-1.5 hover:border-primary transition-colors"
+                >
+                  Actualiser
+                </button>
+                <button
+                  onClick={() => navigate('/invoice-reminders')}
+                  className="text-xs text-primary flex items-center gap-1.5 border border-primary/30 rounded-lg px-3 py-1.5 hover:bg-primary/5 transition-colors"
+                >
+                  <Settings size={12} /> Configurer les règles
+                </button>
+              </div>
+            </div>
+
+            {loadingQueue ? (
+              <div className="py-12 text-center text-gray-400 text-sm">Chargement...</div>
+            ) : !reminderQueue?.data?.length ? (
+              <div className="py-16 text-center">
+                <Bell size={36} className="mx-auto mb-3 text-gray-200" />
+                <p className="text-sm text-gray-500">Aucune relance en attente</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Les relances sont générées automatiquement chaque jour à 08h00
+                </p>
+                <button
+                  onClick={() => navigate('/invoice-reminders')}
+                  className="mt-4 flex items-center gap-2 mx-auto text-sm text-primary hover:underline"
+                >
+                  <Settings size={13} /> Configurer les règles de relance
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {reminderQueue.data.map(item => {
+                  const balance = item.invoice
+                    ? Math.max(0, (item.invoice.total_ttc ?? 0) - (item.invoice.paid_amount ?? 0))
+                    : 0
+                  const clientPhone = item.phone ?? item.invoice?.client?.phone ?? null
+                  return (
+                    <div key={item.id} className="px-4 py-3 flex items-center gap-4 hover:bg-gray-50 transition-colors">
+                      {/* Channel badge */}
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                        item.channel === 'whatsapp' ? 'bg-green-100 text-green-600'
+                        : item.channel === 'sms'    ? 'bg-purple-100 text-purple-600'
+                        : 'bg-blue-100 text-blue-600'
+                      }`}>
+                        {item.channel === 'whatsapp' ? <MessageCircle size={14} />
+                         : item.channel === 'sms'    ? <Smartphone size={14} />
+                         : <Bell size={14} />}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm text-gray-900">{item.invoice?.reference ?? `#${item.invoice_id}`}</span>
+                          <span className="text-xs text-gray-500">{item.client_name ?? item.invoice?.client?.name ?? '—'}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                          <span>Solde : <span className="font-medium text-red-600">{new Intl.NumberFormat('fr-SN').format(balance)} FCFA</span></span>
+                          {item.invoice?.due_date && (
+                            <span>Échéance : {new Date(item.invoice.due_date).toLocaleDateString('fr-SN', { day: '2-digit', month: 'short' })}</span>
+                          )}
+                          <span>Prévu le {new Date(item.scheduled_date).toLocaleDateString('fr-SN', { day: '2-digit', month: 'short' })}</span>
+                        </div>
+                        {!clientPhone && (
+                          <p className="text-xs text-red-500 mt-0.5">Numéro de téléphone manquant</p>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {(() => {
+                          const isSending  = sendingIds.has(item.id)
+                          const twilioOk   = item.channel === 'whatsapp' ? twilioStatus?.has_whatsapp : (item.channel === 'sms' ? twilioStatus?.has_sms : false)
+                          const canSend    = !!clientPhone || item.channel === 'sms'
+                          const btnColor   = item.channel === 'sms' ? 'bg-purple-500 hover:bg-purple-600' : 'bg-green-500 hover:bg-green-600'
+                          const BtnIcon    = item.channel === 'sms' ? Smartphone : MessageCircle
+                          const label      = twilioOk ? 'Envoyer' : (item.channel === 'whatsapp' ? 'WhatsApp' : 'Envoyer')
+                          return (
+                            <button
+                              onClick={() => handleSend(item)}
+                              disabled={!canSend || isSending}
+                              title={canSend
+                                ? (twilioOk ? `Envoyer via Twilio (${item.channel})` : `Ouvrir WhatsApp — ${clientPhone}`)
+                                : 'Téléphone manquant'}
+                              className={`flex items-center gap-1.5 text-xs font-medium text-white ${btnColor} disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg transition-colors`}
+                            >
+                              {isSending ? <Loader2 size={12} className="animate-spin" /> : <BtnIcon size={12} />}
+                              {!twilioOk && item.channel === 'whatsapp' && <ExternalLink size={10} />}
+                              {label}
+                            </button>
+                          )
+                        })()}
+                        <button
+                          onClick={() => markReminderSkipped.mutate(item.id)}
+                          title="Ignorer cette relance"
+                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          <SkipForward size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {reminderQueue?.meta && reminderQueue.meta.last_page > 1 && (
+              <PaginationBar
+                currentPage={reminderQueue.meta.current_page}
+                lastPage={reminderQueue.meta.last_page}
+                total={reminderQueue.meta.total}
+                onPage={setPage}
+              />
+            )}
           </div>
         )}
       </div>
 
+      {/* Import modal */}
+      {showImport && (
+        <ImportInvoicesModal
+          onClose={() => setShowImport(false)}
+          onSuccess={() => setShowImport(false)}
+        />
+      )}
+
       {/* Éditeur */}
       {showEditor && (
         <DocumentEditor
-          type={tab === 'invoices' ? 'invoice' : 'quote'}
+          type={tab !== 'quotes' ? 'invoice' : 'quote'}
           initial={editing}
           storeId={storeId!}
           businessType={businessType}
