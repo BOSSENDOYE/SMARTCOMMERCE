@@ -17,7 +17,7 @@ class UserController extends Controller
             ->select(['id', 'name', 'email', 'is_active', 'store_id', 'last_login_at', 'created_at']);
 
         if ($isSuperAdmin) {
-            // Priorité : param store_id > header X-Store-Id > afficher tout
+            // Super-admin : peut filtrer par magasin via param ou header, sinon voit tout
             $storeFilter = $request->filled('store_id')
                 ? (int) $request->store_id
                 : ($request->header('X-Store-Id') ? (int) $request->header('X-Store-Id') : null);
@@ -29,12 +29,9 @@ class UserController extends Controller
                 });
             }
         } else {
-            // Utilisateur normal : uniquement les users du même magasin
-            $myStoreId = $request->user()->store_id;
-            $query->where(function ($q) use ($myStoreId) {
-                $q->where('store_id', $myStoreId)
-                  ->orWhereHas('stores', fn($q2) => $q2->where('stores.id', $myStoreId));
-            });
+            // Utilisateur normal : uniquement les users de la même organisation
+            $orgId = $request->user()->organization_id;
+            $query->where('organization_id', $orgId);
         }
 
         return response()->json($query->orderBy('name')->get());

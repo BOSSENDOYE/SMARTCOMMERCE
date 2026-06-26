@@ -7,7 +7,7 @@ import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users, BarChart3,
-  Settings, LogOut, ChevronLeft, ChevronRight, AlertTriangle,
+  Settings, LogOut, ChevronLeft, ChevronRight,
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
   UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target, Palette, Sun, Moon,
@@ -191,68 +191,6 @@ function GroupSection({ group, collapsed, storeBusinessType, depth = 0 }: GroupS
 
 // ── Store Switcher (super-admin only) ────────────────────────────────────────
 
-interface StoreEntry { id: number; name: string; code: string; business_type: BusinessType; is_central: boolean; is_active: boolean }
-
-function StoreSwitcher({ collapsed }: { collapsed: boolean }) {
-  const { activeStore, setActiveStore } = useActiveStoreStore()
-  const [open, setOpen] = useState(false)
-
-  const { data: stores = [] } = useQuery<StoreEntry[]>({
-    queryKey: ['stores-list'],
-    queryFn: () => api.get('/stores').then(r => r.data),
-    staleTime: 60_000,
-  })
-
-  const active = stores.find(s => s.id === activeStore?.id) ?? null
-
-  return (
-    <div className="relative px-2 pb-2">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-semibold ${
-          active
-            ? 'bg-primary/20 border-primary/40 text-white'
-            : 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300 animate-pulse'
-        }`}
-        title="Changer de magasin"
-      >
-        <Store size={13} className="flex-shrink-0" />
-        {!collapsed && (
-          <>
-            <span className="flex-1 text-left truncate">
-              {active ? active.name : 'Sélectionner un magasin'}
-            </span>
-            <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-          </>
-        )}
-      </button>
-
-      {open && !collapsed && (
-        <div className="absolute bottom-full left-2 right-2 mb-1 bg-brand-800 border border-brand-600 rounded-xl shadow-2xl py-1 z-50 max-h-64 overflow-y-auto">
-          {stores.filter(s => s.is_active).map(s => (
-            <button
-              key={s.id}
-              onClick={() => { setActiveStore(s); setOpen(false) }}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-brand-700 transition-colors ${
-                active?.id === s.id ? 'text-primary font-semibold' : 'text-brand-200'
-              }`}
-            >
-              {active?.id === s.id && <Check size={11} className="flex-shrink-0" />}
-              {active?.id !== s.id && <span className="w-[11px]" />}
-              <span className="truncate">{s.name}</span>
-              {s.is_central && (
-                <span className="ml-auto text-[9px] bg-primary/30 text-primary px-1.5 py-0.5 rounded-full">
-                  Central
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Main Layout ───────────────────────────────────────────────────────────────
 
 export default function AppLayout() {
@@ -422,20 +360,6 @@ export default function AppLayout() {
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </div>
-
-        {/* Super-admin store switcher */}
-        {isSuperAdmin && !collapsed && (
-          <div className="border-b border-brand-700 pt-2">
-            <StoreSwitcher collapsed={collapsed} />
-          </div>
-        )}
-
-        {isSuperAdmin && !activeStore && !collapsed && (
-          <div className="mx-2 mb-2 flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-            <AlertTriangle size={11} className="text-yellow-400 flex-shrink-0" />
-            <p className="text-[10px] text-yellow-300">Sélectionnez un magasin</p>
-          </div>
-        )}
 
         {/* Caisse Mobile — accès direct terminal Android */}
         <div className="px-2 pt-2 pb-1 border-b border-brand-700">

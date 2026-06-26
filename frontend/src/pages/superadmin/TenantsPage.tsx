@@ -14,7 +14,7 @@ import toast from 'react-hot-toast'
 // ── Shared SA axios instance ──────────────────────────────────────────────────
 
 const saApi = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
+  baseURL: (import.meta.env.VITE_API_URL ?? 'http://localhost:8000') + '/api/v1',
   headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
 })
 saApi.interceptors.request.use(cfg => {

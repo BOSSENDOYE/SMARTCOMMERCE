@@ -138,11 +138,31 @@ Route::prefix('v1')->group(function () {
             return response()->json(null, 204);
         });
 
-        // Categories
-        Route::get('/categories', fn() => response()->json(\App\Models\Category::with('children')->whereNull('parent_id')->orderBy('sort_order')->get()));
-        Route::post('/categories', fn(\Illuminate\Http\Request $r) => response()->json(\App\Models\Category::create($r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant'])), 201));
-        Route::put('/categories/{category}', fn(\Illuminate\Http\Request $r, \App\Models\Category $category) => response()->json(tap($category)->update($r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant']))));
-        Route::delete('/categories/{category}', function (\App\Models\Category $category) {
+        // Categories — isolées par organisation (NULL = globale, visible par tous)
+        Route::get('/categories', function (\Illuminate\Http\Request $r) {
+            $orgId = $r->user()->organization_id;
+            return response()->json(
+                \App\Models\Category::with('children')
+                    ->forOrganization($orgId)
+                    ->whereNull('parent_id')
+                    ->orderBy('sort_order')
+                    ->get()
+            );
+        });
+        Route::post('/categories', function (\Illuminate\Http\Request $r) {
+            $data = $r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant']);
+            return response()->json(\App\Models\Category::create(array_merge($data, ['organization_id' => $r->user()->organization_id])), 201);
+        });
+        Route::put('/categories/{category}', function (\Illuminate\Http\Request $r, \App\Models\Category $category) {
+            if ($category->organization_id !== null && $category->organization_id !== $r->user()->organization_id) {
+                return response()->json(['message' => 'Action non autorisée.'], 403);
+            }
+            return response()->json(tap($category)->update($r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant'])));
+        });
+        Route::delete('/categories/{category}', function (\Illuminate\Http\Request $r, \App\Models\Category $category) {
+            if ($category->organization_id !== null && $category->organization_id !== $r->user()->organization_id) {
+                return response()->json(['message' => 'Action non autorisée.'], 403);
+            }
             if ($category->products()->count() > 0) {
                 return response()->json(['message' => 'Impossible de supprimer : des produits utilisent cette catégorie.'], 422);
             }
@@ -201,6 +221,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/clients/{client}/deposit', [\App\Http\Controllers\Api\ClientController::class, 'deposit']);
         Route::post('/clients/{client}/withdraw', [\App\Http\Controllers\Api\ClientController::class, 'withdraw']);
         // Encours (créances) client
+        Route::get('/encours/history', [\App\Http\Controllers\Api\EncourController::class, 'globalHistory']);
         Route::get('/clients/{client}/encours', [\App\Http\Controllers\Api\EncourController::class, 'index']);
         Route::post('/clients/{client}/payer-encours', [\App\Http\Controllers\Api\EncourController::class, 'pay']);
 

@@ -33,9 +33,9 @@ class ClientController extends Controller
             Client::where('store_id', $request->user()->store_id)
                 ->with('category')
                 ->when($request->search, fn($q) => $q->where(fn($q2) =>
-                    $q2->where('name', 'like', "%{$request->search}%")
-                       ->orWhere('phone', 'like', "%{$request->search}%")
-                       ->orWhere('email', 'like', "%{$request->search}%")
+                    $q2->where('name', 'ilike', "%{$request->search}%")
+                       ->orWhere('phone', 'ilike', "%{$request->search}%")
+                       ->orWhere('email', 'ilike', "%{$request->search}%")
                 ))
                 ->when($request->type, fn($q) => $q->where('type', $request->type))
                 ->when($request->client_category_id, fn($q) => $q->where('client_category_id', $request->client_category_id))

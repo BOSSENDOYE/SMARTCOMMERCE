@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import {
-  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X, Palette, Menu, Tag,
+  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X, Palette, Menu, Tag, Bell,
 } from 'lucide-react'
 import { usePreferencesStore, COLOR_PALETTES } from '../../store/preferences.store'
 import ThermalPrinterPanel from '../../components/thermal/ThermalPrinterPanel'
@@ -99,6 +99,14 @@ export default function SettingsPage() {
       desc: 'Gros, Demi-Gros, Détail…',
       detail: 'Gérer les niveaux de prix par type de client',
       onClick: () => navigate('/client-categories'),
+    },
+    {
+      icon: <Bell size={20} className="text-rose-600" />,
+      iconBg: 'bg-rose-100',
+      title: 'Relances factures',
+      desc: 'Règles de relance automatique',
+      detail: 'Configurer les délais et canaux de relance (SMS, email)',
+      onClick: () => navigate('/invoice-reminders'),
     },
   ]
 

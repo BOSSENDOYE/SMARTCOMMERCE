@@ -2142,7 +2142,6 @@ function ArticlesTab() {
     : undefined
 
   return (
-<<<<<<< HEAD
     <div className="flex gap-5 items-start">
 
       {/* ── Category sidebar ── */}
@@ -2183,14 +2182,6 @@ function ArticlesTab() {
             />
           ))}
         </div>
-=======
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={<Package size={20} className="text-white" />} label="Total articles" value={stats?.total ?? 0} color="bg-primary" />
-        <KpiCard icon={<Check size={20} className="text-white" />} label="Articles actifs" value={stats?.active ?? 0} color="bg-green-500" />
-        <KpiCard icon={<AlertTriangle size={20} className="text-white" />} label="Stock faible" value={stats?.low_stock ?? 0} color="bg-amber-500" />
-        <KpiCard icon={<X size={20} className="text-white" />} label="En rupture" value={stats?.out_of_stock ?? 0} color="bg-red-500" />
->>>>>>> 9f1009b7f61ea61fefbd76485dd101f74ece90d9
       </div>
 
       {/* ── Main content ── */}

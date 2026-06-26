@@ -159,9 +159,9 @@ class ExpenseController extends Controller
             ->when($r->date_from,    fn($q) => $q->whereDate('expense_date', '>=', $r->date_from))
             ->when($r->date_to,      fn($q) => $q->whereDate('expense_date', '<=', $r->date_to))
             ->when($r->search,       fn($q) => $q->where(fn($s) =>
-                $s->where('description', 'like', "%{$r->search}%")
-                  ->orWhere('beneficiary', 'like', "%{$r->search}%")
-                  ->orWhere('reference', 'like', "%{$r->search}%")
+                $s->where('description', 'ilike', "%{$r->search}%")
+                  ->orWhere('beneficiary', 'ilike', "%{$r->search}%")
+                  ->orWhere('reference', 'ilike', "%{$r->search}%")
             ))
             ->orderByDesc('expense_date')
             ->orderByDesc('id')

@@ -59,8 +59,8 @@ class LossController extends Controller
         }
         if ($request->search) {
             $query->whereHas('product', fn($q) => $q
-                ->where('name', 'like', "%{$request->search}%")
-                ->orWhere('internal_code', 'like', "%{$request->search}%")
+                ->where('name', 'ilike', "%{$request->search}%")
+                ->orWhere('internal_code', 'ilike', "%{$request->search}%")
             );
         }
 

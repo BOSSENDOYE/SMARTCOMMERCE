@@ -7,7 +7,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SalePayment extends Model
 {
-    protected $fillable = ['sale_id', 'method', 'amount', 'reference', 'change_given'];
+    protected $fillable = [
+        'sale_id', 'payment_method', 'amount', 'reference', 'voucher_code',
+        'is_confirmed', 'paid_at', 'notes', 'recorded_by',
+    ];
 
-    public function sale(): BelongsTo { return $this->belongsTo(Sale::class); }
+    protected $casts = [
+        'paid_at'      => 'datetime',
+        'is_confirmed' => 'boolean',
+        'amount'       => 'decimal:2',
+    ];
+
+    public function sale(): BelongsTo       { return $this->belongsTo(Sale::class); }
+    public function recordedBy(): BelongsTo { return $this->belongsTo(User::class, 'recorded_by'); }
 }

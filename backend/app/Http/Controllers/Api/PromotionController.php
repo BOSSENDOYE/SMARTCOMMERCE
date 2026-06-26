@@ -40,7 +40,7 @@ class PromotionController extends Controller
         return response()->json(
             $this->baseQuery($request)
                 ->with(['products:id,name,internal_code', 'categories:id,name'])
-                ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%"))
+                ->when($request->search, fn($q) => $q->where('name', 'ilike', "%{$request->search}%"))
                 ->when($request->type, fn($q) => $q->where('type', $request->type))
                 ->when($request->status, function ($q) use ($request, $now) {
                     match ($request->status) {

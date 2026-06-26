@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import {
   Search, X, Check, AlertTriangle, CheckCircle2, Banknote,
   Loader2, CreditCard, Wallet, Phone, User, ChevronRight,
+  History, FileText, Calendar, UserCheck,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -32,10 +33,30 @@ interface EncourItem {
   is_overdue: boolean
 }
 
+interface EncourHistoryItem {
+  id: number
+  type: 'sale' | 'invoice'
+  reference: string | null
+  client_name: string | null
+  client_id: number | null
+  amount: number
+  method: string
+  paid_at: string
+  notes: string | null
+  recorder: { id: number; name: string } | null
+}
+
 interface EncourData {
   client: { id: number; name: string; phone: string; credit_balance: number; account_balance: number }
   items: EncourItem[]
   total_due: number
+  history: EncourHistoryItem[]
+}
+
+interface GlobalHistoryData {
+  data: EncourHistoryItem[]
+  total: number
+  count: number
 }
 
 const PAYMENT_METHODS = [
@@ -46,15 +67,70 @@ const PAYMENT_METHODS = [
   { value: 'other',         label: 'Autre' },
 ]
 
+const METHOD_LABELS: Record<string, string> = {
+  cash: 'Espèces', card: 'Carte', wave: 'Wave', orange_money: 'Orange Money',
+  free_money: 'Free Money', mobile_money: 'Mobile Money', bank_transfer: 'Virement',
+  check: 'Chèque', credit: 'Crédit', other: 'Autre',
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function EncourPage() {
+  const [activePage, setActivePage] = useState<'encours' | 'historique'>('encours')
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <Banknote size={24} className="text-primary" />
+          Encaissements
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Gérez les paiements d'encours et consultez l'historique des encaissements.
+        </p>
+      </div>
+
+      {/* Page-level tabs */}
+      <div className="flex gap-1 border-b border-gray-200">
+        <button
+          onClick={() => setActivePage('encours')}
+          className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-all border-b-2 -mb-px ${
+            activePage === 'encours'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Banknote size={16} />
+          Paiement des encours
+        </button>
+        <button
+          onClick={() => setActivePage('historique')}
+          className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-all border-b-2 -mb-px ${
+            activePage === 'historique'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <History size={16} />
+          Historique des encaissements
+        </button>
+      </div>
+
+      {activePage === 'encours'    && <EncourTab />}
+      {activePage === 'historique' && <HistoriqueTab />}
+    </div>
+  )
+}
+
+// ─── Tab 1 : Paiement des encours ─────────────────────────────────────────────
+
+function EncourTab() {
   const [query, setQuery] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
   const [selectedClient, setSelectedClient] = useState<ClientSearchResult | null>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (!searchRef.current?.contains(e.target as Node)) setShowDropdown(false)
@@ -82,18 +158,7 @@ export default function EncourPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Banknote size={24} className="text-primary" />
-          Encaissements — Paiement des encours
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Recherchez un client pour voir et régler ses factures ou ventes à crédit.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* Search */}
       <div ref={searchRef} className="relative">
         <div className="flex items-center gap-2 border border-gray-200 rounded-2xl px-4 py-3 shadow-sm bg-white focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary transition-all">
@@ -136,11 +201,6 @@ export default function EncourPage() {
                       Crédit dû : {formatCurrency(c.credit_balance)}
                     </p>
                   )}
-                  {c.account_balance < 0 && (
-                    <p className="text-xs font-semibold text-red-500">
-                      Compte : −{formatCurrency(Math.abs(c.account_balance))}
-                    </p>
-                  )}
                 </div>
                 <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
               </button>
@@ -155,12 +215,8 @@ export default function EncourPage() {
         )}
       </div>
 
-      {/* Payment panel */}
-      {selectedClient && (
-        <EncourPanel client={selectedClient} onReset={handleClear} />
-      )}
+      {selectedClient && <EncourPanel client={selectedClient} onReset={handleClear} />}
 
-      {/* Empty state */}
       {!selectedClient && (
         <div className="text-center py-20 text-gray-300">
           <Banknote size={56} className="mx-auto mb-3 opacity-30" />
@@ -172,24 +228,177 @@ export default function EncourPage() {
   )
 }
 
-// ─── Encour Panel ─────────────────────────────────────────────────────────────
+// ─── Tab 2 : Historique global ────────────────────────────────────────────────
+
+function HistoriqueTab() {
+  const [search, setSearch] = useState('')
+  const [from, setFrom]     = useState('')
+  const [to, setTo]         = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data, isLoading } = useQuery<GlobalHistoryData>({
+    queryKey: ['encours-global-history', debouncedSearch, from, to],
+    queryFn: () =>
+      api.get('/encours/history', {
+        params: {
+          search: debouncedSearch || undefined,
+          from:   from || undefined,
+          to:     to   || undefined,
+        },
+      }).then(r => r.data),
+    staleTime: 30_000,
+  })
+
+  const items = data?.data ?? []
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex-1 min-w-56 flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary transition-all">
+          <Search size={15} className="text-gray-400 flex-shrink-0" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher : client, référence, utilisateur..."
+            className="flex-1 text-sm bg-transparent outline-none placeholder-gray-400"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500 font-medium">Du</label>
+          <input
+            type="date" value={from} onChange={e => setFrom(e.target.value)}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500 font-medium">Au</label>
+          <input
+            type="date" value={to} onChange={e => setTo(e.target.value)}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        {(from || to || search) && (
+          <button
+            onClick={() => { setSearch(''); setFrom(''); setTo('') }}
+            className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 px-3 py-2 border border-gray-200 rounded-xl hover:bg-gray-50">
+            <X size={12} /> Réinitialiser
+          </button>
+        )}
+      </div>
+
+      {/* Summary */}
+      {data && (
+        <div className="flex items-center gap-6 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+          <div>
+            <p className="text-xs text-emerald-600 font-medium">{data.count} encaissement{data.count > 1 ? 's' : ''}</p>
+          </div>
+          <div className="ml-auto">
+            <p className="text-xs text-emerald-600">Total encaissé</p>
+            <p className="text-lg font-bold text-emerald-700">{formatCurrency(data.total)}</p>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16 text-gray-400 gap-2">
+          <Loader2 size={20} className="animate-spin" /> Chargement de l'historique...
+        </div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-16">
+          <History size={40} className="mx-auto mb-2 text-gray-200" />
+          <p className="text-sm text-gray-400 font-medium">
+            {search || from || to ? 'Aucun résultat pour ces critères' : 'Aucun encaissement enregistré'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map(h => (
+            <div key={`${h.type}-${h.id}`}
+              className="border border-gray-100 rounded-xl p-4 bg-white hover:bg-gray-50/60 transition-colors">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <FileText size={15} className="text-emerald-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {/* Client + ref */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {h.client_name && (
+                        <span className="font-semibold text-gray-900 text-sm">{h.client_name}</span>
+                      )}
+                      {h.reference && (
+                        <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{h.reference}</span>
+                      )}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        h.type === 'invoice' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {h.type === 'invoice' ? 'Facture' : 'Vente crédit'}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
+                        {METHOD_LABELS[h.method] ?? h.method}
+                      </span>
+                    </div>
+                    {/* Meta */}
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      <span className="flex items-center gap-1 text-xs text-gray-400">
+                        <Calendar size={10} />
+                        {new Date(h.paid_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        {' à '}
+                        {new Date(h.paid_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {h.recorder && (
+                        <span className="flex items-center gap-1 text-xs text-gray-400">
+                          <UserCheck size={10} />
+                          {h.recorder.name}
+                        </span>
+                      )}
+                    </div>
+                    {h.notes && (
+                      <p className="text-xs text-gray-400 mt-1 italic">{h.notes}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-base font-bold text-emerald-600">+{formatCurrency(h.amount)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Encour Panel (inside Tab 1) ──────────────────────────────────────────────
 
 function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset: () => void }) {
   const queryClient = useQueryClient()
-  const [method, setMethod] = useState('cash')
+  const [method, setMethod]       = useState('cash')
   const [reference, setReference] = useState('')
-  const [note, setNote] = useState('')
-  const [advance, setAdvance] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [amounts, setAmounts] = useState<Record<string, string>>({})
-  const [paid, setPaid] = useState(false)
+  const [note, setNote]           = useState('')
+  const [advance, setAdvance]     = useState('')
+  const [selected, setSelected]   = useState<Set<string>>(new Set())
+  const [amounts, setAmounts]     = useState<Record<string, string>>({})
+  const [paid, setPaid]           = useState(false)
 
   const { data, isLoading, refetch } = useQuery<EncourData>({
     queryKey: ['encours', client.id],
     queryFn: () => api.get(`/clients/${client.id}/encours`).then(r => r.data),
   })
 
-  // Pré-sélectionner tous les encours
   const itemsKey = data?.items?.map(i => `${i.type}-${i.id}`).join(',') ?? ''
   useEffect(() => {
     if (!data?.items?.length) return
@@ -217,8 +426,8 @@ function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset:
     onSuccess: () => {
       toast.success('Paiement enregistré avec succès !')
       queryClient.invalidateQueries({ queryKey: ['encours', client.id] })
-      queryClient.invalidateQueries({ queryKey: ['client', client.id] })
       queryClient.invalidateQueries({ queryKey: ['clients'] })
+      queryClient.invalidateQueries({ queryKey: ['encours-global-history'] })
       setAdvance('')
       setReference('')
       setNote('')
@@ -226,9 +435,9 @@ function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset:
       refetch()
     },
     onError: (err: unknown) => {
-      const data = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
-      const fieldErrors = data?.errors ? Object.values(data.errors).flat() as string[] : []
-      toast.error(fieldErrors[0] ?? data?.message ?? 'Erreur lors du paiement')
+      const d = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
+      const fieldErrors = d?.errors ? Object.values(d.errors).flat() as string[] : []
+      toast.error(fieldErrors[0] ?? d?.message ?? 'Erreur lors du paiement')
     },
   })
 
@@ -238,8 +447,8 @@ function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset:
       .map(key => {
         const dashIdx = key.indexOf('-')
         return {
-          type: key.slice(0, dashIdx),
-          id: parseInt(key.slice(dashIdx + 1)),
+          type:   key.slice(0, dashIdx),
+          id:     parseInt(key.slice(dashIdx + 1)),
           amount: parseFloat(amounts[key]),
         }
       })
@@ -251,9 +460,9 @@ function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset:
     mutation.mutate({
       method,
       reference: reference || undefined,
-      note: note || undefined,
-      payments: payments.length > 0 ? payments : undefined,
-      advance: advanceAmount > 0 ? advanceAmount : undefined,
+      note:      note      || undefined,
+      payments:  payments.length > 0 ? payments : undefined,
+      advance:   advanceAmount > 0   ? advanceAmount : undefined,
     })
   }
 
@@ -288,10 +497,10 @@ function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset:
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {client.credit_balance > 0 && (
+          {data.client.credit_balance > 0 && (
             <div className="text-right">
               <p className="text-[10px] text-gray-400 flex items-center gap-1 justify-end"><CreditCard size={10} /> Crédit dû</p>
-              <p className="text-sm font-bold text-orange-600">{formatCurrency(client.credit_balance)}</p>
+              <p className="text-sm font-bold text-orange-600">{formatCurrency(data.client.credit_balance)}</p>
             </div>
           )}
           {data.client.account_balance !== 0 && (
@@ -309,7 +518,6 @@ function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset:
       </div>
 
       <div className="p-6 space-y-5">
-        {/* Succès après paiement */}
         {paid && data.total_due === 0 && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
             <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
@@ -320,7 +528,6 @@ function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset:
           </div>
         )}
 
-        {/* Résumé total dû */}
         {data.total_due > 0 ? (
           <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -474,7 +681,7 @@ function EncourPanel({ client, onReset }: { client: ClientSearchResult; onReset:
           )}
         </div>
 
-        {/* Footer / bouton */}
+        {/* Footer */}
         <div className="pt-2 border-t">
           <div className="flex items-center justify-between mb-4">
             <span className="text-gray-600 font-medium">Total à encaisser</span>

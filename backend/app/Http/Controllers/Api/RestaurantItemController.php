@@ -34,7 +34,7 @@ class RestaurantItemController extends Controller
         }
         if ($request->filled('search')) {
             $q = '%' . $request->search . '%';
-            $query->where('name', 'like', $q);
+            $query->where('name', 'ilike', $q);
         }
 
         $items = $query->orderBy('sort_order')->orderBy('name')->get();

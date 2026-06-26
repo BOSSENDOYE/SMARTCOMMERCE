@@ -9,7 +9,7 @@ import {
   ArrowUpCircle, ArrowDownCircle, Building2, User, Filter, ChevronDown,
   AlertCircle, ToggleLeft, ToggleRight, Wallet, ArrowDownToLine, ArrowUpFromLine,
   TrendingDown, Activity, Upload, Download, AlertTriangle, CheckCircle2,
-  Banknote, Loader2, FileText,
+  Banknote, Loader2, FileText, History,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -111,10 +111,22 @@ interface EncourItem {
   is_overdue: boolean
 }
 
+interface EncourHistoryItem {
+  id: number
+  type: 'invoice' | 'sale'
+  reference: string
+  amount: number
+  method: string
+  paid_at: string
+  notes?: string
+  recorder?: { id: number; name: string }
+}
+
 interface EncourData {
   client: { id: number; name: string; phone: string; credit_balance: number; account_balance: number }
   items: EncourItem[]
   total_due: number
+  history: EncourHistoryItem[]
 }
 
 const PAYMENT_METHODS_ENCOUR = [
@@ -124,6 +136,13 @@ const PAYMENT_METHODS_ENCOUR = [
   { value: 'check',         label: 'Chèque' },
   { value: 'other',         label: 'Autre' },
 ]
+
+const METHOD_LABELS: Record<string, string> = {
+  cash: 'Espèces', mobile_money: 'Mobile', bank_transfer: 'Virement',
+  check: 'Chèque', other: 'Autre', card: 'Carte', wave: 'Wave',
+  orange_money: 'Orange M.', free_money: 'Free M.', credit: 'Crédit',
+  account: 'Compte', account_deposit: 'Avance',
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -708,6 +727,15 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
   })
   const client = clientData ?? initialClient
 
+  // Fetch encours dès l'ouverture pour synchroniser credit_balance avec les vraies données
+  const { data: encourData } = useQuery<EncourData>({
+    queryKey: ['encours', client.id],
+    queryFn: () => api.get(`/clients/${client.id}/encours`).then(r => r.data),
+    staleTime: 30_000,
+  })
+  // Valeur synchronisée : encourData?.client.credit_balance est recalculé côté serveur
+  const displayCreditBalance = encourData?.client.credit_balance ?? client.credit_balance
+
   const { data: salesData } = useQuery<Paginated<Sale>>({
     queryKey: ['client-sales', client.id],
     queryFn: () => api.get(`/clients/${client.id}/sales`).then(r => r.data),
@@ -733,7 +761,7 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
   })
 
   const creditPct = client.credit_limit > 0
-    ? Math.min(100, Math.round((client.credit_balance / client.credit_limit) * 100))
+    ? Math.min(100, Math.round((displayCreditBalance / client.credit_limit) * 100))
     : null
 
   return (
@@ -841,7 +869,7 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
               </div>
 
               {/* Credit */}
-              <div className={`rounded-2xl p-4 space-y-2 ${client.credit_balance > 0 ? 'bg-orange-50' : 'bg-gray-50'}`}>
+              <div className={`rounded-2xl p-4 space-y-2 ${displayCreditBalance > 0 ? 'bg-orange-50' : 'bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
                     <CreditCard size={12} className="text-orange-500" /> Crédit dû
@@ -851,8 +879,8 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
                     ···
                   </button>
                 </div>
-                <p className={`text-xl font-bold ${client.credit_balance > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
-                  {formatCurrency(client.credit_balance)}
+                <p className={`text-xl font-bold ${displayCreditBalance > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                  {formatCurrency(displayCreditBalance)}
                 </p>
                 {client.credit_limit > 0 && (
                   <>
@@ -866,10 +894,10 @@ function ClientDetail({ client: initialClient, onClose, onEdit }: {
                   </>
                 )}
                 {/* Bouton rapide : payer le crédit via le compte quand les deux coexistent */}
-                {client.credit_balance > 0 && client.account_balance > 0 && (
+                {displayCreditBalance > 0 && client.account_balance > 0 && (
                   <button onClick={() => setShowCreditModal(true)}
                     className="w-full mt-1 text-[11px] font-semibold text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 rounded-lg py-1.5 flex items-center justify-center gap-1.5 transition-colors">
-                    ⇄ Régler avec le compte ({formatCurrency(Math.min(client.credit_balance, client.account_balance))})
+                    ⇄ Régler avec le compte ({formatCurrency(Math.min(displayCreditBalance, client.account_balance))})
                   </button>
                 )}
               </div>
@@ -1115,6 +1143,7 @@ function PayEncourModal({ client, onClose, onSuccess }: {
   onSuccess: () => void
 }) {
   const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState<'encours' | 'historique'>('encours')
   const [method, setMethod] = useState('cash')
   const [reference, setReference] = useState('')
   const [note, setNote] = useState('')
@@ -1204,206 +1233,289 @@ function PayEncourModal({ client, onClose, onSuccess }: {
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[90vh] flex flex-col">
 
-        {/* Header */}
-        <div className="p-5 border-b flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Banknote size={20} className="text-primary" />
-            </div>
-            <div>
-              <h2 className="font-bold text-gray-900">Paiement des encours</h2>
-              <p className="text-sm text-gray-500">{client.name}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {isLoading && (
-            <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
-              <Loader2 size={18} className="animate-spin" /> Chargement des encours...
-            </div>
-          )}
-
-          {data && (
-            <>
-              {/* Résumé encours */}
-              {data.total_due > 0 ? (
-                <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle size={15} className="text-orange-500" />
-                    <span className="text-sm font-semibold text-orange-700">Total dû</span>
-                  </div>
-                  <span className="text-lg font-bold text-orange-700">{formatCurrency(data.total_due)}</span>
-                </div>
-              ) : (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-green-500" />
-                  <span className="text-sm text-green-700 font-medium">Aucun encours — le client est à jour</span>
-                </div>
-              )}
-
-              {/* Moyen de paiement */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Moyen de paiement</label>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {PAYMENT_METHODS_ENCOUR.map(m => (
-                    <button key={m.value} onClick={() => setMethod(m.value)}
-                      className={`py-2 px-1 rounded-xl text-xs font-semibold text-center transition-all border ${
-                        method === m.value
-                          ? 'bg-primary text-white border-primary shadow-sm'
-                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-                      }`}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Référence</label>
-                  <input value={reference} onChange={e => setReference(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="N° chèque, transaction..." />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Note</label>
-                  <input value={note} onChange={e => setNote(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="Remarque..." />
-                </div>
-              </div>
-
-              {/* Liste des encours */}
-              {data.items.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Encours à régler</label>
-                    <div className="flex gap-2 text-[11px]">
-                      <button onClick={() => setSelected(new Set(data.items.map(i => `${i.type}-${i.id}`)))}
-                        className="text-primary font-semibold hover:underline">Tout</button>
-                      <span className="text-gray-300">·</span>
-                      <button onClick={() => setSelected(new Set())}
-                        className="text-gray-400 font-semibold hover:underline">Aucun</button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {data.items.map(item => {
-                      const key = `${item.type}-${item.id}`
-                      const isChecked = selected.has(key)
-                      return (
-                        <div key={key}
-                          className={`border rounded-xl p-3 transition-all ${isChecked ? 'border-primary/30 bg-primary/5' : 'border-gray-200 bg-gray-50'}`}>
-                          <div className="flex items-start gap-2">
-                            <button onClick={() => toggleItem(key)} className="mt-0.5 flex-shrink-0">
-                              {isChecked
-                                ? <div className="w-4 h-4 rounded bg-primary flex items-center justify-center"><Check size={10} className="text-white" /></div>
-                                : <div className="w-4 h-4 rounded border-2 border-gray-300" />
-                              }
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-sm font-semibold text-gray-800">{item.reference}</span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                                  item.type === 'invoice'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-orange-100 text-orange-700'
-                                }`}>
-                                  {item.type === 'invoice' ? 'Facture' : 'Vente crédit'}
-                                </span>
-                                {item.is_overdue && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">En retard</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5 flex-wrap">
-                                <span>{new Date(item.date).toLocaleDateString('fr-FR')}</span>
-                                {item.due_date && (
-                                  <span>Échéance : {new Date(item.due_date).toLocaleDateString('fr-FR')}</span>
-                                )}
-                                {item.paid_amount > 0 && (
-                                  <span className="text-emerald-600">Déjà encaissé : {formatCurrency(item.paid_amount)}</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-[10px] text-gray-400">Reste dû</p>
-                              <p className="text-sm font-bold text-orange-600">{formatCurrency(item.balance)}</p>
-                            </div>
-                          </div>
-                          {isChecked && (
-                            <div className="mt-2.5 ml-6 flex items-center gap-2">
-                              <label className="text-xs text-gray-500 flex-shrink-0">Montant :</label>
-                              <input
-                                type="number" min="0" max={item.balance}
-                                value={amounts[key] ?? String(item.balance)}
-                                onChange={e => setAmounts(prev => ({ ...prev, [key]: e.target.value }))}
-                                className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                              />
-                              <button
-                                onClick={() => setAmounts(prev => ({ ...prev, [key]: String(item.balance) }))}
-                                className="text-[11px] text-primary font-semibold hover:underline flex-shrink-0">
-                                Max
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Avance sur compte */}
-              <div className="border border-dashed border-gray-200 rounded-xl p-3">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                  Avance sur compte
-                  <span className="ml-1 text-gray-400 font-normal normal-case">(crédite le solde compte du client)</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number" min="0"
-                    value={advance}
-                    onChange={e => setAdvance(e.target.value)}
-                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="0"
-                  />
-                  <span className="text-sm text-gray-500 flex-shrink-0">FCFA</span>
-                </div>
-                {data.client.account_balance !== 0 && (
-                  <p className="text-xs mt-1 text-gray-400">
-                    Solde actuel : <span className={data.client.account_balance > 0 ? 'text-emerald-600' : 'text-red-500'}>
-                      {data.client.account_balance >= 0 ? '+' : '−'}{formatCurrency(Math.abs(data.client.account_balance))}
-                    </span>
-                  </p>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-5 border-t flex-shrink-0 bg-gray-50 rounded-b-2xl">
+        {/* Header + onglets */}
+        <div className="p-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-gray-500 font-medium">Total à encaisser</span>
-            <span className="text-2xl font-bold text-gray-900">{formatCurrency(totalWithAdvance)}</span>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Banknote size={18} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="font-bold text-gray-900 leading-tight">Encours</h2>
+                <p className="text-xs text-gray-500">{client.name}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
           </div>
-          <div className="flex gap-3">
-            <button onClick={onClose} disabled={mutation.isPending}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-white disabled:opacity-50">
-              Annuler
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+            <button
+              onClick={() => setActiveTab('encours')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'encours' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Banknote size={12} /> Encours
+              {data?.total_due ? (
+                <span className="bg-orange-100 text-orange-600 px-1.5 rounded-full text-[10px] font-bold">{data.items.length}</span>
+              ) : null}
             </button>
             <button
-              onClick={handleSubmit}
-              disabled={mutation.isPending || totalWithAdvance <= 0 || isLoading}
-              className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2">
-              {mutation.isPending
-                ? <><Loader2 size={15} className="animate-spin" /> Traitement...</>
-                : <><Check size={15} /> Confirmer le paiement</>
-              }
+              onClick={() => setActiveTab('historique')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'historique' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <History size={12} /> Historique
+              {data?.history?.length ? (
+                <span className="bg-gray-200 text-gray-600 px-1.5 rounded-full text-[10px] font-bold">{data.history.length}</span>
+              ) : null}
             </button>
           </div>
         </div>
+
+        {/* ── Onglet Encours ── */}
+        {activeTab === 'encours' && (
+          <>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {isLoading && (
+                <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+                  <Loader2 size={18} className="animate-spin" /> Chargement...
+                </div>
+              )}
+
+              {data && (
+                <>
+                  {data.total_due > 0 ? (
+                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle size={15} className="text-orange-500" />
+                        <span className="text-sm font-semibold text-orange-700">Total dû</span>
+                      </div>
+                      <span className="text-lg font-bold text-orange-700">{formatCurrency(data.total_due)}</span>
+                    </div>
+                  ) : (
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
+                      <CheckCircle2 size={15} className="text-green-500" />
+                      <span className="text-sm text-green-700 font-medium">Aucun encours — le client est à jour</span>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Moyen de paiement</label>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {PAYMENT_METHODS_ENCOUR.map(m => (
+                        <button key={m.value} onClick={() => setMethod(m.value)}
+                          className={`py-2 px-1 rounded-xl text-xs font-semibold text-center transition-all border ${
+                            method === m.value
+                              ? 'bg-primary text-white border-primary shadow-sm'
+                              : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                          }`}>
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Référence</label>
+                      <input value={reference} onChange={e => setReference(e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="N° chèque, transaction..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Note</label>
+                      <input value={note} onChange={e => setNote(e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="Remarque..." />
+                    </div>
+                  </div>
+
+                  {data.items.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Encours à régler</label>
+                        <div className="flex gap-2 text-[11px]">
+                          <button onClick={() => setSelected(new Set(data.items.map(i => `${i.type}-${i.id}`)))}
+                            className="text-primary font-semibold hover:underline">Tout</button>
+                          <span className="text-gray-300">·</span>
+                          <button onClick={() => setSelected(new Set())}
+                            className="text-gray-400 font-semibold hover:underline">Aucun</button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {data.items.map(item => {
+                          const key = `${item.type}-${item.id}`
+                          const isChecked = selected.has(key)
+                          return (
+                            <div key={key}
+                              className={`border rounded-xl p-3 transition-all ${isChecked ? 'border-primary/30 bg-primary/5' : 'border-gray-200 bg-gray-50'}`}>
+                              <div className="flex items-start gap-2">
+                                <button onClick={() => toggleItem(key)} className="mt-0.5 flex-shrink-0">
+                                  {isChecked
+                                    ? <div className="w-4 h-4 rounded bg-primary flex items-center justify-center"><Check size={10} className="text-white" /></div>
+                                    : <div className="w-4 h-4 rounded border-2 border-gray-300" />
+                                  }
+                                </button>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-sm font-semibold text-gray-800">{item.reference}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                      item.type === 'invoice' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
+                                    }`}>
+                                      {item.type === 'invoice' ? 'Facture' : 'Vente crédit'}
+                                    </span>
+                                    {item.is_overdue && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">En retard</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5 flex-wrap">
+                                    <span>{new Date(item.date).toLocaleDateString('fr-FR')}</span>
+                                    {item.due_date && <span>Échéance : {new Date(item.due_date).toLocaleDateString('fr-FR')}</span>}
+                                    {item.paid_amount > 0 && <span className="text-emerald-600">Déjà encaissé : {formatCurrency(item.paid_amount)}</span>}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="text-[10px] text-gray-400">Reste dû</p>
+                                  <p className="text-sm font-bold text-orange-600">{formatCurrency(item.balance)}</p>
+                                </div>
+                              </div>
+                              {isChecked && (
+                                <div className="mt-2.5 ml-6 flex items-center gap-2">
+                                  <label className="text-xs text-gray-500 flex-shrink-0">Montant :</label>
+                                  <input
+                                    type="number" min="0" max={item.balance}
+                                    value={amounts[key] ?? String(item.balance)}
+                                    onChange={e => setAmounts(prev => ({ ...prev, [key]: e.target.value }))}
+                                    className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                  />
+                                  <button
+                                    onClick={() => setAmounts(prev => ({ ...prev, [key]: String(item.balance) }))}
+                                    className="text-[11px] text-primary font-semibold hover:underline flex-shrink-0">
+                                    Max
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border border-dashed border-gray-200 rounded-xl p-3">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                      Avance sur compte
+                      <span className="ml-1 text-gray-400 font-normal normal-case">(crédite le solde compte du client)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min="0"
+                        value={advance}
+                        onChange={e => setAdvance(e.target.value)}
+                        className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="0"
+                      />
+                      <span className="text-sm text-gray-500 flex-shrink-0">FCFA</span>
+                    </div>
+                    {data.client.account_balance !== 0 && (
+                      <p className="text-xs mt-1 text-gray-400">
+                        Solde actuel : <span className={data.client.account_balance > 0 ? 'text-emerald-600' : 'text-red-500'}>
+                          {data.client.account_balance >= 0 ? '+' : '−'}{formatCurrency(Math.abs(data.client.account_balance))}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-5 border-t flex-shrink-0 bg-gray-50 rounded-b-2xl">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-gray-500 font-medium">Total à encaisser</span>
+                <span className="text-2xl font-bold text-gray-900">{formatCurrency(totalWithAdvance)}</span>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={onClose} disabled={mutation.isPending}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-white disabled:opacity-50">
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={mutation.isPending || totalWithAdvance <= 0 || isLoading}
+                  className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {mutation.isPending
+                    ? <><Loader2 size={15} className="animate-spin" /> Traitement...</>
+                    : <><Check size={15} /> Confirmer le paiement</>
+                  }
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── Onglet Historique ── */}
+        {activeTab === 'historique' && (
+          <>
+            <div className="flex-1 overflow-y-auto p-5">
+              {isLoading && (
+                <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+                  <Loader2 size={18} className="animate-spin" /> Chargement...
+                </div>
+              )}
+              {data && (
+                data.history?.length > 0 ? (
+                  <div className="space-y-2">
+                    {data.history.map(h => (
+                      <div key={`${h.type}-${h.id}`} className="border border-gray-100 rounded-xl px-3 py-2.5 bg-white hover:bg-gray-50 transition-colors flex items-start gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${h.type === 'invoice' ? 'bg-blue-100' : 'bg-emerald-100'}`}>
+                          {h.type === 'invoice'
+                            ? <FileText size={14} className="text-blue-600" />
+                            : <Banknote size={14} className="text-emerald-600" />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm font-semibold text-gray-800">{h.reference}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${h.type === 'invoice' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {h.type === 'invoice' ? 'Facture' : 'Vente'}
+                              </span>
+                            </div>
+                            <span className="text-sm font-bold text-emerald-600 flex-shrink-0">+{formatCurrency(h.amount)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5 flex-wrap">
+                            <span>{new Date(h.paid_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full font-medium">
+                              {METHOD_LABELS[h.method] ?? h.method}
+                            </span>
+                            {h.recorder && <span>· par <span className="text-gray-600 font-medium">{h.recorder.name}</span></span>}
+                            {h.notes && <span className="italic truncate">· {h.notes}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-14 text-gray-400">
+                    <History size={32} className="mb-3 opacity-40" />
+                    <p className="text-sm font-medium">Aucun encaissement enregistré</p>
+                    <p className="text-xs mt-1">Les paiements effectués apparaîtront ici</p>
+                  </div>
+                )
+              )}
+            </div>
+
+            <div className="p-4 border-t flex-shrink-0 bg-gray-50 rounded-b-2xl">
+              <button
+                onClick={() => setActiveTab('encours')}
+                className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 flex items-center justify-center gap-2">
+                <Plus size={15} /> Nouveau encaissement
+              </button>
+            </div>
+          </>
+        )}
+
       </div>
     </div>
   )

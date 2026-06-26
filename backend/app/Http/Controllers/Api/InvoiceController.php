@@ -37,9 +37,9 @@ class InvoiceController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $q->where(function ($qq) use ($search) {
-                $qq->where('reference', 'like', "%{$search}%")
-                   ->orWhere('object', 'like', "%{$search}%")
-                   ->orWhereHas('client', fn($c) => $c->where('name', 'like', "%{$search}%"));
+                $qq->where('reference', 'ilike', "%{$search}%")
+                   ->orWhere('object', 'ilike', "%{$search}%")
+                   ->orWhereHas('client', fn($c) => $c->where('name', 'ilike', "%{$search}%"));
             });
         }
         if ($request->filled('date_from')) {
@@ -293,9 +293,9 @@ class InvoiceController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $q->where(function ($qq) use ($search) {
-                $qq->where('reference', 'like', "%{$search}%")
-                   ->orWhere('object', 'like', "%{$search}%")
-                   ->orWhereHas('client', fn($c) => $c->where('name', 'like', "%{$search}%"));
+                $qq->where('reference', 'ilike', "%{$search}%")
+                   ->orWhere('object', 'ilike', "%{$search}%")
+                   ->orWhereHas('client', fn($c) => $c->where('name', 'ilike', "%{$search}%"));
             });
         }
 

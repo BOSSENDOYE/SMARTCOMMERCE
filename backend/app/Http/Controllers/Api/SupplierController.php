@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
+use App\Models\Store;
 use App\Models\Supplier;
 use App\Models\SupplierInvoice;
 use App\Models\SupplierPayment;
@@ -13,15 +14,22 @@ use Illuminate\Support\Facades\DB;
 
 class SupplierController extends Controller
 {
-    private function storeScope(Request $request)
+    /** IDs de tous les magasins de la même organisation que l'utilisateur courant */
+    private function orgStoreIds(Request $request)
     {
-        return fn($q) => $q->whereNull('store_id')->orWhere('store_id', $request->user()->store_id);
+        return Store::where('organization_id', $request->user()->organization_id)->pluck('id');
+    }
+
+    private function orgScope(Request $request)
+    {
+        $orgStoreIds = $this->orgStoreIds($request);
+        return fn($q) => $q->whereNull('store_id')->orWhereIn('store_id', $orgStoreIds);
     }
 
     public function stats(Request $request)
     {
-        $storeId = $request->user()->store_id;
-        $base = Supplier::where(fn($q) => $q->whereNull('store_id')->orWhere('store_id', $storeId));
+        $orgStoreIds = $this->orgStoreIds($request);
+        $base = Supplier::where(fn($q) => $q->whereNull('store_id')->orWhereIn('store_id', $orgStoreIds));
 
         return response()->json([
             'total'             => (clone $base)->count(),
@@ -34,10 +42,10 @@ class SupplierController extends Controller
     public function index(Request $request)
     {
         return response()->json(
-            Supplier::where($this->storeScope($request))
+            Supplier::where($this->orgScope($request))
                 ->withCount(['purchaseOrders', 'invoices'])
-                ->when($request->search, fn($q) => $q->where('company_name', 'like', "%{$request->search}%")
-                    ->orWhere('contact_name', 'like', "%{$request->search}%"))
+                ->when($request->search, fn($q) => $q->where('company_name', 'ilike', "%{$request->search}%")
+                    ->orWhere('contact_name', 'ilike', "%{$request->search}%"))
                 ->when($request->filter === 'active', fn($q) => $q->where('is_active', true))
                 ->when($request->filter === 'inactive', fn($q) => $q->where('is_active', false))
                 ->orderBy('company_name')

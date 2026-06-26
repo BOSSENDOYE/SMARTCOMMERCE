@@ -17,13 +17,13 @@ class EncourController extends Controller
 {
     /**
      * GET /clients/{client}/encours
-     * Retourne toutes les créances non soldées du client pour ce magasin.
+     * Retourne toutes les créances non soldées du client + historique des encaissements.
      */
     public function index(Request $request, Client $client)
     {
         $storeId = $request->user()->store_id;
 
-        // Factures impayées (envoyées, partiellement payées, ou en retard)
+        // ── Factures impayées ─────────────────────────────────────────────────
         $invoices = Invoice::where('store_id', $storeId)
             ->where('client_id', $client->id)
             ->whereIn('status', ['sent', 'partial', 'overdue'])
@@ -44,23 +44,40 @@ class EncourController extends Controller
                 'is_overdue'  => $inv->due_date && now()->gt($inv->due_date) && !in_array($inv->status, ['paid', 'cancelled']),
             ]);
 
-        // Ventes à crédit non entièrement encaissées
-        $creditSales = Sale::where('store_id', $storeId)
+        // ── Ventes à crédit non entièrement encaissées ────────────────────────
+        // Balance = montant crédit initial − encaissements reçus (paid_at IS NOT NULL)
+        $allCreditData = Sale::where('store_id', $storeId)
             ->where('client_id', $client->id)
             ->where('status', 'completed')
             ->whereHas('payments', fn($q) => $q->where('payment_method', 'credit'))
+            ->with('payments')
             ->get()
-            ->filter(fn($s) => (float) $s->total_ttc - (float) $s->paid_amount > 0.01)
-            ->map(fn($s) => [
-                'id'          => $s->id,
+            ->map(function ($s) {
+                $creditAmount = round((float) $s->payments->where('payment_method', 'credit')->sum('amount'), 2);
+                $encaissed    = round((float) $s->payments->filter(fn($p) => !is_null($p->paid_at))->sum('amount'), 2);
+                $balance      = round($creditAmount - $encaissed, 2);
+                return compact('s', 'creditAmount', 'encaissed', 'balance');
+            });
+
+        // Synchroniser credit_balance avec le vrai solde calculé (corrige les dérives dues aux annulations, etc.)
+        $realCreditBalance = round($allCreditData->sum('balance'), 2);
+        if (abs((float) $client->credit_balance - $realCreditBalance) > 0.01) {
+            $client->update(['credit_balance' => $realCreditBalance]);
+            $client->credit_balance = $realCreditBalance;
+        }
+
+        $creditSales = $allCreditData
+            ->filter(fn($item) => $item['balance'] > 0.01)
+            ->map(fn($item) => [
+                'id'          => $item['s']->id,
                 'type'        => 'sale',
-                'reference'   => $s->reference,
-                'label'       => $s->reference,
-                'date'        => $s->created_at?->format('Y-m-d'),
+                'reference'   => $item['s']->reference,
+                'label'       => $item['s']->reference,
+                'date'        => $item['s']->created_at?->format('Y-m-d'),
                 'due_date'    => null,
-                'total_ttc'   => (float) $s->total_ttc,
-                'paid_amount' => (float) $s->paid_amount,
-                'balance'     => round((float) $s->total_ttc - (float) $s->paid_amount, 2),
+                'total_ttc'   => (float) $item['s']->total_ttc,
+                'paid_amount' => $item['encaissed'],
+                'balance'     => $item['balance'],
                 'status'      => 'credit',
                 'is_overdue'  => false,
             ])
@@ -68,6 +85,42 @@ class EncourController extends Controller
 
         $items    = collect($invoices)->concat($creditSales)->sortBy('date')->values();
         $totalDue = round($items->sum('balance'), 2);
+
+        // ── Historique des encaissements ──────────────────────────────────────
+        $saleHistory = SalePayment::whereHas('sale', fn($q) =>
+                $q->where('store_id', $storeId)->where('client_id', $client->id))
+            ->whereNotNull('paid_at')
+            ->with('recordedBy:id,name', 'sale:id,reference')
+            ->orderByDesc('paid_at')
+            ->get()
+            ->map(fn($p) => [
+                'id'        => $p->id,
+                'type'      => 'sale',
+                'reference' => $p->sale?->reference,
+                'amount'    => (float) $p->amount,
+                'method'    => $p->payment_method,
+                'paid_at'   => $p->paid_at?->toIso8601String(),
+                'notes'     => $p->notes,
+                'recorder'  => $p->recordedBy ? ['id' => $p->recordedBy->id, 'name' => $p->recordedBy->name] : null,
+            ]);
+
+        $invoiceHistory = InvoicePayment::whereHas('invoice', fn($q) =>
+                $q->where('store_id', $storeId)->where('client_id', $client->id))
+            ->with('recordedBy:id,name', 'invoice:id,reference')
+            ->orderByDesc('paid_at')
+            ->get()
+            ->map(fn($p) => [
+                'id'        => $p->id,
+                'type'      => 'invoice',
+                'reference' => $p->invoice?->reference,
+                'amount'    => (float) $p->amount,
+                'method'    => $p->method,
+                'paid_at'   => $p->paid_at?->toIso8601String(),
+                'notes'     => $p->notes,
+                'recorder'  => $p->recordedBy ? ['id' => $p->recordedBy->id, 'name' => $p->recordedBy->name] : null,
+            ]);
+
+        $history = collect($saleHistory)->concat($invoiceHistory)->sortByDesc('paid_at')->values();
 
         return response()->json([
             'client' => [
@@ -79,6 +132,76 @@ class EncourController extends Controller
             ],
             'items'     => $items,
             'total_due' => $totalDue,
+            'history'   => $history,
+        ]);
+    }
+
+    /**
+     * GET /encours/history
+     * Historique global de tous les encaissements du magasin (recherche, filtre date).
+     */
+    public function globalHistory(Request $request)
+    {
+        $storeId = $request->user()->store_id;
+        $search  = $request->search;
+        $from    = $request->from;
+        $to      = $request->to;
+
+        $salePayments = SalePayment::whereHas('sale', fn($q) => $q->where('store_id', $storeId))
+            ->whereNotNull('paid_at')
+            ->with('recordedBy:id,name', 'sale:id,reference,client_id', 'sale.client:id,name')
+            ->when($from, fn($q) => $q->where('paid_at', '>=', $from))
+            ->when($to,   fn($q) => $q->where('paid_at', '<=', $to . ' 23:59:59'))
+            ->orderByDesc('paid_at')
+            ->get()
+            ->map(fn($p) => [
+                'id'          => $p->id,
+                'type'        => 'sale',
+                'reference'   => $p->sale?->reference,
+                'client_name' => $p->sale?->client?->name,
+                'client_id'   => $p->sale?->client_id,
+                'amount'      => (float) $p->amount,
+                'method'      => $p->payment_method,
+                'paid_at'     => $p->paid_at?->toIso8601String(),
+                'notes'       => $p->notes,
+                'recorder'    => $p->recordedBy ? ['id' => $p->recordedBy->id, 'name' => $p->recordedBy->name] : null,
+            ]);
+
+        $invoicePayments = InvoicePayment::whereHas('invoice', fn($q) => $q->where('store_id', $storeId))
+            ->with('recordedBy:id,name', 'invoice:id,reference,client_id', 'invoice.client:id,name')
+            ->when($from, fn($q) => $q->where('paid_at', '>=', $from))
+            ->when($to,   fn($q) => $q->where('paid_at', '<=', $to . ' 23:59:59'))
+            ->orderByDesc('paid_at')
+            ->get()
+            ->map(fn($p) => [
+                'id'          => $p->id,
+                'type'        => 'invoice',
+                'reference'   => $p->invoice?->reference,
+                'client_name' => $p->invoice?->client?->name,
+                'client_id'   => $p->invoice?->client_id,
+                'amount'      => (float) $p->amount,
+                'method'      => $p->method,
+                'paid_at'     => $p->paid_at?->toIso8601String(),
+                'notes'       => $p->notes,
+                'recorder'    => $p->recordedBy ? ['id' => $p->recordedBy->id, 'name' => $p->recordedBy->name] : null,
+            ]);
+
+        $all = collect($salePayments)->concat($invoicePayments)->sortByDesc('paid_at')->values();
+
+        if ($search) {
+            $s   = mb_strtolower($search);
+            $all = $all->filter(fn($item) =>
+                str_contains(mb_strtolower($item['client_name'] ?? ''), $s) ||
+                str_contains(mb_strtolower($item['reference']   ?? ''), $s) ||
+                str_contains(mb_strtolower($item['recorder']['name'] ?? ''), $s) ||
+                str_contains(mb_strtolower($item['notes']       ?? ''), $s)
+            )->values();
+        }
+
+        return response()->json([
+            'data'  => $all,
+            'total' => round($all->sum('amount'), 2),
+            'count' => $all->count(),
         ]);
     }
 
@@ -89,7 +212,7 @@ class EncourController extends Controller
     public function pay(Request $request, Client $client)
     {
         $data = $request->validate([
-            'method'            => 'required|in:cash,mobile_money,bank_transfer,check,other',
+            'method'            => 'required|in:cash,mobile_money,bank_transfer,check,other,card,wave,orange_money,free_money',
             'reference'         => 'nullable|string|max:100',
             'note'              => 'nullable|string|max:300',
             'payments'          => 'nullable|array',
@@ -107,10 +230,10 @@ class EncourController extends Controller
         $userId  = $request->user()->id;
 
         return DB::transaction(function () use ($data, $client, $storeId, $userId) {
-            $results      = [];
-            $totalPaid    = 0;
+            $results   = [];
+            $totalPaid = 0;
 
-            // ── Règlements sur documents ──────────────────────────────────────────
+            // ── Règlements sur documents ──────────────────────────────────────
             foreach ($data['payments'] ?? [] as $pmt) {
                 if ($pmt['type'] === 'invoice') {
                     $invoice = Invoice::where('store_id', $storeId)
@@ -140,23 +263,25 @@ class EncourController extends Controller
                         ->where('client_id', $client->id)
                         ->findOrFail((int) $pmt['id']);
 
-                    $balance = round((float) $sale->total_ttc - (float) $sale->paid_amount, 2);
-                    $amount  = min(round((float) $pmt['amount'], 2), $balance);
+                    // Balance réelle = crédit initial − encaissements déjà reçus (paid_at NOT NULL)
+                    $sale->load('payments');
+                    $creditAmount  = round((float) $sale->payments->where('payment_method', 'credit')->sum('amount'), 2);
+                    $prevEncaissed = round((float) $sale->payments->filter(fn($p) => !is_null($p->paid_at))->sum('amount'), 2);
+                    $balance       = round($creditAmount - $prevEncaissed, 2);
+
+                    $amount = min(round((float) $pmt['amount'], 2), $balance);
                     if ($amount <= 0) continue;
 
-                    // Nouvel encaissement sur la vente
                     SalePayment::create([
                         'sale_id'        => $sale->id,
                         'payment_method' => $data['method'],
                         'amount'         => $amount,
                         'reference'      => $data['reference'] ?? null,
+                        'notes'          => $data['note'] ?? null,
+                        'paid_at'        => now(),
+                        'recorded_by'    => $userId,
                         'is_confirmed'   => true,
                     ]);
-
-                    // Mise à jour paid_amount (bypass Eloquent boot protection)
-                    DB::table('sales')
-                        ->where('id', $sale->id)
-                        ->update(['paid_amount' => (float) $sale->paid_amount + $amount]);
 
                     // Réduction du credit_balance client
                     $newCredit = max(0, (float) $client->fresh()->credit_balance - $amount);
@@ -167,7 +292,7 @@ class EncourController extends Controller
                 }
             }
 
-            // ── Avance sur compte ─────────────────────────────────────────────────
+            // ── Avance sur compte ─────────────────────────────────────────────
             if (!empty($data['advance']) && $data['advance'] > 0) {
                 $client->refresh();
                 $before = (float) $client->account_balance;

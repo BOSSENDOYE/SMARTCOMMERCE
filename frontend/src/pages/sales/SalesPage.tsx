@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
@@ -814,7 +814,7 @@ function SaleForm({ onSaved, onCancel, initialLines }: {
           </div>
 
         </div>
-      </div>
+      )}
 
       {/* ── Modale de paiement ── */}
       {showPaymentModal && (

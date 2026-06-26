@@ -63,11 +63,11 @@ class CrmController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $q->where(function ($qq) use ($s) {
-                $qq->where('title', 'like', "%{$s}%")
-                   ->orWhere('contact_name', 'like', "%{$s}%")
-                   ->orWhere('contact_phone', 'like', "%{$s}%")
-                   ->orWhere('company_name', 'like', "%{$s}%")
-                   ->orWhereHas('client', fn($c) => $c->where('name', 'like', "%{$s}%"));
+                $qq->where('title', 'ilike', "%{$s}%")
+                   ->orWhere('contact_name', 'ilike', "%{$s}%")
+                   ->orWhere('contact_phone', 'ilike', "%{$s}%")
+                   ->orWhere('company_name', 'ilike', "%{$s}%")
+                   ->orWhereHas('client', fn($c) => $c->where('name', 'ilike', "%{$s}%"));
             });
         }
         if ($request->boolean('overdue')) {

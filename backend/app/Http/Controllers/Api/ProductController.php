@@ -24,9 +24,9 @@ class ProductController extends Controller
             ])
             ->when($request->search, fn($q) => $q
                 ->where(fn($q2) => $q2
-                    ->where('name', 'like', "%{$request->search}%")
-                    ->orWhere('internal_code', 'like', "%{$request->search}%")
-                    ->orWhereHas('barcodes', fn($q3) => $q3->where('barcode', 'like', "%{$request->search}%"))
+                    ->where('name', 'ilike', "%{$request->search}%")
+                    ->orWhere('internal_code', 'ilike', "%{$request->search}%")
+                    ->orWhereHas('barcodes', fn($q3) => $q3->where('barcode', 'ilike', "%{$request->search}%"))
                 )
             )
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))

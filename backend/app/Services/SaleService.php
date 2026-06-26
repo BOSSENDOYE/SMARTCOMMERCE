@@ -319,6 +319,17 @@ class SaleService
                 'refunded_at'          => $hasRefund ? now() : null,
             ]);
 
+            // Décrémenter credit_balance si la vente était à crédit et pas encore soldée
+            if ($sale->client_id) {
+                $creditAmt    = (float) $sale->payments()->where('payment_method', 'credit')->sum('amount');
+                $encaissedAmt = (float) $sale->payments()->whereNotNull('paid_at')->sum('amount');
+                $outstanding  = round(max(0, $creditAmt - $encaissedAmt), 2);
+                if ($outstanding > 0.01) {
+                    $saleClient = $sale->client;
+                    $saleClient->update(['credit_balance' => max(0, (float) $saleClient->credit_balance - $outstanding)]);
+                }
+            }
+
             // Refund to account if method is 'account'
             if ($refundMethod === 'account' && $sale->client_id) {
                 $client = $sale->client;
