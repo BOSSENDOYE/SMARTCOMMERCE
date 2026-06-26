@@ -245,7 +245,7 @@ function ReceiptScreen({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =
           ['Date',      `${dateStr}  ${timeStr}`],
           sale.user?.name   ? ['Caissier', sale.user.name]  : null,
           sale.client?.name ? ['Client',   sale.client.name] : null,
-        ] as ([string, string] | null)[]).filter(Boolean).map(([k, v]) => (
+        ] as ([string, string] | null)[]).filter((x): x is [string, string] => x !== null).map(([k, v]) => (
           <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 4 }}>
             <span style={{ color: '#555' }}>{k}</span>
             <span style={{ fontWeight: 'bold', textAlign: 'right' }}>{v}</span>
@@ -437,7 +437,11 @@ export default function MobilePosPage() {
   // ── Products ────────────────────────────────────────────────────────────────
   const PER_PAGE = 20
 
-  const { data: productPage = { items: [] as PosItem[], total: 0, totalPages: 1 }, isLoading: productsLoading } = useQuery({
+  const { data: productPage = { items: [] as PosItem[], total: 0, totalPages: 1 }, isLoading: productsLoading } = useQuery<{
+    items: PosItem[]
+    total: number
+    totalPages: number
+  }>({
     queryKey: ['mobile-pos-products', selectedCategoryId, page],
     queryFn:  () => api.get('/products', {
       params: { category_id: selectedCategoryId ?? undefined, per_page: PER_PAGE, page, is_active: true, has_stock: 1 },
@@ -453,8 +457,8 @@ export default function MobilePosPage() {
       totalPages: r.data.meta?.last_page ?? 1,
     })),
     enabled: !is_offline,
-    keepPreviousData: true,
-  } as any)
+    placeholderData: (prev) => prev,
+  })
 
   // ── Cache to Dexie ──────────────────────────────────────────────────────────
   useEffect(() => {
