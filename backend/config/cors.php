@@ -20,6 +20,8 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
+        'https://baobab.sn',
+        'https://www.baobab.sn',
         'https://baobab.lamadoneadn.com',
         'https://gestion.gymaluxe.com',
     ],
