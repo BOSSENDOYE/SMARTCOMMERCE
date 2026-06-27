@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import InstallPWABanner from '../components/InstallPWABanner'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -42,6 +43,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-brand flex items-center justify-center p-4">
+      <InstallPWABanner />
       {/* Déco background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -right-32 w-96 h-96 bg-primary opacity-10 rounded-full" />
@@ -111,17 +113,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo credentials */}
-          <div className="mt-6 p-4 bg-primary-50 rounded-lg border border-primary-100">
-            <p className="text-xs font-semibold text-brand mb-2">Comptes de démonstration :</p>
-            <div className="space-y-1 text-xs text-brand-600">
-              <p><span className="font-medium">Admin :</span> admin@smartcommerce.sn / Admin@2026!</p>
-              <p><span className="font-medium">Gérant :</span> gerant@smartcommerce.sn / Gerant@2026!</p>
-              <p><span className="font-medium">Caissier :</span> caissier@smartcommerce.sn / Caissier@2026!</p>
-              <p><span className="font-medium">Boutiquier :</span> boutiquier@smartcommerce.sn / Boutique@2026!</p>
-              <p><span className="font-medium">Restaurant :</span> restaurant@smartcommerce.sn / Resto@2026!</p>
-            </div>
-          </div>
         </div>
 
         <div className="mt-6 flex items-center justify-between">

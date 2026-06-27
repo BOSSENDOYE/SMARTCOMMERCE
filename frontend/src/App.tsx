@@ -7,7 +7,6 @@ import { useSuperAdminStore } from './store/superAdmin.store'
 import { ConfirmProvider } from './hooks/useConfirm'
 import { usePreferencesStore } from './store/preferences.store'
 import AppLayout from './components/layout/AppLayout'
-import InstallPWABanner from './components/InstallPWABanner'
 import api from './lib/api'
 
 // ── Eager imports (critical path) ─────────────────────────────────────────────
@@ -145,7 +144,6 @@ export default function App() {
     <QueryClientProvider client={qc}>
       <ConfirmProvider>
         <PreferencesBootstrap />
-        <InstallPWABanner />
         <BrowserRouter>
           <Toaster
             position="top-right"
