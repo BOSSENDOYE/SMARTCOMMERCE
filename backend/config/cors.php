@@ -20,6 +20,7 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
+        'http://185.124.202.73',
         'https://baobab.sn',
         'https://www.baobab.sn',
         'https://baobab.lamadoneadn.com',
