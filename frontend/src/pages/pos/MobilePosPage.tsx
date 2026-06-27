@@ -437,11 +437,10 @@ export default function MobilePosPage() {
   // ── Products ────────────────────────────────────────────────────────────────
   const PER_PAGE = 20
 
-  const { data: productPage = { items: [] as PosItem[], total: 0, totalPages: 1 }, isLoading: productsLoading } = useQuery<{
-    items: PosItem[]
-    total: number
-    totalPages: number
-  }>({
+  interface ProductPage { items: PosItem[]; total: number; totalPages: number }
+  const EMPTY_PAGE: ProductPage = { items: [], total: 0, totalPages: 1 }
+
+  const { data: _productPage, isLoading: productsLoading } = useQuery<ProductPage>({
     queryKey: ['mobile-pos-products', selectedCategoryId, page],
     queryFn:  () => api.get('/products', {
       params: { category_id: selectedCategoryId ?? undefined, per_page: PER_PAGE, page, is_active: true, has_stock: 1 },
@@ -457,8 +456,9 @@ export default function MobilePosPage() {
       totalPages: r.data.meta?.last_page ?? 1,
     })),
     enabled: !is_offline,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev: ProductPage | undefined) => prev,
   })
+  const productPage: ProductPage = _productPage ?? EMPTY_PAGE
 
   // ── Cache to Dexie ──────────────────────────────────────────────────────────
   useEffect(() => {
