@@ -20,9 +20,9 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
+        'https://senbaobab.com',
+        'https://www.senbaobab.com',
         'http://185.124.202.73',
-        'https://baobab.sn',
-        'https://www.baobab.sn',
         'https://baobab.lamadoneadn.com',
         'https://gestion.gymaluxe.com',
     ],
