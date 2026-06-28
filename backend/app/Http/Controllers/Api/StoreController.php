@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Store;
 use App\Models\StockLevel;
+use App\Models\Subscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -65,6 +66,28 @@ class StoreController extends Controller
         }
         if (!isset($data['license_restaurant'])) {
             $data['license_restaurant'] = in_array($bt, ['restaurant', 'mixte']);
+        }
+
+        // Vérifier la limite de magasins du plan
+        $orgId = $data['organization_id'] ?? $request->user()->store?->organization_id ?? $request->user()->organization_id;
+        if ($orgId) {
+            $sub = Subscription::where('organization_id', $orgId)
+                ->whereIn('status', ['active', 'trial'])
+                ->with('plan')
+                ->latest('starts_at')
+                ->first();
+
+            if ($sub) {
+                $max = $sub->maxStores();
+                if ($max !== -1) {
+                    $current = Store::where('organization_id', $orgId)->count();
+                    if ($current >= $max) {
+                        return response()->json([
+                            'message' => "Limite atteinte : votre plan « {$sub->plan?->name} » autorise {$max} magasin(s). Contactez l'administrateur pour augmenter votre limite.",
+                        ], 403);
+                    }
+                }
+            }
         }
 
         $store = Store::create(array_merge($data, ['is_active' => true]));

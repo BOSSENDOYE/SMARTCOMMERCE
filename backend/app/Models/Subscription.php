@@ -67,6 +67,18 @@ class Subscription extends Model
         return $this->plan?->hasFeature($feature) ?? false;
     }
 
+    /** Nombre max de magasins autorisés (-1 = illimité) */
+    public function maxStores(): int
+    {
+        return $this->max_stores_override ?? $this->plan?->max_stores ?? -1;
+    }
+
+    /** Nombre max d'utilisateurs autorisés (-1 = illimité) */
+    public function maxUsers(): int
+    {
+        return $this->max_users_override ?? $this->plan?->max_users ?? -1;
+    }
+
     public function extendDays(int $days): void
     {
         $this->ends_at = $this->ends_at->addDays($days);
