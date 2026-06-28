@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\SuperAdmin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\NewOnboardingRequestMail;
+use App\Mail\OnboardingApprovedMail;
 use App\Models\OnboardingRequest;
 use App\Models\Organization;
 use App\Models\Store;
@@ -13,6 +15,8 @@ use App\Models\PlatformAuditLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class OnboardingController extends Controller
@@ -34,6 +38,16 @@ class OnboardingController extends Controller
         ]);
 
         $req = OnboardingRequest::create($data);
+
+        // Notifier le super admin
+        try {
+            $adminEmail = config('mail.superadmin_notify', env('SUPERADMIN_NOTIFY_EMAIL'));
+            if ($adminEmail) {
+                Mail::to($adminEmail)->send(new NewOnboardingRequestMail($req));
+            }
+        } catch (\Throwable $e) {
+            Log::error('Mail nouvelle demande onboarding : ' . $e->getMessage());
+        }
 
         return response()->json([
             'message' => 'Demande enregistrée. Notre équipe vous contactera sous 24h.',
@@ -182,6 +196,19 @@ class OnboardingController extends Controller
                 'admin_email'     => $email,
             ]
         );
+
+        // Envoyer les identifiants au nouveau client
+        try {
+            Mail::to($email)->send(new OnboardingApprovedMail(
+                contactName: $onboardingRequest->contact_name,
+                companyName: $onboardingRequest->company_name,
+                email:       $email,
+                password:    $password,
+                appUrl:      rtrim(config('app.frontend_url', env('FRONTEND_URL', 'https://www.senbaobab.com')), '/'),
+            ));
+        } catch (\Throwable $e) {
+            Log::error('Mail approbation onboarding : ' . $e->getMessage());
+        }
 
         return response()->json([
             'message'         => 'Demande approuvée. Organisation et compte admin créés.',

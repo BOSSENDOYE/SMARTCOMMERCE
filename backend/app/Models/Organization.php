@@ -13,11 +13,16 @@ class Organization extends Model
         'name', 'code', 'ninea', 'rc',
         'address', 'phone', 'email', 'logo',
         'description', 'is_active',
+        'mail_host', 'mail_port', 'mail_username', 'mail_password',
+        'mail_encryption', 'mail_from_address', 'mail_from_name',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'mail_port' => 'integer',
     ];
+
+    protected $hidden = ['mail_password'];
 
     public function stores()
     {

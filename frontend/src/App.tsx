@@ -59,6 +59,7 @@ const RolesPage                   = lazy(() => import('./pages/settings/RolesPag
 const PreferencesPage             = lazy(() => import('./pages/settings/PreferencesPage'))
 const MenuSettingsPage            = lazy(() => import('./pages/settings/MenuSettingsPage'))
 const ClientCategoriesPage        = lazy(() => import('./pages/settings/ClientCategoriesPage'))
+const MailSettingsPage            = lazy(() => import('./pages/settings/MailSettingsPage'))
 
 // ── Query client ──────────────────────────────────────────────────────────────
 
@@ -203,6 +204,7 @@ export default function App() {
               <Route path="client-categories" element={<Suspense fallback={<PageLoader />}><ClientCategoriesPage /></Suspense>} />
               <Route path="invoices" element={<Suspense fallback={<PageLoader />}><InvoicesPage /></Suspense>} />
               <Route path="invoice-reminders" element={<Suspense fallback={<PageLoader />}><InvoiceReminderSettingsPage /></Suspense>} />
+              <Route path="mail-settings" element={<Suspense fallback={<PageLoader />}><MailSettingsPage /></Suspense>} />
               <Route path="crm" element={<Suspense fallback={<PageLoader />}><CrmPage /></Suspense>} />
               <Route path="encours" element={<Suspense fallback={<PageLoader />}><EncourPage /></Suspense>} />
             </Route>

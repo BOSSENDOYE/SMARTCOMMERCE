@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import {
-  Settings, Store, Users, Shield, Printer, ArrowRight, X, Palette, Menu, Tag, Bell,
+  Settings, Store, Users, Shield, Printer, ArrowRight, X, Palette, Menu, Tag, Bell, Mail,
 } from 'lucide-react'
 import { usePreferencesStore, COLOR_PALETTES } from '../../store/preferences.store'
 import ThermalPrinterPanel from '../../components/thermal/ThermalPrinterPanel'
@@ -98,6 +98,14 @@ export default function SettingsPage() {
       desc: 'Règles de relance automatique',
       detail: 'Configurer les délais et canaux de relance (SMS, email)',
       onClick: () => navigate('/invoice-reminders'),
+    },
+    {
+      icon: <Mail size={20} className="text-blue-600" />,
+      iconBg: 'bg-blue-100',
+      title: 'Configuration Email',
+      desc: 'SMTP de votre organisation',
+      detail: 'Configurez votre propre serveur SMTP pour l\'envoi d\'emails',
+      onClick: () => navigate('/mail-settings'),
     },
   ]
 

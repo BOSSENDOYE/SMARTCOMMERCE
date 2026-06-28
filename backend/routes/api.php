@@ -573,10 +573,15 @@ Route::prefix('v1')->group(function () {
         Route::get('/twilio/status',    [\App\Http\Controllers\Api\InvoiceReminderController::class, 'twilioStatus']);
         Route::post('/twilio/test',     [\App\Http\Controllers\Api\InvoiceReminderController::class, 'twilioTest']);
         Route::post('/twilio/send-test', [\App\Http\Controllers\Api\InvoiceReminderController::class, 'twilioSendTest']);
-        // Mail
+        // Mail (relances)
         Route::get('/mail/status',      [\App\Http\Controllers\Api\InvoiceReminderController::class, 'mailStatus']);
         Route::post('/mail/test',        [\App\Http\Controllers\Api\InvoiceReminderController::class, 'mailTest']);
         Route::post('/mail/send-test',   [\App\Http\Controllers\Api\InvoiceReminderController::class, 'mailSendTest']);
+
+        // Configuration email organisation
+        Route::get('/mail-settings',        [\App\Http\Controllers\Api\MailSettingController::class, 'show']);
+        Route::put('/mail-settings',        [\App\Http\Controllers\Api\MailSettingController::class, 'update']);
+        Route::post('/mail-settings/test',  [\App\Http\Controllers\Api\MailSettingController::class, 'test']);
 
         // ── Rayons / Rangement ────────────────────────────────────────────────────
         Route::prefix('sections')->group(function () {
