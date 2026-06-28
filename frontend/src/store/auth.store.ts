@@ -9,6 +9,7 @@ export interface AuthUser {
   store?: {
     id: number
     name: string
+    logo: string | null
     currency: string
     business_type: 'grande_surface' | 'restaurant' | 'depot' | 'mixte'
     license_grande_surface: boolean

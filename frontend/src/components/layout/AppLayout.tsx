@@ -343,13 +343,15 @@ export default function AppLayout() {
         {/* Logo */}
         <div className="flex items-center justify-between p-4 border-b border-brand-700">
           {!collapsed && (
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                <ShoppingCart size={14} className="text-white" />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-primary">
+                {user?.store?.logo
+                  ? <img src={(import.meta.env.VITE_API_URL ?? '') + user.store.logo} alt={storeName} className="w-full h-full object-cover" />
+                  : <ShoppingCart size={14} className="text-white" />}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-bold text-white tracking-wider">BAOBAB</p>
-                <p className="text-xs text-brand-300 truncate">{storeName}</p>
+                <p className="text-xs text-brand-300 leading-tight break-words">{storeName}</p>
               </div>
             </div>
           )}
