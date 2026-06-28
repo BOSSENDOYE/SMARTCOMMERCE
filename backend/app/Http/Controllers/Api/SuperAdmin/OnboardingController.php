@@ -104,30 +104,40 @@ class OnboardingController extends Controller
             $onboardingRequest->country ?? 'Sénégal',
         ]));
 
-        $org = Organization::create([
-            'name'      => $onboardingRequest->company_name,
-            'code'      => $code,
-            'email'     => $onboardingRequest->email,
-            'phone'     => $onboardingRequest->phone,
-            'address'   => $address,
-            'is_active' => true,
-        ]);
+        $org = Organization::firstOrCreate(
+            ['name' => $onboardingRequest->company_name],
+            [
+                'code'      => $code,
+                'email'     => $onboardingRequest->email,
+                'phone'     => $onboardingRequest->phone,
+                'address'   => $address,
+                'is_active' => true,
+            ]
+        );
 
         // ── 2. Créer le magasin principal ─────────────────────────────────────
-        $storeCode = $code . '-001';
-        $store = Store::create([
-            'organization_id' => $org->id,
-            'name'            => $onboardingRequest->company_name,
-            'code'            => $storeCode,
-            'business_type'   => $this->inferBusinessType($onboardingRequest->activity_type),
-            'address'         => $address,
-            'phone'           => $onboardingRequest->phone,
-            'email'           => $onboardingRequest->email,
-            'currency'        => 'XOF',
-            'timezone'        => 'Africa/Dakar',
-            'is_active'       => true,
-            'is_central'      => true,
-        ]);
+        $storeBase = $org->wasRecentlyCreated ? $code : strtoupper(preg_replace('/[^A-Z0-9]/', '', strtoupper($onboardingRequest->company_name)));
+        $storeBase = substr($storeBase, 0, 6) ?: 'STR';
+        $storeCode = $storeBase . '-001';
+        $si = 2;
+        while (Store::where('code', $storeCode)->exists()) {
+            $storeCode = $storeBase . '-00' . $si++;
+        }
+        $store = Store::firstOrCreate(
+            ['organization_id' => $org->id, 'is_central' => true],
+            [
+                'name'          => $onboardingRequest->company_name,
+                'code'          => $storeCode,
+                'business_type' => $this->inferBusinessType($onboardingRequest->activity_type),
+                'address'       => $address,
+                'phone'         => $onboardingRequest->phone,
+                'email'         => $onboardingRequest->email,
+                'currency'      => 'XOF',
+                'timezone'      => 'Africa/Dakar',
+                'is_active'     => true,
+                'is_central'    => true,
+            ]
+        );
 
         // ── 3. Créer l'utilisateur admin du tenant ────────────────────────────
         $password = Str::random(10) . '!';
