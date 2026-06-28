@@ -12,34 +12,17 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $isSuperAdmin = $request->user()->hasRole('super_admin');
+        $user  = $request->user();
+        $orgId = $user->store?->organization_id ?? $user->organization_id;
 
         $query = User::with(['roles', 'store:id,name,code', 'stores:id,name,code'])
             ->select(['id', 'name', 'email', 'is_active', 'store_id', 'last_login_at', 'created_at']);
 
-        if ($isSuperAdmin) {
-            // Super-admin : peut filtrer par magasin via param ou header, sinon voit tout
-            $storeFilter = $request->filled('store_id')
-                ? (int) $request->store_id
-                : ($request->header('X-Store-Id') ? (int) $request->header('X-Store-Id') : null);
-
-            if ($storeFilter) {
-                $query->where(function ($q) use ($storeFilter) {
-                    $q->where('store_id', $storeFilter)
-                      ->orWhereHas('stores', fn($q2) => $q2->where('stores.id', $storeFilter));
-                });
-            }
+        if ($orgId) {
+            $storeIds = Store::where('organization_id', $orgId)->pluck('id');
+            $query->whereIn('store_id', $storeIds);
         } else {
-            // Utilisateur normal : filtrer par organisation du magasin courant
-            $orgId = $request->user()->store?->organization_id
-                  ?? $request->user()->organization_id;
-
-            if ($orgId !== null) {
-                $storeIds = Store::where('organization_id', $orgId)->pluck('id');
-                $query->whereIn('store_id', $storeIds);
-            } else {
-                $query->where('store_id', $request->user()->store_id);
-            }
+            $query->where('store_id', $user->store_id ?? -1);
         }
 
         return response()->json($query->orderBy('name')->get());

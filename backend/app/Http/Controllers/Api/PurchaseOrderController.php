@@ -16,15 +16,12 @@ class PurchaseOrderController extends Controller
 {
     private function authorizedStoreIds(Request $request): array
     {
-        $user = $request->user();
-        if ($user->hasRole('super_admin')) {
-            return Store::pluck('id')->toArray();
-        }
+        $user  = $request->user();
         $orgId = $user->store?->organization_id ?? $user->organization_id;
         if ($orgId) {
             return Store::where('organization_id', $orgId)->pluck('id')->toArray();
         }
-        return [$user->store_id];
+        return $user->store_id ? [$user->store_id] : [-1];
     }
 
     private function canAccessOrder(Request $request, PurchaseOrder $order): bool
