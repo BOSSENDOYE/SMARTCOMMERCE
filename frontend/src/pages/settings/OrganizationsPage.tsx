@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import api from '../../lib/api'
+import api, { storageUrl } from '../../lib/api'
 import toast from 'react-hot-toast'
 import {
   Building2, Plus, Pencil, Trash2, X, Store,
@@ -237,7 +237,7 @@ function OrgDetailDrawer({ org, onClose, onEdit }: { org: Org; onClose: () => vo
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl overflow-hidden bg-primary/10 flex items-center justify-center flex-shrink-0">
               {org.logo
-                ? <img src={org.logo} alt={org.name} className="w-full h-full object-cover" />
+                ? <img src={storageUrl(org.logo)} alt={org.name} className="w-full h-full object-cover" />
                 : <Building2 size={20} className="text-primary" />}
             </div>
             <div>
@@ -396,7 +396,7 @@ function OrgCard({ org, onEdit, onDelete, onToggle, onView }: {
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 bg-primary/10 flex items-center justify-center">
             {org.logo
-              ? <img src={org.logo} alt={org.name} className="w-full h-full object-cover" />
+              ? <img src={storageUrl(org.logo)} alt={org.name} className="w-full h-full object-cover" />
               : <Building2 size={22} className="text-primary" />}
           </div>
           <div>

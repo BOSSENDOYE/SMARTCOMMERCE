@@ -70,4 +70,11 @@ api.interceptors.response.use(
   }
 )
 
+/** Préfixe l'URL de l'API pour les chemins /storage/... retournés par Laravel */
+export const storageUrl = (path: string | null | undefined): string | undefined => {
+  if (!path) return undefined
+  if (path.startsWith('http')) return path
+  return API_URL + path
+}
+
 export default api

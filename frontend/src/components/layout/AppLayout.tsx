@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import api from '../../lib/api'
+import api, { storageUrl } from '../../lib/api'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users, BarChart3,
@@ -346,7 +346,7 @@ export default function AppLayout() {
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-primary">
                 {user?.store?.logo
-                  ? <img src={(import.meta.env.VITE_API_URL ?? '') + user.store.logo} alt={storeName} className="w-full h-full object-cover" />
+                  ? <img src={storageUrl(user.store.logo)} alt={storeName} className="w-full h-full object-cover" />
                   : <ShoppingCart size={14} className="text-white" />}
               </div>
               <div className="min-w-0">

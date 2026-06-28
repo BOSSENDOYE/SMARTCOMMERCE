@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import api from '../../lib/api'
+import api, { storageUrl } from '../../lib/api'
 import { formatCurrency } from '../../lib/format'
 import toast from 'react-hot-toast'
 import {
@@ -362,7 +362,7 @@ function StoreCard({ store, onEdit, onToggle }: {
             store.logo ? '' : (store.is_central ? 'bg-gradient-to-br from-primary to-orange-600' : 'bg-gradient-to-br from-indigo-500 to-blue-600')
           } flex items-center justify-center text-white font-bold text-lg`}>
             {store.logo
-              ? <img src={store.logo} alt={store.name} className="w-full h-full object-cover" />
+              ? <img src={storageUrl(store.logo)} alt={store.name} className="w-full h-full object-cover" />
               : store.name.charAt(0).toUpperCase()
             }
           </div>
