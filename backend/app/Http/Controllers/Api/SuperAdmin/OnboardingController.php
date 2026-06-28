@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\SuperAdmin;
 use App\Http\Controllers\Controller;
 use App\Mail\NewOnboardingRequestMail;
 use App\Mail\OnboardingApprovedMail;
+use App\Mail\OnboardingReceivedMail;
 use App\Models\OnboardingRequest;
 use App\Models\Organization;
 use App\Models\Store;
@@ -39,14 +40,21 @@ class OnboardingController extends Controller
 
         $req = OnboardingRequest::create($data);
 
-        // Notifier le super admin
+        // 1. Confirmation au demandeur
+        try {
+            Mail::to($req->email)->send(new OnboardingReceivedMail($req));
+        } catch (\Throwable $e) {
+            Log::error('Mail confirmation demande onboarding : ' . $e->getMessage());
+        }
+
+        // 2. Notification au super admin
         try {
             $adminEmail = config('mail.superadmin_notify', env('SUPERADMIN_NOTIFY_EMAIL'));
             if ($adminEmail) {
                 Mail::to($adminEmail)->send(new NewOnboardingRequestMail($req));
             }
         } catch (\Throwable $e) {
-            Log::error('Mail nouvelle demande onboarding : ' . $e->getMessage());
+            Log::error('Mail notification super admin onboarding : ' . $e->getMessage());
         }
 
         return response()->json([
