@@ -24,11 +24,11 @@ class SuperAdminDashboardController extends Controller
         // MRR calculation (sum of monthly equivalents)
         $mrr = Subscription::where('status', 'active')
             ->join('subscription_plans', 'subscriptions.plan_id', '=', 'subscription_plans.id')
-            ->selectRaw('SUM(CASE
-                WHEN subscriptions.billing_cycle = "monthly" THEN subscription_plans.price_monthly
-                WHEN subscriptions.billing_cycle = "quarterly" THEN subscription_plans.price_quarterly / 3
-                WHEN subscriptions.billing_cycle = "yearly" THEN subscription_plans.price_yearly / 12
-                ELSE 0 END) as mrr')
+            ->selectRaw("SUM(CASE
+                WHEN subscriptions.billing_cycle = 'monthly' THEN subscription_plans.price_monthly
+                WHEN subscriptions.billing_cycle = 'quarterly' THEN subscription_plans.price_quarterly / 3
+                WHEN subscriptions.billing_cycle = 'yearly' THEN subscription_plans.price_yearly / 12
+                ELSE 0 END) as mrr")
             ->value('mrr') ?? 0;
 
         // ARR
