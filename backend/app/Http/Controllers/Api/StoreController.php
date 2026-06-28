@@ -137,10 +137,14 @@ class StoreController extends Controller
             Storage::delete(str_replace('/storage/', 'public/', $store->logo));
         }
 
-        $path = $request->file('logo')->store('logos/stores', 'public');
-        if (!$path) {
-            return response()->json(['message' => 'Impossible de sauvegarder le fichier. Vérifiez le lien de stockage (php artisan storage:link).'], 500);
+        $file      = $request->file('logo');
+        $filename  = \Illuminate\Support\Str::random(40) . '.' . $file->getClientOriginalExtension();
+        $contents  = file_get_contents($file->getPathname());
+        if ($contents === false) {
+            return response()->json(['message' => 'Impossible de lire le fichier uploadé (dossier temp inaccessible).'], 500);
         }
+        Storage::disk('public')->put('logos/stores/' . $filename, $contents);
+        $path = 'logos/stores/' . $filename;
         $store->update(['logo' => Storage::url($path)]);
 
         return response()->json(['logo' => $store->logo]);

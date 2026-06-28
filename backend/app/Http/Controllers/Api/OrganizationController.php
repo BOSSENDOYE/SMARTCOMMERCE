@@ -111,7 +111,11 @@ class OrganizationController extends Controller
             Storage::delete(str_replace('/storage/', 'public/', $organization->logo));
         }
 
-        $path = $request->file('logo')->store('logos/organizations', 'public');
+        $file     = $request->file('logo');
+        $filename = \Illuminate\Support\Str::random(40) . '.' . $file->getClientOriginalExtension();
+        $contents = file_get_contents($file->getPathname());
+        Storage::disk('public')->put('logos/organizations/' . $filename, $contents);
+        $path = 'logos/organizations/' . $filename;
         $organization->update(['logo' => Storage::url($path)]);
 
         return response()->json(['logo' => $organization->logo]);
