@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -29,9 +30,16 @@ class UserController extends Controller
                 });
             }
         } else {
-            // Utilisateur normal : uniquement les users de la même organisation
-            $orgId = $request->user()->organization_id;
-            $query->where('organization_id', $orgId);
+            // Utilisateur normal : filtrer par organisation du magasin courant
+            $orgId = $request->user()->store?->organization_id
+                  ?? $request->user()->organization_id;
+
+            if ($orgId !== null) {
+                $storeIds = Store::where('organization_id', $orgId)->pluck('id');
+                $query->whereIn('store_id', $storeIds);
+            } else {
+                $query->where('store_id', $request->user()->store_id);
+            }
         }
 
         return response()->json($query->orderBy('name')->get());
@@ -75,12 +83,13 @@ class UserController extends Controller
         }
 
         $user = User::create([
-            'name'      => $data['name'],
-            'email'     => $data['email'],
-            'password'  => Hash::make($data['password']),
-            'pin'       => Hash::make($data['pin']),
-            'store_id'  => $defaultStoreId,
-            'is_active' => true,
+            'name'            => $data['name'],
+            'email'           => $data['email'],
+            'password'        => Hash::make($data['password']),
+            'pin'             => Hash::make($data['pin']),
+            'store_id'        => $defaultStoreId,
+            'organization_id' => Store::find($defaultStoreId)?->organization_id,
+            'is_active'       => true,
         ]);
         $user->assignRole($data['role']);
         $user->stores()->sync($storeIds);

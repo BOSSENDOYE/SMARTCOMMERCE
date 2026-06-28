@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import {
-  Settings, Store, Users, Shield, Printer, Building2, ArrowRight, X, Palette, Menu, Tag, Bell,
+  Settings, Store, Users, Shield, Printer, ArrowRight, X, Palette, Menu, Tag, Bell,
 } from 'lucide-react'
 import { usePreferencesStore, COLOR_PALETTES } from '../../store/preferences.store'
 import ThermalPrinterPanel from '../../components/thermal/ThermalPrinterPanel'
@@ -27,15 +27,6 @@ export default function SettingsPage() {
   const isSuperAdmin = user?.roles?.includes('super_admin')
 
   const cards: SettingCard[] = [
-    {
-      icon: <Building2 size={20} className="text-indigo-600" />,
-      iconBg: 'bg-indigo-100',
-      title: 'Organisations',
-      desc: 'Groupes & entités mères',
-      detail: 'Créer et gérer les organisations qui regroupent vos magasins',
-      onClick: () => navigate('/organizations'),
-      adminOnly: true,
-    },
     {
       icon: <Store size={20} className="text-primary" />,
       iconBg: 'bg-primary-100',
