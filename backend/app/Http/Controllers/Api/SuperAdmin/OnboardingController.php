@@ -253,15 +253,16 @@ class OnboardingController extends Controller
     private function inferBusinessType(string $activityType): string
     {
         $type = strtolower($activityType);
-        if (str_contains($type, 'restaurant') || str_contains($type, 'fast') || str_contains($type, 'snack') || str_contains($type, 'café')) {
+        if (str_contains($type, 'restaurant') || str_contains($type, 'fast') || str_contains($type, 'snack') || str_contains($type, 'café') || str_contains($type, 'cafe')) {
             return 'restaurant';
         }
-        if (str_contains($type, 'supermarché') || str_contains($type, 'superette') || str_contains($type, 'grande surface')) {
-            return 'supermarket';
+        if (str_contains($type, 'supermarché') || str_contains($type, 'superette') || str_contains($type, 'grande surface') || str_contains($type, 'supermarche')) {
+            return 'grande_surface';
         }
-        if (str_contains($type, 'pharmacie')) {
-            return 'pharmacy';
+        if (str_contains($type, 'dépôt') || str_contains($type, 'depot') || str_contains($type, 'entrepôt') || str_contains($type, 'entrepot') || str_contains($type, 'grossiste')) {
+            return 'depot';
         }
-        return 'general';
+        // 'mixte' est le fallback sûr — couvre pharmacie, boutique, etc.
+        return 'mixte';
     }
 }
