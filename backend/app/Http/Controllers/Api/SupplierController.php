@@ -15,15 +15,25 @@ use Illuminate\Support\Facades\DB;
 class SupplierController extends Controller
 {
     /** IDs de tous les magasins de la même organisation que l'utilisateur courant */
-    private function orgStoreIds(Request $request)
+    private function orgStoreIds(Request $request): array
     {
-        return Store::where('organization_id', $request->user()->organization_id)->pluck('id');
+        $user  = $request->user();
+        $orgId = $user->store?->organization_id ?? $user->organization_id;
+        if (!$orgId) {
+            return $user->store_id ? [$user->store_id] : [-1];
+        }
+        return Store::where('organization_id', $orgId)->pluck('id')->toArray();
     }
 
-    private function orgScope(Request $request)
+    private function orgScope(Request $request): \Closure
     {
-        $orgStoreIds = $this->orgStoreIds($request);
-        return fn($q) => $q->whereNull('store_id')->orWhereIn('store_id', $orgStoreIds);
+        $ids = $this->orgStoreIds($request);
+        return fn($q) => $q->whereIn('store_id', $ids);
+    }
+
+    private function canAccess(Request $request, Supplier $supplier): bool
+    {
+        return in_array($supplier->store_id, $this->orgStoreIds($request), true);
     }
 
     public function stats(Request $request)
@@ -72,8 +82,11 @@ class SupplierController extends Controller
         return response()->json($supplier, 201);
     }
 
-    public function show(Supplier $supplier)
+    public function show(Request $request, Supplier $supplier)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         return response()->json(
             $supplier->loadCount(['purchaseOrders', 'invoices'])
         );
@@ -81,6 +94,9 @@ class SupplierController extends Controller
 
     public function update(Request $request, Supplier $supplier)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         $data = $request->validate([
             'company_name'      => 'sometimes|string|max:200',
             'ninea'             => 'nullable|string|max:30',
@@ -98,8 +114,11 @@ class SupplierController extends Controller
         return response()->json($supplier);
     }
 
-    public function destroy(Supplier $supplier)
+    public function destroy(Request $request, Supplier $supplier)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         if ($supplier->purchaseOrders()->exists()) {
             return response()->json(['message' => 'Impossible de supprimer un fournisseur ayant des commandes.'], 422);
         }
@@ -111,6 +130,9 @@ class SupplierController extends Controller
 
     public function getOrders(Request $request, Supplier $supplier)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         return response()->json(
             PurchaseOrder::where('supplier_id', $supplier->id)
                 ->where('store_id', $request->user()->store_id)
@@ -125,6 +147,9 @@ class SupplierController extends Controller
 
     public function getInvoices(Request $request, Supplier $supplier)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         return response()->json(
             SupplierInvoice::where('supplier_id', $supplier->id)
                 ->where('store_id', $request->user()->store_id)
@@ -136,6 +161,9 @@ class SupplierController extends Controller
 
     public function addInvoice(Request $request, Supplier $supplier)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         $data = $request->validate([
             'reference'    => 'required|string|max:100',
             'amount_ht'    => 'required|numeric|min:0',
@@ -161,6 +189,9 @@ class SupplierController extends Controller
 
     public function payInvoice(Request $request, Supplier $supplier, SupplierInvoice $invoice)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         if ($invoice->supplier_id !== $supplier->id) {
             return response()->json(['message' => 'Facture introuvable.'], 404);
         }
@@ -204,8 +235,11 @@ class SupplierController extends Controller
 
     // ---------- Products ----------
 
-    public function getProducts(Supplier $supplier)
+    public function getProducts(Request $request, Supplier $supplier)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         return response()->json(
             $supplier->products()
                 ->with('unit:id,abbreviation')
@@ -216,6 +250,9 @@ class SupplierController extends Controller
 
     public function linkProduct(Request $request, Supplier $supplier)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         $data = $request->validate([
             'product_id'          => 'required|exists:products,id',
             'supplier_ref'        => 'nullable|string|max:50',
@@ -238,8 +275,11 @@ class SupplierController extends Controller
         );
     }
 
-    public function unlinkProduct(Supplier $supplier, Product $product)
+    public function unlinkProduct(Request $request, Supplier $supplier, Product $product)
     {
+        if (!$this->canAccess($request, $supplier)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         $supplier->products()->detach($product->id);
         return response()->json(['message' => 'Produit retiré du fournisseur.']);
     }
