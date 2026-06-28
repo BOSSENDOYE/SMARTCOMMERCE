@@ -7,16 +7,35 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\PurchaseReception;
 use App\Models\PurchaseReceptionItem;
+use App\Models\Store;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseOrderController extends Controller
 {
+    private function authorizedStoreIds(Request $request): array
+    {
+        $user = $request->user();
+        if ($user->hasRole('super_admin')) {
+            return Store::pluck('id')->toArray();
+        }
+        $orgId = $user->store?->organization_id ?? $user->organization_id;
+        if ($orgId) {
+            return Store::where('organization_id', $orgId)->pluck('id')->toArray();
+        }
+        return [$user->store_id];
+    }
+
+    private function canAccessOrder(Request $request, PurchaseOrder $order): bool
+    {
+        return in_array($order->store_id, $this->authorizedStoreIds($request), true);
+    }
+
     public function stats(Request $request)
     {
-        $storeId = $request->user()->store_id;
-        $base = PurchaseOrder::where('store_id', $storeId);
+        $storeIds = $this->authorizedStoreIds($request);
+        $base = PurchaseOrder::whereIn('store_id', $storeIds);
 
         return response()->json([
             'total'         => (clone $base)->count(),
@@ -35,7 +54,7 @@ class PurchaseOrderController extends Controller
         return response()->json(
             PurchaseOrder::with(['supplier:id,company_name', 'creator:id,name'])
                 ->withCount('items')
-                ->where('store_id', $request->user()->store_id)
+                ->whereIn('store_id', $this->authorizedStoreIds($request))
                 ->when($request->search, fn($q) => $q->where('reference', 'ilike', "%{$request->search}%")
                     ->orWhereHas('supplier', fn($s) => $s->where('company_name', 'ilike', "%{$request->search}%")))
                 ->when($request->supplier_id, fn($q) => $q->where('supplier_id', $request->supplier_id))
@@ -83,8 +102,11 @@ class PurchaseOrderController extends Controller
         });
     }
 
-    public function show(PurchaseOrder $purchaseOrder)
+    public function show(Request $request, PurchaseOrder $purchaseOrder)
     {
+        if (!$this->canAccessOrder($request, $purchaseOrder)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         $po = $purchaseOrder->load([
             'supplier',
             'items.product:id,name,internal_code',
@@ -109,6 +131,9 @@ class PurchaseOrderController extends Controller
 
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
+        if (!$this->canAccessOrder($request, $purchaseOrder)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         if ($purchaseOrder->status !== 'draft') {
             return response()->json(['message' => 'Seules les commandes brouillon sont modifiables.'], 422);
         }
@@ -143,8 +168,11 @@ class PurchaseOrderController extends Controller
         );
     }
 
-    public function send(PurchaseOrder $purchaseOrder)
+    public function send(Request $request, PurchaseOrder $purchaseOrder)
     {
+        if (!$this->canAccessOrder($request, $purchaseOrder)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         if ($purchaseOrder->status !== 'draft') {
             return response()->json(['message' => 'Seules les commandes brouillon peuvent être envoyées.'], 422);
         }
@@ -155,8 +183,11 @@ class PurchaseOrderController extends Controller
         return response()->json($purchaseOrder->fresh());
     }
 
-    public function cancel(PurchaseOrder $purchaseOrder)
+    public function cancel(Request $request, PurchaseOrder $purchaseOrder)
     {
+        if (!$this->canAccessOrder($request, $purchaseOrder)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         if ($purchaseOrder->status === 'received') {
             return response()->json(['message' => 'Impossible d\'annuler une commande déjà réceptionnée.'], 422);
         }
@@ -166,6 +197,9 @@ class PurchaseOrderController extends Controller
 
     public function receive(Request $request, PurchaseOrder $purchaseOrder, StockService $stock)
     {
+        if (!$this->canAccessOrder($request, $purchaseOrder)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         if (!in_array($purchaseOrder->status, ['sent', 'partial'])) {
             return response()->json(['message' => 'Cette commande ne peut pas être réceptionnée dans son état actuel.'], 422);
         }
@@ -255,8 +289,11 @@ class PurchaseOrderController extends Controller
         });
     }
 
-    public function destroy(PurchaseOrder $purchaseOrder)
+    public function destroy(Request $request, PurchaseOrder $purchaseOrder)
     {
+        if (!$this->canAccessOrder($request, $purchaseOrder)) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
         if ($purchaseOrder->status !== 'draft') {
             return response()->json(['message' => 'Seules les commandes brouillon peuvent être supprimées.'], 422);
         }
