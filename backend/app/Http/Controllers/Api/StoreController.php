@@ -138,6 +138,9 @@ class StoreController extends Controller
         }
 
         $path = $request->file('logo')->store('logos/stores', 'public');
+        if (!$path) {
+            return response()->json(['message' => 'Impossible de sauvegarder le fichier. Vérifiez le lien de stockage (php artisan storage:link).'], 500);
+        }
         $store->update(['logo' => Storage::url($path)]);
 
         return response()->json(['logo' => $store->logo]);

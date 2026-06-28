@@ -79,7 +79,7 @@ class NotificationController extends Controller
 
         // ── 3. Lots proches de l'expiration (≤ 30 jours) ───────────────────
         $expirySoon = ProductLot::where('store_id', $storeId)
-            ->where('qty', '>', 0)
+            ->where('current_qty', '>', 0)
             ->whereNotNull('expiry_date')
             ->whereBetween('expiry_date', [Carbon::today(), Carbon::today()->addDays(30)])
             ->with(['product' => fn($q) => $q->select('id', 'name', 'internal_code')])
@@ -91,7 +91,7 @@ class NotificationController extends Controller
 
         // Lots déjà expirés avec stock restant
         $expired = ProductLot::where('store_id', $storeId)
-            ->where('qty', '>', 0)
+            ->where('current_qty', '>', 0)
             ->whereNotNull('expiry_date')
             ->where('expiry_date', '<', Carbon::today())
             ->with(['product' => fn($q) => $q->select('id', 'name', 'internal_code')])
@@ -112,7 +112,7 @@ class NotificationController extends Controller
                     'id'   => $lot->product->id,
                     'name' => $lot->product->name,
                     'code' => $lot->lot_number,
-                    'qty'  => (float) $lot->qty,
+                    'qty'  => (float) $lot->current_qty,
                     'text' => 'Expiré le ' . $lot->expiry_date->format('d/m/Y'),
                 ])->values()->toArray(),
             ];
@@ -130,7 +130,7 @@ class NotificationController extends Controller
                     'id'   => $lot->product->id,
                     'name' => $lot->product->name,
                     'code' => $lot->lot_number,
-                    'qty'  => (float) $lot->qty,
+                    'qty'  => (float) $lot->current_qty,
                     'text' => 'Expire le ' . $lot->expiry_date->format('d/m/Y')
                         . ' (' . Carbon::today()->diffInDays($lot->expiry_date) . 'j)',
                 ])->values()->toArray(),
