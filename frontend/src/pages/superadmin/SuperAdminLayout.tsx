@@ -4,7 +4,7 @@ import { useSuperAdminStore } from '../../store/superAdmin.store'
 import {
   LayoutDashboard, ClipboardList, Building2, CreditCard, Package,
   LogOut, ShieldCheck, ChevronLeft, ChevronRight, Bell,
-  BarChart3, FileText, Settings, Users, AlertTriangle
+  BarChart3, FileText, Settings, Users, AlertTriangle, UserCog
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -15,6 +15,7 @@ const navItems = [
   { to: '/superadmin/plans', label: 'Plans & Tarifs', icon: <Package size={18} /> },
   { to: '/superadmin/licences', label: 'Licences', icon: <CreditCard size={18} /> },
   { to: '/superadmin/invoices', label: 'Facturation', icon: <FileText size={18} /> },
+  { to: '/superadmin/tenant-users', label: 'Utilisateurs tenants', icon: <UserCog size={18} /> },
   { to: '/superadmin/admins', label: 'Administrateurs', icon: <Users size={18} /> },
   { to: '/superadmin/audit', label: 'Audit Log', icon: <AlertTriangle size={18} /> },
 ]

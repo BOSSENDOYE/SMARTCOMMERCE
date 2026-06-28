@@ -24,6 +24,7 @@ import LicencesPage from './pages/superadmin/LicencesPage'
 import InvoicesAdminPage from './pages/superadmin/InvoicesAdminPage'
 import AdminsPage from './pages/superadmin/AdminsPage'
 import AuditLogPage from './pages/superadmin/AuditLogPage'
+import TenantUsersPage from './pages/superadmin/TenantUsersPage'
 
 // ── Lazy app pages ────────────────────────────────────────────────────────────
 const DashboardPage               = lazy(() => import('./pages/dashboard/DashboardPage'))
@@ -164,6 +165,7 @@ export default function App() {
               <Route path="tenants" element={<TenantsPage />} />
               <Route path="licences" element={<LicencesPage />} />
               <Route path="invoices" element={<InvoicesAdminPage />} />
+              <Route path="tenant-users" element={<TenantUsersPage />} />
               <Route path="admins" element={<AdminsPage />} />
               <Route path="audit" element={<AuditLogPage />} />
               <Route path="*" element={<Navigate to="/superadmin" replace />} />

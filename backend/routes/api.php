@@ -67,6 +67,13 @@ Route::prefix('v1')->group(function () {
             Route::put('/admins/{admin}', [AdminsManagementController::class, 'update']);
             Route::patch('/admins/{admin}/toggle-active', [AdminsManagementController::class, 'toggleActive']);
 
+            // Tenant users management
+            Route::get('/tenants/{organization}/users',               [\App\Http\Controllers\Api\SuperAdmin\TenantUsersController::class, 'index']);
+            Route::post('/tenants/{organization}/users',              [\App\Http\Controllers\Api\SuperAdmin\TenantUsersController::class, 'store']);
+            Route::put('/tenants/{organization}/users/{user}',        [\App\Http\Controllers\Api\SuperAdmin\TenantUsersController::class, 'update']);
+            Route::patch('/tenants/{organization}/users/{user}/toggle', [\App\Http\Controllers\Api\SuperAdmin\TenantUsersController::class, 'toggle']);
+            Route::delete('/tenants/{organization}/users/{user}',     [\App\Http\Controllers\Api\SuperAdmin\TenantUsersController::class, 'destroy']);
+
             // Audit log
             Route::get('/audit', [AuditLogController::class, 'index']);
         });
