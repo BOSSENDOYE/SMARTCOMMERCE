@@ -18,9 +18,16 @@ class StoreController extends Controller
             ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
             ->when($request->organization_id, fn($q) => $q->where('organization_id', $request->organization_id));
 
-        if ($request->user()->hasRole('super_admin') === false) {
-            $query->where('id', $request->user()->store_id);
+        $user = $request->user();
+
+        if ($user->organization_id) {
+            // Tenant user (quel que soit son rôle) : uniquement son organisation
+            $query->where('organization_id', $user->organization_id);
+        } elseif (!$user->hasRole('super_admin')) {
+            // Utilisateur sans organisation et pas super_admin : son seul magasin
+            $query->where('id', $user->store_id);
         }
+        // super_admin sans organisation = admin plateforme → voit tout
 
         return response()->json(
             $query->orderByDesc('is_central')->orderBy('name')->get()
