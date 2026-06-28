@@ -13,17 +13,15 @@ class OrganizationController extends Controller
     /** GET /organizations */
     public function index(Request $request)
     {
-        // Super-admin (store_id null before middleware) → all orgs
-        // Regular user → only their own org (via store)
         $user = $request->user();
 
         if ($user->hasRole('super_admin')) {
             $orgs = Organization::withCount(['stores', 'users'])
                 ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
+                ->when($request->search, fn($q) => $q->where('name', 'ilike', '%' . $request->search . '%'))
                 ->orderBy('name')
                 ->get();
         } else {
-            // Retourne seulement l'organisation du magasin courant
             $orgId = optional(\App\Models\Store::find($user->store_id))->organization_id;
             $orgs = $orgId
                 ? Organization::withCount(['stores', 'users'])->where('id', $orgId)->get()
@@ -36,17 +34,31 @@ class OrganizationController extends Controller
     /** GET /organizations/{organization} */
     public function show(Organization $organization)
     {
-        $stockValue = StockLevel::whereIn(
-            'store_id',
-            $organization->stores()->pluck('id')
-        )->sum('total_value');
+        $storeIds   = $organization->stores()->pluck('id');
+        $stockValue = StockLevel::whereIn('store_id', $storeIds)->sum('total_value');
+
+        $stores = $organization->stores()
+            ->withCount(['users', 'clients', 'sales'])
+            ->orderByDesc('is_central')
+            ->orderBy('name')
+            ->get();
+
+        $users = \App\Models\User::with('roles:name')
+            ->select(['id', 'name', 'email', 'is_active', 'store_id', 'last_login_at'])
+            ->whereIn('store_id', $storeIds)
+            ->orderBy('name')
+            ->get()
+            ->map(fn($u) => array_merge($u->toArray(), [
+                'role' => $u->roles->first()?->name,
+            ]));
 
         return response()->json(
             array_merge(
                 $organization->loadCount(['stores', 'users'])->toArray(),
                 [
-                    'stock_value'   => (float) $stockValue,
-                    'stores'        => $organization->stores()->withCount(['users', 'clients'])->orderByDesc('is_central')->orderBy('name')->get(),
+                    'stock_value' => (float) $stockValue,
+                    'stores'      => $stores,
+                    'users'       => $users,
                 ]
             )
         );
@@ -56,7 +68,7 @@ class OrganizationController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'        => 'required|string|max:150',
+            'name'        => 'required|string|max:150|unique:organizations,name',
             'code'        => 'required|string|max:30|unique:organizations,code|regex:/^[A-Z0-9_-]+$/',
             'ninea'       => 'nullable|string|max:30',
             'rc'          => 'nullable|string|max:30',
@@ -75,7 +87,7 @@ class OrganizationController extends Controller
     public function update(Request $request, Organization $organization)
     {
         $data = $request->validate([
-            'name'        => 'sometimes|string|max:150',
+            'name'        => 'sometimes|string|max:150|unique:organizations,name,' . $organization->id,
             'ninea'       => 'nullable|string|max:30',
             'rc'          => 'nullable|string|max:30',
             'address'     => 'nullable|string|max:255',
