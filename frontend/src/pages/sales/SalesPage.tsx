@@ -1405,6 +1405,7 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
         status: applied.status || undefined, channel: applied.channel || undefined,
       }
     }).then(r => r.data),
+    staleTime: 0,
   })
 
   const sales: Record<string, any>[]  = data?.data    ?? []

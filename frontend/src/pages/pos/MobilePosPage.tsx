@@ -596,6 +596,7 @@ export default function MobilePosPage() {
       setSaleReceipt(r.data)
       setView('receipt')
       queryClient.invalidateQueries({ queryKey: ['mobile-pos-products'] })
+      queryClient.invalidateQueries({ queryKey: ['sales'] })
     } catch (err: any) {
       toast.error(err?.response?.data?.message ?? "Erreur lors de l'enregistrement")
     } finally { setProcessing(false) }

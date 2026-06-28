@@ -1748,6 +1748,7 @@ export default function PosPage() {
       const res = await api.post('/sales', salePayload)
       clearCart(); setShowPayment(false); setSaleReceipt(res.data)
       queryClient.invalidateQueries({ queryKey: ['pos-products'] })
+      queryClient.invalidateQueries({ queryKey: ['sales'] })
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Erreur lors de l'enregistrement"
       toast.error(message)

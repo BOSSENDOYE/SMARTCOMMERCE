@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
+        $middleware->appendToGroup('api', \App\Http\Middleware\SanitizeJsonResponse::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\ResolveStoreContext::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\SetTenantSchema::class);
         $middleware->alias([
