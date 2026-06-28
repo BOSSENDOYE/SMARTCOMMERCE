@@ -138,7 +138,7 @@ class OnboardingController extends Controller
             'store_id'        => $store->id,
             'is_active'       => true,
         ]);
-        $tenantAdmin->assignRole('admin');
+        $tenantAdmin->assignRole('super_admin');
 
         // ── 4. Créer l'abonnement ─────────────────────────────────────────────
         $startsAt = now();
