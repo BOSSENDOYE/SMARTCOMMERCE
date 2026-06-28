@@ -338,12 +338,12 @@ function DocumentEditor({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-primary rounded-t-2xl">
           <div>
             <h2 className="text-lg font-bold text-white">
               {isEdit ? 'Modifier' : 'Nouveau'} {type === 'invoice' ? 'Facture' : 'Devis'}
             </h2>
-            <p className="text-blue-200 text-xs mt-0.5">
+            <p className="text-white/70 text-xs mt-0.5">
               {isEdit ? `Réf. ${(initial as Invoice).reference ?? ''}` : 'Nouveau document commercial'}
             </p>
           </div>
@@ -366,7 +366,7 @@ function DocumentEditor({
                   onFocus={() => setShowClientDrop(true)}
                   onBlur={() => setTimeout(() => setShowClientDrop(false), 200)}
                   placeholder="Rechercher un client..."
-                  className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
+                  className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:border-transparent pr-8"
                 />
                 <ChevronDown size={14} className="absolute right-3 top-3.5 text-gray-400 pointer-events-none" />
                 {showClientDrop && (
@@ -404,7 +404,7 @@ function DocumentEditor({
                 value={object}
                 onChange={e => setObject(e.target.value)}
                 placeholder="Ex : Livraison matériaux mois de juin"
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary"
               />
             </div>
 
@@ -414,7 +414,7 @@ function DocumentEditor({
                 type="date"
                 value={issueDate}
                 onChange={e => setIssueDate(e.target.value)}
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary"
               />
             </div>
 
@@ -426,7 +426,7 @@ function DocumentEditor({
                 type="date"
                 value={type === 'invoice' ? dueDate : validUntil}
                 onChange={e => type === 'invoice' ? setDueDate(e.target.value) : setValidUntil(e.target.value)}
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary"
               />
             </div>
           </div>
@@ -437,7 +437,7 @@ function DocumentEditor({
               <h3 className="font-semibold text-gray-800">Lignes</h3>
               <button
                 onClick={addLine}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 hover:bg-primary-100 text-primary rounded-lg text-sm font-semibold transition"
               >
                 <Plus size={14} /> Ajouter une ligne
               </button>
@@ -453,7 +453,7 @@ function DocumentEditor({
                   <div key={i} className="border rounded-xl p-3 bg-gray-50/50 hover:bg-white transition">
                     {/* Row 1: numéro + autocomplete produit + qty + unit + supprimer */}
                     <div className="flex gap-2 items-start mb-2">
-                      <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-2">{i + 1}</span>
+                      <span className="w-6 h-6 rounded-full bg-primary-100 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-2">{i + 1}</span>
 
                       <div className="flex-1 relative">
                         <input
@@ -473,7 +473,7 @@ function DocumentEditor({
                             setProdQ(prev => { const n = { ...prev }; delete n[i]; return n })
                           }, 200)}
                           placeholder="Tapez pour rechercher un produit ou saisir une description..."
-                          className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
                         />
                         {openProdLine === i && prodList.length > 0 && (
                           <div className="absolute z-20 left-0 right-0 top-full mt-0.5 bg-white border rounded-xl shadow-xl max-h-52 overflow-y-auto">
@@ -502,7 +502,7 @@ function DocumentEditor({
                           type="number" min="0.001" step="any"
                           value={it.quantity}
                           onChange={e => updateLine(i, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="w-full border rounded-lg px-2 py-2 text-sm text-center focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border rounded-lg px-2 py-2 text-sm text-center focus:ring-2 focus:ring-primary bg-white"
                           placeholder="Qté"
                         />
                       </div>
@@ -512,7 +512,7 @@ function DocumentEditor({
                           type="text"
                           value={it.unit}
                           onChange={e => updateLine(i, 'unit', e.target.value)}
-                          className="w-full border rounded-lg px-2 py-2 text-sm text-center focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border rounded-lg px-2 py-2 text-sm text-center focus:ring-2 focus:ring-primary bg-white"
                           placeholder="unité"
                         />
                       </div>
@@ -532,7 +532,7 @@ function DocumentEditor({
                           type="number" min="0" step="any"
                           value={it.unit_price}
                           onChange={e => updateLine(i, 'unit_price', parseFloat(e.target.value) || 0)}
-                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-primary bg-white"
                         />
                       </div>
                       <div className="w-24">
@@ -541,7 +541,7 @@ function DocumentEditor({
                           type="number" min="0" max="100"
                           value={it.discount_percent}
                           onChange={e => updateLine(i, 'discount_percent', parseFloat(e.target.value) || 0)}
-                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-primary bg-white"
                         />
                       </div>
                       <div className="w-24">
@@ -550,7 +550,7 @@ function DocumentEditor({
                           type="number" min="0" max="100"
                           value={it.vat_rate}
                           onChange={e => updateLine(i, 'vat_rate', parseFloat(e.target.value) || 0)}
-                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-primary bg-white"
                         />
                       </div>
                       <div className="w-36 text-right pb-1.5">
@@ -584,7 +584,7 @@ function DocumentEditor({
                 )}
                 <div className="flex justify-between font-bold text-gray-900 border-t pt-2 text-lg">
                   <span>Total TTC</span>
-                  <span className="text-blue-700 font-mono">{fmt(totals.ttc)}</span>
+                  <span className="text-primary font-mono">{fmt(totals.ttc)}</span>
                 </div>
               </div>
             </div>
@@ -599,7 +599,7 @@ function DocumentEditor({
                 onChange={e => setNotes(e.target.value)}
                 rows={3}
                 placeholder="Remarques, instructions de livraison..."
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary resize-none"
               />
             </div>
             <div>
@@ -609,7 +609,7 @@ function DocumentEditor({
                 onChange={e => setTerms(e.target.value)}
                 rows={3}
                 placeholder="Ex : Paiement à 30 jours..."
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary resize-none"
               />
             </div>
           </div>
@@ -623,7 +623,7 @@ function DocumentEditor({
           <button
             onClick={handleSubmit}
             disabled={mutation.isPending}
-            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition shadow-md"
+            className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:opacity-90 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition shadow-md"
           >
             <Check size={16} />
             {mutation.isPending ? 'Sauvegarde...' : (isEdit ? 'Mettre à jour' : `Créer ${type === 'invoice' ? 'la facture' : 'le devis'}`)}
@@ -974,7 +974,7 @@ function InvoiceDetail({
                 <tfoot className="bg-gray-50 font-semibold">
                   <tr>
                     <td colSpan={4} className="px-3 py-2 text-right text-gray-600">Total TTC</td>
-                    <td className="px-3 py-2 text-right text-blue-700">{fmt(inv.total_ttc)}</td>
+                    <td className="px-3 py-2 text-right text-primary">{fmt(inv.total_ttc)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1024,7 +1024,7 @@ function InvoiceDetail({
               {inv.status === 'draft' && (
                 <button
                   onClick={() => markSentMut.mutate()}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:opacity-90"
                 >
                   <Send size={14} /> Marquer envoyée
                 </button>
@@ -1410,7 +1410,7 @@ function ImportInvoicesModal({ onClose, onSuccess }: { onClose: () => void; onSu
               <button
                 onClick={() => file && previewMutation.mutate(file)}
                 disabled={!file || previewMutation.isPending}
-                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50"
               >
                 {previewMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 Analyser
@@ -1426,7 +1426,7 @@ function ImportInvoicesModal({ onClose, onSuccess }: { onClose: () => void; onSu
               <button
                 onClick={() => confirmMutation.mutate(okRows)}
                 disabled={okRows.length === 0 || confirmMutation.isPending}
-                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50"
               >
                 {confirmMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 Importer {okRows.length} facture(s)
@@ -1435,7 +1435,7 @@ function ImportInvoicesModal({ onClose, onSuccess }: { onClose: () => void; onSu
           )}
           {step === 'done' && (
             <button onClick={onClose}
-              className="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700">
+              className="px-5 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90">
               Fermer
             </button>
           )}
@@ -1489,7 +1489,7 @@ function PaginationBar({
               onClick={() => onPage(p)}
               className={`w-8 h-8 rounded-lg text-xs font-medium transition ${
                 p === currentPage
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary text-white'
                   : 'border hover:bg-gray-100 text-gray-600'
               }`}
             >
@@ -1787,7 +1787,7 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1797,7 +1797,7 @@ export default function InvoicesPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-2 px-4 py-2.5 border border-blue-200 text-blue-700 rounded-xl text-sm font-semibold hover:bg-blue-50 transition"
+            className="flex items-center gap-2 px-4 py-2.5 border border-primary/30 text-primary rounded-xl text-sm font-semibold hover:bg-primary-50 transition"
           >
             <Upload size={15} />
             Importer
@@ -1805,7 +1805,7 @@ export default function InvoicesPage() {
           {tab !== 'reminders' && (
             <button
               onClick={() => { setEditing(null); setShowEditor(true) }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm"
             >
               <Plus size={16} />
               Nouveau {tab === 'invoices' ? 'Facture' : 'Devis'}
@@ -1818,23 +1818,43 @@ export default function InvoicesPage() {
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-xs text-gray-500 mb-1">Total facturé</div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-primary-100 flex items-center justify-center">
+                <FileText size={15} className="text-primary" />
+              </div>
+              <span className="text-xs text-gray-500">Total facturé</span>
+            </div>
             <div className="text-xl font-bold text-gray-900">{fmt(stats.total_ttc)}</div>
             <div className="text-xs text-gray-400 mt-0.5">{stats.total_count} factures</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-xs text-green-600 mb-1">Encaissé</div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-green-100 flex items-center justify-center">
+                <Check size={15} className="text-green-600" />
+              </div>
+              <span className="text-xs text-green-600">Encaissé</span>
+            </div>
             <div className="text-xl font-bold text-green-700">{fmt(stats.total_paid)}</div>
             <div className="text-xs text-gray-400 mt-0.5">{stats.paid_count} payées</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-xs text-red-500 mb-1">Solde à encaisser</div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center">
+                <AlertCircle size={15} className="text-red-500" />
+              </div>
+              <span className="text-xs text-red-500">Solde à encaisser</span>
+            </div>
             <div className="text-xl font-bold text-red-600">{fmt(stats.total_balance)}</div>
             <div className="text-xs text-gray-400 mt-0.5">{stats.overdue_count} en retard</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-xs text-blue-600 mb-1">En cours</div>
-            <div className="text-xl font-bold text-blue-700">{stats.sent_count}</div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center">
+                <Send size={15} className="text-orange-500" />
+              </div>
+              <span className="text-xs text-orange-500">En cours</span>
+            </div>
+            <div className="text-xl font-bold text-orange-600">{stats.sent_count}</div>
             <div className="text-xs text-gray-400 mt-0.5">{stats.draft_count} brouillons</div>
           </div>
         </div>
@@ -1848,7 +1868,7 @@ export default function InvoicesPage() {
               key={t}
               onClick={() => { setTab(t); resetFilters() }}
               className={`flex-1 py-3 text-sm font-semibold transition ${
-                tab === t ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                tab === t ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               {t === 'invoices' ? 'Factures' : t === 'quotes' ? 'Devis' : 'Relances'}
@@ -1883,7 +1903,7 @@ export default function InvoicesPage() {
                 value={draftSearch}
                 onChange={e => setDraftSearch(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                className="w-full pl-8 pr-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-8 pr-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
             {/* Date de */}
@@ -1893,7 +1913,7 @@ export default function InvoicesPage() {
                 type="date"
                 value={draftDateFrom}
                 onChange={e => setDraftDateFrom(e.target.value)}
-                className="border rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 w-36"
+                className="border rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-primary w-36"
               />
             </div>
             {/* Date au */}
@@ -1903,14 +1923,14 @@ export default function InvoicesPage() {
                 type="date"
                 value={draftDateTo}
                 onChange={e => setDraftDateTo(e.target.value)}
-                className="border rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 w-36"
+                className="border rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-primary w-36"
               />
             </div>
             {/* Statut */}
             <select
               value={draftStatus}
               onChange={e => setDraftStatus(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+              className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
             >
               <option value="">Tous les statuts</option>
               {tab === 'invoices'
@@ -1924,7 +1944,7 @@ export default function InvoicesPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleSearch}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+              className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 transition"
             >
               <Search size={14} /> Rechercher
             </button>
@@ -2165,7 +2185,7 @@ export default function InvoicesPage() {
                 </button>
                 <button
                   onClick={() => navigate('/invoice-reminders')}
-                  className="text-xs text-primary flex items-center gap-1.5 border border-primary/30 rounded-lg px-3 py-1.5 hover:bg-primary/5 transition-colors"
+                  className="text-xs text-primary flex items-center gap-1.5 border border-primary/30 rounded-lg px-3 py-1.5 hover:bg-primary-50 transition-colors"
                 >
                   <Settings size={12} /> Configurer les règles
                 </button>
