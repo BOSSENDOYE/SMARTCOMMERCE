@@ -23,10 +23,10 @@ class SaleService
             $globalDiscount = (float) ($data['global_discount_amount'] ?? 0);
             unset($data['global_discount_amount']);
 
-            // Generate reference before INSERT (NOT NULL constraint)
+            // Serialize reference generation to prevent duplicate key on concurrent sales
+            DB::statement('SELECT pg_advisory_xact_lock(42)');
             $date = now()->format('Ymd');
             $last = Sale::whereDate('created_at', today())
-                ->where('store_id', $data['store_id'])
                 ->orderByDesc('id')->value('reference');
             $seq = $last ? (int)substr($last, -6) + 1 : 1;
             $data['reference'] = 'VTE' . $date . str_pad($seq, 6, '0', STR_PAD_LEFT);
