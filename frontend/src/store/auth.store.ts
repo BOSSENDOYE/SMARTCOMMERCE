@@ -14,6 +14,10 @@ export interface AuthUser {
     business_type: 'grande_surface' | 'restaurant' | 'depot' | 'mixte'
     license_grande_surface: boolean
     license_restaurant: boolean
+    address?: string | null
+    phone?: string | null
+    ninea?: string | null
+    receipt_footer?: string | null
   }
   stores?: { id: number; name: string; code: string }[]
   roles: string[]

@@ -1657,8 +1657,13 @@ export default function PosPage() {
       } else if (is_offline) {
         setSearchResults(await searchProductsOffline(search) as any)
       } else {
+        // Detect price search: pure number >= 100 → filter by exact price
+        const isPriceSearch = /^\d+$/.test(search.trim()) && parseInt(search) >= 100
         try {
-          const res = await api.get('/products', { params: { search, per_page: 15, is_active: true } })
+          const params = isPriceSearch
+            ? { price_exact: search.trim(), per_page: 30, is_active: true }
+            : { search, per_page: 15, is_active: true }
+          const res = await api.get('/products', { params })
           setSearchResults(res.data.data.map((p: any) => ({
             id: p.id, name: p.name, short_name: p.short_name,
             sale_price_ttc: getPosPrice(p), vat_rate: p.vat_rate,
@@ -1755,7 +1760,31 @@ export default function PosPage() {
     }
     try {
       const res = await api.post('/sales', salePayload)
-      clearCart(); setShowPayment(false); setSaleReceipt(res.data)
+      // Build receipt from local cart state (faster than server loadMissing)
+      const cartSnapshot = [...items]
+      const receipt: SaleReceipt = {
+        ...res.data,
+        items: (res.data.items ?? []).map((si: any) => {
+          const ci = cartSnapshot.find(c =>
+            (si.product_id && c.product_id === si.product_id) ||
+            (si.restaurant_item_id && c.restaurant_item_id === si.restaurant_item_id)
+          )
+          return {
+            ...si,
+            product:         si.product_id        ? { name: ci?.product_name ?? '—', short_name: ci?.product_name } : null,
+            restaurantItem:  si.restaurant_item_id ? { name: ci?.product_name ?? '—' } : null,
+          }
+        }),
+        user:  user ? { id: user.id, name: user.name } : undefined,
+        store: user?.store ? {
+          name:           user.store.name,
+          address:        user.store.address  ?? undefined,
+          phone:          user.store.phone    ?? undefined,
+          ninea:          user.store.ninea    ?? undefined,
+          receipt_footer: user.store.receipt_footer ?? undefined,
+        } : undefined,
+      }
+      clearCart(); setShowPayment(false); setSaleReceipt(receipt)
       queryClient.invalidateQueries({ queryKey: ['pos-products'] })
       queryClient.invalidateQueries({ queryKey: ['sales'] })
     } catch (err: unknown) {

@@ -104,16 +104,22 @@ class StockService
             ->keyBy('product_id');
 
         $movementsToInsert = [];
-        $lotDecrements = [];
+        $lotDecrements     = [];
+        $caseParams        = [];
+        $caseBindings      = [];
 
         foreach ($items as $item) {
             $level = $levels->get($item['product_id']);
             if (!$level) continue;
 
             $qty = abs($item['qty']);
-            $level->qty_on_hand -= $qty;
-            $level->last_updated = $now;
-            $level->save(); // UPDATE per level (can't avoid without raw CASE WHEN)
+            $newQty = $level->qty_on_hand - $qty;
+
+            // Prepare CASE WHEN clause (no individual save)
+            $caseParams[]   = 'WHEN product_id = ? THEN ?';
+            $caseBindings[] = (int)   $item['product_id'];
+            $caseBindings[] = (float) $newQty;
+            $level->qty_on_hand = $newQty; // update in-memory for stock_after below
 
             if (!empty($item['lot_id'])) {
                 $lotDecrements[$item['lot_id']] = ($lotDecrements[$item['lot_id']] ?? 0) + $qty;
@@ -127,13 +133,23 @@ class StockService
                 'type'           => 'sale_out',
                 'qty'            => $qty,
                 'unit_cost'      => $level->avg_cost,
-                'stock_after'    => $level->qty_on_hand,
+                'stock_after'    => $newQty,
                 'reference_type' => 'sales',
                 'reference_id'   => $saleId,
                 'reason'         => null,
                 'notes'          => null,
                 'created_at'     => $now,
             ];
+        }
+
+        // ONE UPDATE for all stock levels (CASE WHEN replaces N individual saves)
+        if (!empty($caseParams)) {
+            $caseClause     = implode(' ', $caseParams);
+            $inPlaceholders = implode(',', array_fill(0, count($productIds), '?'));
+            DB::statement(
+                "UPDATE stock_levels SET qty_on_hand = CASE {$caseClause} ELSE qty_on_hand END, last_updated = ? WHERE store_id = ? AND product_id IN ({$inPlaceholders})",
+                array_merge($caseBindings, [$now, $storeId], $productIds)
+            );
         }
 
         // Batch decrement lots (one query per distinct lot)

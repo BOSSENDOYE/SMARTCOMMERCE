@@ -31,6 +31,7 @@ class ProductController extends Controller
             )
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
             ->when($request->section_id,  fn($q) => $q->where('section_id', $request->section_id))
+            ->when($request->price_exact !== null && $request->price_exact !== '', fn($q) => $q->where('sale_price_ttc', (float)$request->price_exact))
             ->when($request->is_active !== null, fn($q) => $q->where('is_active', $request->boolean('is_active')))
             ->when($request->low_stock, fn($q) => $q->whereHas('stockLevel', fn($q2) => $q2
                 ->where('store_id', $storeId)
