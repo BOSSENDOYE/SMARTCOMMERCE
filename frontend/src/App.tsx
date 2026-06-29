@@ -7,6 +7,7 @@ import { useSuperAdminStore } from './store/superAdmin.store'
 import { ConfirmProvider } from './hooks/useConfirm'
 import { usePreferencesStore } from './store/preferences.store'
 import AppLayout from './components/layout/AppLayout'
+import InstallPWABanner from './components/InstallPWABanner'
 import api from './lib/api'
 
 // ── Eager imports (critical path) ─────────────────────────────────────────────
@@ -155,6 +156,8 @@ export default function App() {
             position="top-right"
             toastOptions={{ duration: 3000, style: { fontSize: '14px', maxWidth: '400px' } }}
           />
+          {/* PWA install banner — affiché globalement sur toutes les pages */}
+          <InstallPWABanner />
           <Routes>
             {/* ── Public ──────────────────────────────────────────────── */}
             <Route path="/" element={<LandingPage />} />

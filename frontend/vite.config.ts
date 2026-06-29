@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', '*.png', '*.svg'],
+      includeAssets: ['*.png', '*.svg'],
       manifest: {
         name: 'Baobab — SmartCommerce',
         short_name: 'Baobab',
@@ -21,9 +21,8 @@ export default defineConfig({
         scope: '/',
         lang: 'fr',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
           { src: '/icon.svg',     sizes: 'any',      type: 'image/svg+xml' },
         ],
         shortcuts: [

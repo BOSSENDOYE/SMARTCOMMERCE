@@ -1,10 +1,36 @@
-﻿<!doctype html>
-<html lang="en">
+<!doctype html>
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ff7631" />
+    <meta name="description" content="Gestion commerciale intelligente pour l'Afrique" />
+
+    <!-- Apple / Safari PWA (iOS ne supporte pas beforeinstallprompt) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Baobab" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+
     <title>Baobab</title>
+
+    <!--
+      Capturer beforeinstallprompt AVANT que React monte.
+      Chrome peut déclencher cet événement très tôt — si React n'a pas
+      encore monté son useEffect, l'event serait perdu.
+      On le stocke dans window.__pwaPrompt et on dispatche un custom event.
+    -->
+    <script>
+      window.__pwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__pwaPrompt = e;
+        window.dispatchEvent(new CustomEvent('pwa-prompt-ready'));
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
