@@ -20,14 +20,18 @@ class StoreController extends Controller
 
         $user = $request->user();
 
-        if ($user->organization_id) {
-            // Tenant user (quel que soit son rôle) : uniquement son organisation
-            $query->where('organization_id', $user->organization_id);
+        // Dériver l'org : user.organization_id direct, sinon via son store
+        $orgId = $user->organization_id
+            ?? \App\Models\Store::where('id', $user->store_id)->value('organization_id');
+
+        if ($orgId) {
+            // Tout utilisateur (même super_admin) scopé à son organisation
+            $query->where('organization_id', $orgId);
         } elseif (!$user->hasRole('super_admin')) {
             // Utilisateur sans organisation et pas super_admin : son seul magasin
             $query->where('id', $user->store_id);
         }
-        // super_admin sans organisation = admin plateforme → voit tout
+        // super_admin plateforme sans aucune org → voit tout (gestion plateforme)
 
         return response()->json(
             $query->orderByDesc('is_central')->orderBy('name')->get()
