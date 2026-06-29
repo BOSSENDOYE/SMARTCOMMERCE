@@ -91,12 +91,19 @@ export default function SupportTicketAdminPage() {
     mutationFn: () => saApi.post(`/support/tickets/${id}/reply`, { body: reply, is_internal: isInternal }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sa-support-ticket', id] })
-      qc.invalidateQueries({ queryKey: ['sa-support-tickets'] })
+      qc.invalidateQueries({ queryKey: ['support-tickets-admin'] })
       setReply('')
       setIsInternal(false)
       toast.success('Réponse envoyée')
     },
-    onError: () => toast.error('Erreur lors de l\'envoi'),
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message
+        ?? error?.response?.data?.error
+        ?? error?.message
+        ?? 'Erreur lors de l\'envoi'
+      toast.error(msg)
+      console.error('Reply error:', error?.response?.data ?? error)
+    },
   })
 
   const statusMutation = useMutation({
@@ -114,8 +121,6 @@ export default function SupportTicketAdminPage() {
   if (!ticket) return (
     <div className="text-center py-20 text-gray-400"><AlertCircle className="w-10 h-10 mx-auto mb-2" /><p>Ticket introuvable</p></div>
   )
-
-  const isClosed = ticket.status === 'closed' || ticket.status === 'resolved'
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -185,43 +190,46 @@ export default function SupportTicketAdminPage() {
             })}
           </div>
 
-          {/* Reply box */}
-          {!isClosed ? (
-            <div className="bg-white border rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <button onClick={() => setIsInternal(false)}
-                  className={`text-xs px-3 py-1 rounded-full font-medium transition-colors
-                    ${!isInternal ? 'bg-indigo-100 text-indigo-700' : 'text-gray-400 hover:text-gray-600'}`}>
-                  Réponse publique
-                </button>
-                <button onClick={() => setIsInternal(true)}
-                  className={`text-xs px-3 py-1 rounded-full font-medium transition-colors flex items-center gap-1
-                    ${isInternal ? 'bg-yellow-100 text-yellow-700' : 'text-gray-400 hover:text-gray-600'}`}>
-                  <Lock className="w-3 h-3" /> Note interne
-                </button>
+          {/* Reply box — always visible for super admin */}
+          <div className="bg-white border rounded-xl p-4">
+            {(ticket.status === 'resolved' || ticket.status === 'closed') && (
+              <div className="flex items-center gap-2 mb-3 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                Ticket {ticket.status === 'resolved' ? 'résolu' : 'fermé'} — votre réponse le réouvrira automatiquement.
               </div>
-              <textarea rows={4}
-                className={`w-full text-sm resize-none focus:outline-none p-3 rounded-lg border
-                  ${isInternal ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}`}
-                placeholder={isInternal ? 'Note visible uniquement par l\'équipe…' : 'Réponse au client…'}
-                value={reply}
-                onChange={e => setReply(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey && reply.trim()) replyMutation.mutate() }}
-              />
-              <div className="flex justify-end mt-3">
-                <button onClick={() => replyMutation.mutate()}
-                  disabled={!reply.trim() || replyMutation.isPending}
-                  className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
-                  {replyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Envoyer
-                </button>
-              </div>
+            )}
+            <div className="flex items-center gap-2 mb-3">
+              <button onClick={() => setIsInternal(false)}
+                className={`text-xs px-3 py-1 rounded-full font-medium transition-colors
+                  ${!isInternal ? 'bg-indigo-100 text-indigo-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                Réponse publique
+              </button>
+              <button onClick={() => setIsInternal(true)}
+                className={`text-xs px-3 py-1 rounded-full font-medium transition-colors flex items-center gap-1
+                  ${isInternal ? 'bg-yellow-100 text-yellow-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                <Lock className="w-3 h-3" /> Note interne
+              </button>
             </div>
-          ) : (
-            <div className="bg-gray-50 border rounded-xl p-4 text-center text-sm text-gray-400">
-              Ticket {ticket.status === 'resolved' ? 'résolu' : 'fermé'}
+            <textarea rows={5}
+              className={`w-full text-sm resize-none p-3 rounded-lg border focus:outline-none focus:ring-2
+                ${isInternal
+                  ? 'bg-yellow-50 border-yellow-200 focus:ring-yellow-300'
+                  : 'bg-white border-gray-200 focus:ring-indigo-300'}`}
+              placeholder={isInternal ? 'Note visible uniquement par l\'équipe support…' : 'Écrivez votre réponse au client…'}
+              value={reply}
+              onChange={e => setReply(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey && reply.trim()) replyMutation.mutate() }}
+            />
+            <div className="flex items-center justify-between mt-3">
+              <p className="text-xs text-gray-400">Ctrl+Entrée pour envoyer</p>
+              <button onClick={() => replyMutation.mutate()}
+                disabled={!reply.trim() || replyMutation.isPending}
+                className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                {replyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Envoyer la réponse
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Sidebar */}

@@ -87,9 +87,14 @@ class SupportAdminController extends Controller
             $supportTicket->update(['first_response_at' => now()]);
         }
 
-        // Auto-transition status: open → in_progress after first agent reply
-        if (!($data['is_internal'] ?? false) && $supportTicket->status === 'open') {
-            $supportTicket->update(['status' => 'in_progress']);
+        // Auto-transition status
+        if (!($data['is_internal'] ?? false)) {
+            if ($supportTicket->status === 'open') {
+                $supportTicket->update(['status' => 'in_progress']);
+            } elseif (in_array($supportTicket->status, ['resolved', 'closed'])) {
+                // Re-open ticket when admin replies after closure
+                $supportTicket->update(['status' => 'in_progress', 'resolved_at' => null, 'closed_at' => null]);
+            }
         }
 
         return response()->json(array_merge($message->toArray(), [
