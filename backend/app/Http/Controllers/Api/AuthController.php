@@ -107,6 +107,15 @@ class AuthController extends Controller
             return response()->json(['message' => "Vous n'avez pas accès à ce magasin."], 403);
         }
 
+        // Prevent switching to a store belonging to a different organization
+        $targetOrgId = \App\Models\Store::where('id', $storeId)->value('organization_id');
+        $userOrgId   = $user->organization_id
+            ?? \App\Models\Store::where('id', $user->store_id)->value('organization_id');
+
+        if ($targetOrgId && $userOrgId && (int) $targetOrgId !== (int) $userOrgId) {
+            return response()->json(['message' => "Ce magasin n'appartient pas à votre organisation."], 403);
+        }
+
         $user->update(['store_id' => $storeId]);
         $user->load(['store', 'stores']);
 
