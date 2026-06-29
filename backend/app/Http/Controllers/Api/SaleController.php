@@ -33,6 +33,7 @@ class SaleController extends Controller
                 COUNT(*) as total_count,
                 SUM(CASE WHEN status = 'completed' THEN total_ttc ELSE 0 END) as total_ttc,
                 SUM(CASE WHEN status = 'completed' THEN paid_amount ELSE 0 END) as paid_amount,
+                SUM(CASE WHEN status = 'completed' THEN discount_amount ELSE 0 END) as total_discounts,
                 COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
                 COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_count
             ")
@@ -40,11 +41,12 @@ class SaleController extends Controller
 
         return response()->json(array_merge($sales->toArray(), [
             'totals' => [
-                'count'           => (int)   ($totals->total_count     ?? 0),
-                'total_ttc'       => (float) ($totals->total_ttc       ?? 0),
-                'paid_amount'     => (float) ($totals->paid_amount     ?? 0),
-                'completed_count' => (int)   ($totals->completed_count ?? 0),
-                'cancelled_count' => (int)   ($totals->cancelled_count ?? 0),
+                'count'            => (int)   ($totals->total_count     ?? 0),
+                'total_ttc'        => (float) ($totals->total_ttc       ?? 0),
+                'paid_amount'      => (float) ($totals->paid_amount     ?? 0),
+                'total_discounts'  => (float) ($totals->total_discounts ?? 0),
+                'completed_count'  => (int)   ($totals->completed_count ?? 0),
+                'cancelled_count'  => (int)   ($totals->cancelled_count ?? 0),
             ],
         ]));
     }
@@ -100,15 +102,8 @@ class SaleController extends Controller
 
         AuditService::log('sale_created', 'sales', $sale->id, ['total' => $sale->total_ttc]);
 
-        // Load relations needed for the receipt
-        $sale->loadMissing([
-            'items.product:id,name,short_name',
-            'items.restaurantItem:id,name',
-            'user:id,name',
-            'store:id,name,address,phone,ninea,receipt_footer',
-        ]);
-
-        return response()->json($sale, 201);
+        // Return minimal relations — frontend builds the receipt from local cart state
+        return response()->json($sale->load(['items', 'payments', 'ticket']), 201);
     }
 
     public function show(Request $request, Sale $sale)
