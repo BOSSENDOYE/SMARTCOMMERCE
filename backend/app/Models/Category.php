@@ -16,9 +16,12 @@ class Category extends Model
     public function children(): HasMany { return $this->hasMany(Category::class, 'parent_id'); }
     public function products(): HasMany { return $this->hasMany(Product::class); }
 
-    /** Retourne les catégories visibles par l'organisation : les siennes + les globales (NULL) */
+    /** Retourne uniquement les catégories de l'organisation. NULL = super_admin plateforme → tout voir. */
     public function scopeForOrganization($query, ?int $orgId)
     {
-        return $query->where(fn($q) => $q->whereNull('organization_id')->orWhere('organization_id', $orgId));
+        if ($orgId === null) {
+            return $query; // super_admin plateforme voit tout
+        }
+        return $query->where('organization_id', $orgId);
     }
 }
