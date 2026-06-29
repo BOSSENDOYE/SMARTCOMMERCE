@@ -30,7 +30,9 @@ interface PosState {
   client_name: string | null
   client_account_balance: number | null
   cash_session_id: number | null
-  on_hold_carts: { id: string; items: CartItem[]; client_id: number | null; held_at: string }[]
+  /** Remise globale en montant fixe appliquée sur le total du panier */
+  cart_discount_amount: number
+  on_hold_carts: { id: string; items: CartItem[]; client_id: number | null; cart_discount_amount: number; held_at: string }[]
   is_offline: boolean
 
   addItem: (item: Omit<CartItem, 'discount_amount' | 'total_ttc'>) => void
@@ -40,6 +42,7 @@ interface PosState {
   clearCart: () => void
   setClient: (id: number | null, name: string | null, accountBalance?: number | null) => void
   setCashSession: (id: number | null) => void
+  setCartDiscount: (amount: number) => void
   addPayment: (payment: Payment) => void
   clearPayments: () => void
   holdCart: () => string
@@ -67,6 +70,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   client_name: null,
   client_account_balance: null,
   cash_session_id: null,
+  cart_discount_amount: 0,
   on_hold_carts: [],
   is_offline: false,
 
@@ -107,11 +111,13 @@ export const usePosStore = create<PosState>((set, get) => ({
     set({ items: get().items.filter(i => i.product_id !== productId) })
   },
 
-  clearCart: () => set({ items: [], payments: [], client_id: null, client_name: null, client_account_balance: null }),
+  clearCart: () => set({ items: [], payments: [], client_id: null, client_name: null, client_account_balance: null, cart_discount_amount: 0 }),
 
   setClient: (id, name, accountBalance = null) => set({ client_id: id, client_name: name, client_account_balance: accountBalance }),
 
   setCashSession: (id) => set({ cash_session_id: id }),
+
+  setCartDiscount: (amount) => set({ cart_discount_amount: Math.max(0, amount) }),
 
   addPayment: (payment) => set({ payments: [...get().payments, payment] }),
 
@@ -122,13 +128,14 @@ export const usePosStore = create<PosState>((set, get) => ({
     set({
       on_hold_carts: [
         ...get().on_hold_carts,
-        { id, items: get().items, client_id: get().client_id, held_at: new Date().toISOString() },
+        { id, items: get().items, client_id: get().client_id, cart_discount_amount: get().cart_discount_amount, held_at: new Date().toISOString() },
       ],
       items: [],
       payments: [],
       client_id: null,
       client_name: null,
       client_account_balance: null,
+      cart_discount_amount: 0,
     })
     return id
   },
@@ -139,6 +146,7 @@ export const usePosStore = create<PosState>((set, get) => ({
     set({
       items: cart.items,
       client_id: cart.client_id,
+      cart_discount_amount: cart.cart_discount_amount ?? 0,
       on_hold_carts: get().on_hold_carts.filter(c => c.id !== id),
     })
   },
@@ -157,11 +165,12 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
 
   get totalTtc() {
-    return get().items.reduce((sum, i) => sum + i.total_ttc, 0)
+    const itemsTotal = get().items.reduce((sum, i) => sum + i.total_ttc, 0)
+    return Math.max(0, itemsTotal - get().cart_discount_amount)
   },
 
   get totalDiscount() {
-    return get().items.reduce((sum, i) => sum + i.discount_amount, 0)
+    return get().items.reduce((sum, i) => sum + i.discount_amount, 0) + get().cart_discount_amount
   },
 
   get totalPaid() {

@@ -14,7 +14,7 @@ import toast from 'react-hot-toast'
 import {
   Search, ShoppingBag, Plus, Minus, X, Check, Wifi, WifiOff,
   Lock, Unlock, Percent, Printer, ArrowLeft, Receipt as ReceiptIcon,
-  ChevronUp, Trash2,
+  ChevronUp, Trash2, Tag,
 } from 'lucide-react'
 import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
 
@@ -392,6 +392,7 @@ export default function MobilePosPage() {
   const {
     items, addItem, updateQty, updateDiscount, removeItem, clearCart,
     cash_session_id, setCashSession, is_offline, setOffline,
+    cart_discount_amount, setCartDiscount,
   } = usePosStore()
 
   const [view, setView] = useState<View>('pos')
@@ -406,8 +407,9 @@ export default function MobilePosPage() {
   const [payments, setPayments] = useState<PaymentEntry[]>([])
 
   const searchRef = useRef<HTMLInputElement>(null)
-  const totalTtc  = items.reduce((s, i) => s + i.total_ttc, 0)
-  const totalQty  = items.reduce((s, i) => s + i.qty, 0)
+  const itemsTotal = items.reduce((s, i) => s + i.total_ttc, 0)
+  const totalTtc   = Math.max(0, itemsTotal - cart_discount_amount)
+  const totalQty   = items.reduce((s, i) => s + i.qty, 0)
 
   // ── Online/offline ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -570,6 +572,7 @@ export default function MobilePosPage() {
         product_id: i.product_id,
         qty: i.qty, unit_price_ttc: i.unit_price_ttc, discount_pct: i.discount_pct,
       })),
+      global_discount_amount: cart_discount_amount > 0 ? cart_discount_amount : undefined,
       payments: paymentList,
       offline_id, channel: 'pos',
     }
@@ -928,6 +931,29 @@ export default function MobilePosPage() {
           </div>
 
           <div className="border-t px-4 py-3 bg-white flex-shrink-0 space-y-3">
+            {/* Remise globale en montant */}
+            <div className="flex items-center gap-2">
+              <Tag size={13} className="text-orange-400 flex-shrink-0" />
+              <span className="text-sm text-gray-500 flex-shrink-0">Remise</span>
+              <input
+                type="number"
+                min={0}
+                max={itemsTotal}
+                value={cart_discount_amount || ''}
+                onChange={e => {
+                  const v = parseFloat(e.target.value) || 0
+                  setCartDiscount(Math.min(itemsTotal, v))
+                }}
+                placeholder="0"
+                className="flex-1 min-w-0 text-right text-sm border border-orange-200 rounded-xl px-3 py-2 bg-orange-50/60 text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300 font-mono"
+              />
+              <span className="text-sm text-gray-400 flex-shrink-0">FCFA</span>
+              {cart_discount_amount > 0 && (
+                <button type="button" onClick={() => setCartDiscount(0)} className="text-gray-300 active:text-red-400 flex-shrink-0">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 text-sm">Total</span>
               <span className="text-xl font-bold text-primary">{formatCurrency(totalTtc)}</span>

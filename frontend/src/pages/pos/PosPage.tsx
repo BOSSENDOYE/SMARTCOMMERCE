@@ -795,8 +795,9 @@ function HoldCartsModal({ carts, onRecall, onClose }: {
 
 // ─── Payment Modal ────────────────────────────────────────────────────────────
 
-function PaymentModal({ total, clientAccountBalance, clientName, clientId, onClose, onConfirm, processing, onNeedClient, initialPayments, onNeedClientForDeposit }: {
+function PaymentModal({ total, cartDiscountAmount = 0, clientAccountBalance, clientName, clientId, onClose, onConfirm, processing, onNeedClient, initialPayments, onNeedClientForDeposit }: {
   total: number
+  cartDiscountAmount?: number
   clientAccountBalance?: number
   clientName?: string
   clientId?: number | null
@@ -827,6 +828,11 @@ function PaymentModal({ total, clientAccountBalance, clientName, clientId, onClo
           <div>
             <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-1">Encaissement</p>
             <p className="text-white text-3xl font-bold font-mono">{formatCurrency(total)}</p>
+            {cartDiscountAmount > 0 && (
+              <p className="text-orange-300 text-xs mt-0.5 flex items-center gap-1">
+                <Tag size={10} /> Remise globale : -{formatCurrency(cartDiscountAmount)}
+              </p>
+            )}
             {clientName ? (
               <p className="text-indigo-300 text-xs mt-1 flex items-center gap-1">
                 <UserPlus size={10} /> {clientName}
@@ -1476,6 +1482,7 @@ export default function PosPage() {
     items, addItem, updateQty, updateDiscount, removeItem, clearCart,
     client_id, client_name, client_account_balance, setClient, cash_session_id, setCashSession,
     holdCart, recallCart, on_hold_carts, is_offline, setOffline,
+    cart_discount_amount, setCartDiscount,
   } = usePosStore()
 
   const storeBusinessType = user?.store?.business_type ?? 'grande_surface'
@@ -1514,8 +1521,9 @@ export default function PosPage() {
 
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const totalTtc     = items.reduce((s, i) => s + i.total_ttc, 0)
-  const totalDiscount = items.reduce((s, i) => s + i.discount_amount, 0)
+  const itemsTotal    = items.reduce((s, i) => s + i.total_ttc, 0)
+  const totalTtc      = Math.max(0, itemsTotal - cart_discount_amount)
+  const totalDiscount = items.reduce((s, i) => s + i.discount_amount, 0) + cart_discount_amount
 
   // ── Online/offline ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1727,6 +1735,7 @@ export default function PosPage() {
           : { product_id: i.product_id, lot_id: i.lot_id }),
         qty: i.qty, unit_price_ttc: i.unit_price_ttc, discount_pct: i.discount_pct,
       })),
+      global_discount_amount: cart_discount_amount > 0 ? cart_discount_amount : undefined,
       payments, offline_id, channel: 'pos',
     }
     if (is_offline) {
@@ -2159,11 +2168,37 @@ export default function PosPage() {
 
           {/* Footer */}
           <div className="border-t p-3 space-y-2.5 flex-shrink-0 bg-gray-50">
-            {/* Discount line */}
-            {totalDiscount > 0 && (
+            {/* Per-item discounts line */}
+            {items.reduce((s, i) => s + i.discount_amount, 0) > 0 && (
               <div className="flex justify-between text-xs text-green-600 font-medium">
-                <span>Remises</span>
-                <span>-{formatCurrency(totalDiscount)}</span>
+                <span>Remises articles</span>
+                <span>-{formatCurrency(items.reduce((s, i) => s + i.discount_amount, 0))}</span>
+              </div>
+            )}
+
+            {/* Cart-level discount input */}
+            {items.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Tag size={11} className="text-orange-400 flex-shrink-0" />
+                <span className="text-xs text-gray-500 flex-shrink-0">Remise globale</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={itemsTotal}
+                  value={cart_discount_amount || ''}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value) || 0
+                    setCartDiscount(Math.min(itemsTotal, v))
+                  }}
+                  placeholder="0"
+                  className="flex-1 min-w-0 w-0 text-right text-xs border border-orange-200 rounded-lg px-2 py-1 bg-orange-50/60 text-orange-700 focus:outline-none focus:ring-1 focus:ring-orange-300 font-mono"
+                />
+                <span className="text-xs text-gray-400 flex-shrink-0">FCFA</span>
+                {cart_discount_amount > 0 && (
+                  <button type="button" onClick={() => setCartDiscount(0)} className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0">
+                    <X size={11} />
+                  </button>
+                )}
               </div>
             )}
 
@@ -2249,6 +2284,7 @@ export default function PosPage() {
       {showPayment && (
         <PaymentModal
           total={totalTtc}
+          cartDiscountAmount={cart_discount_amount}
           clientAccountBalance={client_name != null ? (client_account_balance ?? 0) : undefined}
           clientName={client_name ?? undefined}
           clientId={client_id}

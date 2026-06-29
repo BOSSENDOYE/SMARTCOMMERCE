@@ -19,6 +19,10 @@ class SaleService
     public function createSale(array $data, array $items, array $payments): Sale
     {
         return DB::transaction(function () use ($data, $items, $payments) {
+            // Extract non-column fields before Sale::create()
+            $globalDiscount = (float) ($data['global_discount_amount'] ?? 0);
+            unset($data['global_discount_amount']);
+
             // Generate reference before INSERT (NOT NULL constraint)
             $date = now()->format('Ymd');
             $last = Sale::whereDate('created_at', today())
@@ -131,6 +135,8 @@ class SaleService
                 $this->stockService->batchSaleOut($sale->store_id, $stockMoveItems, $sale->user_id, $sale->id);
             }
 
+            // Add cart-level global discount to per-item discounts
+            $discountAmount += $globalDiscount;
             $totalTtc   = $subtotalHt + $vatAmount - $discountAmount;
             // account_deposit = monnaie déposée sur le compte client, ne compte pas comme paiement de la vente
             $paidAmount = collect($payments)
