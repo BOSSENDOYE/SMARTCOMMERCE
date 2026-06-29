@@ -25,6 +25,7 @@ import InvoicesAdminPage from './pages/superadmin/InvoicesAdminPage'
 import AdminsPage from './pages/superadmin/AdminsPage'
 import AuditLogPage from './pages/superadmin/AuditLogPage'
 import TenantUsersPage from './pages/superadmin/TenantUsersPage'
+import SupportAdminPage from './pages/superadmin/SupportAdminPage'
 
 // ── Lazy app pages ────────────────────────────────────────────────────────────
 const DashboardPage               = lazy(() => import('./pages/dashboard/DashboardPage'))
@@ -55,6 +56,8 @@ const InvoicesPage                = lazy(() => import('./pages/invoices/Invoices
 const InvoiceReminderSettingsPage = lazy(() => import('./pages/invoices/InvoiceReminderSettingsPage'))
 const CrmPage                     = lazy(() => import('./pages/crm/CrmPage'))
 const EncourPage                  = lazy(() => import('./pages/encours/EncourPage'))
+const SupportPage                 = lazy(() => import('./pages/support/SupportPage'))
+const SupportTicketPage           = lazy(() => import('./pages/support/SupportTicketPage'))
 const ProfilePage                 = lazy(() => import('./pages/settings/ProfilePage'))
 const RolesPage                   = lazy(() => import('./pages/settings/RolesPage'))
 const PreferencesPage             = lazy(() => import('./pages/settings/PreferencesPage'))
@@ -168,6 +171,7 @@ export default function App() {
               <Route path="tenant-users" element={<TenantUsersPage />} />
               <Route path="admins" element={<AdminsPage />} />
               <Route path="audit" element={<AuditLogPage />} />
+              <Route path="support" element={<SupportAdminPage />} />
               <Route path="*" element={<Navigate to="/superadmin" replace />} />
             </Route>
 
@@ -209,6 +213,8 @@ export default function App() {
               <Route path="mail-settings" element={<Suspense fallback={<PageLoader />}><MailSettingsPage /></Suspense>} />
               <Route path="crm" element={<Suspense fallback={<PageLoader />}><CrmPage /></Suspense>} />
               <Route path="encours" element={<Suspense fallback={<PageLoader />}><EncourPage /></Suspense>} />
+              <Route path="support" element={<Suspense fallback={<PageLoader />}><SupportPage /></Suspense>} />
+              <Route path="support/:id" element={<Suspense fallback={<PageLoader />}><SupportTicketPage /></Suspense>} />
             </Route>
 
             {/* ── Catch-all ────────────────────────────────────────────── */}

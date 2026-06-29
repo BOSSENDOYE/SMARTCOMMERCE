@@ -11,7 +11,7 @@ import {
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
   UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target, Palette, Sun, Moon,
-  FolderOpen, MapPin, Banknote, Menu, Smartphone,
+  FolderOpen, MapPin, Banknote, Menu, Smartphone, LifeBuoy,
 } from 'lucide-react'
 import { usePreferencesStore } from '../../store/preferences.store'
 import { useMenuStore, type MenuNode } from '../../store/menu.store'
@@ -56,6 +56,7 @@ const navItems: NavItem[] = [
   { id: 'restaurant',      label: 'Restaurant',      to: '/restaurant',     icon: <Utensils size={18} />,          license: 'restaurant' },
   { id: 'reports',         label: 'Rapports',        to: '/reports',        icon: <BarChart3 size={18} />,         permission: 'view_reports' },
   { id: 'accounting',      label: 'Comptabilité',    to: '/accounting',     icon: <BookOpen size={18} />,          permission: 'view_accounting' },
+  { id: 'support',          label: 'Support',          to: '/support',        icon: <LifeBuoy size={18} /> },
   { id: 'settings',        label: 'Paramètres',      to: '/settings',       icon: <Settings size={18} /> },
 ]
 

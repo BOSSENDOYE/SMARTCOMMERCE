@@ -635,5 +635,16 @@ Route::prefix('v1')->group(function () {
             Route::post('/activities/{crmActivity}/complete',      [\App\Http\Controllers\Api\CrmController::class, 'completeActivity']);
             Route::delete('/activities/{crmActivity}',             [\App\Http\Controllers\Api\CrmController::class, 'destroyActivity']);
         });
+
+        // ── Support Tickets ───────────────────────────────────────────────────
+        Route::prefix('/support')->group(function () {
+            Route::get('/stats',                                           [\App\Http\Controllers\Api\SupportTicketController::class, 'stats']);
+            Route::get('/tickets',                                         [\App\Http\Controllers\Api\SupportTicketController::class, 'index']);
+            Route::post('/tickets',                                        [\App\Http\Controllers\Api\SupportTicketController::class, 'store']);
+            Route::get('/tickets/{supportTicket}',                         [\App\Http\Controllers\Api\SupportTicketController::class, 'show']);
+            Route::post('/tickets/{supportTicket}/reply',                  [\App\Http\Controllers\Api\SupportTicketController::class, 'reply']);
+            Route::patch('/tickets/{supportTicket}/status',                [\App\Http\Controllers\Api\SupportTicketController::class, 'updateStatus']);
+            Route::post('/tickets/{supportTicket}/close',                  [\App\Http\Controllers\Api\SupportTicketController::class, 'close']);
+        });
     });
 });

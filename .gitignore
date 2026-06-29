@@ -1,6 +1,9 @@
 # Claude session files
 .claude/
 
+# Fichier d'accès confidentiel
+ACCES.md
+
 # Laravel backend
 backend/.env
 backend/.env.backup
