@@ -57,7 +57,7 @@ class Product extends Model
     }
 
     public function scopeActive($query) { return $query->where('is_active', true); }
-    public function scopeForStore($query, $storeId) { return $query->where('store_id', $storeId)->orWhereNull('store_id'); }
+    public function scopeForStore($query, $storeId) { return $query->where('store_id', $storeId); }
     public function scopeByBarcode($query, string $barcode)
     {
         return $query->whereHas('barcodes', fn($q) => $q->where('barcode', $barcode));
