@@ -1,12 +1,24 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import api from '../../lib/api'
+import axios from 'axios'
+import { useSuperAdminStore } from '../../store/superAdmin.store'
 import toast from 'react-hot-toast'
 import {
   LifeBuoy, Search, Loader2, MessageSquare, AlertCircle,
   CheckCircle2, Clock, Circle, X, ChevronRight, Filter,
 } from 'lucide-react'
+
+// Super admin axios instance (uses super admin token, not tenant token)
+const saApi = axios.create({
+  baseURL: (import.meta.env.VITE_API_URL ?? '') + '/api/v1/superadmin',
+  headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+})
+saApi.interceptors.request.use(cfg => {
+  const token = useSuperAdminStore.getState().token
+  if (token) cfg.headers.Authorization = `Bearer ${token}`
+  return cfg
+})
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,13 +83,13 @@ export default function SupportAdminPage() {
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ['support-stats'],
-    queryFn: () => api.get('/support/stats').then(r => r.data),
+    queryFn: () => saApi.get('/support/stats').then(r => r.data),
     staleTime: 0,
   })
 
   const { data, isLoading } = useQuery({
     queryKey: ['support-tickets-admin', search, filterStatus, filterPriority, filterCategory],
-    queryFn: () => api.get('/support/tickets', {
+    queryFn: () => saApi.get('/support/tickets', {
       params: {
         search:   search || undefined,
         status:   filterStatus || undefined,
@@ -93,7 +105,7 @@ export default function SupportAdminPage() {
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: TicketStatus }) =>
-      api.patch(`/support/tickets/${id}/status`, { status }),
+      saApi.patch(`/support/tickets/${id}/status`, { status }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['support-tickets-admin'] })
       qc.invalidateQueries({ queryKey: ['support-stats'] })
@@ -189,7 +201,7 @@ export default function SupportAdminPage() {
                 <tr key={ticket.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => navigate(`/support/${ticket.id}`)}
+                      onClick={() => navigate(`/superadmin/support/${ticket.id}`)}
                       className="flex items-center gap-2 hover:text-indigo-600 group"
                     >
                       <StatusIcon status={ticket.status} />
@@ -222,7 +234,7 @@ export default function SupportAdminPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => navigate(`/support/${ticket.id}`)}
+                        onClick={() => navigate(`/superadmin/support/${ticket.id}`)}
                         className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg"
                         title="Voir"
                       >

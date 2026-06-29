@@ -76,6 +76,15 @@ Route::prefix('v1')->group(function () {
 
             // Audit log
             Route::get('/audit', [AuditLogController::class, 'index']);
+
+            // Support tickets (platform admin view — all orgs)
+            Route::prefix('/support')->group(function () {
+                Route::get('/stats',                                        [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'stats']);
+                Route::get('/tickets',                                      [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'index']);
+                Route::get('/tickets/{supportTicket}',                      [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'show']);
+                Route::post('/tickets/{supportTicket}/reply',               [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'reply']);
+                Route::patch('/tickets/{supportTicket}/status',             [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'updateStatus']);
+            });
         });
     });
 

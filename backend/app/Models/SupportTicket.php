@@ -5,11 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SupportTicket extends Model
 {
     protected $fillable = [
-        'ticket_number', 'organization_id', 'store_id', 'created_by', 'assigned_to',
+        'ticket_number', 'organization_id', 'store_id', 'created_by', 'assigned_to', 'assigned_super_admin_id',
         'subject', 'category', 'priority', 'status',
         'first_response_at', 'resolved_at', 'closed_at',
     ];
