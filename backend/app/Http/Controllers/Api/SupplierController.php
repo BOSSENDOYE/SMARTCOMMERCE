@@ -39,7 +39,7 @@ class SupplierController extends Controller
     public function stats(Request $request)
     {
         $orgStoreIds = $this->orgStoreIds($request);
-        $base = Supplier::where(fn($q) => $q->whereNull('store_id')->orWhereIn('store_id', $orgStoreIds));
+        $base = Supplier::whereIn('store_id', $orgStoreIds);
 
         return response()->json([
             'total'             => (clone $base)->count(),

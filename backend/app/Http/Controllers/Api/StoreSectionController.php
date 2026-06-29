@@ -89,7 +89,7 @@ class StoreSectionController extends Controller
                 'unit',
                 'stockLevel' => fn($q) => $q->where('store_id', $storeId),
             ])
-            ->where(fn($q) => $q->where('store_id', $storeId)->orWhereNull('store_id'))
+            ->where('store_id', $storeId)
             ->orderBy('slot')
             ->orderBy('name')
             ->get()
@@ -146,7 +146,7 @@ class StoreSectionController extends Controller
     public function unassignProduct(Request $request, int $productId)
     {
         \App\Models\Product::where('id', $productId)
-            ->where(fn($q) => $q->where('store_id', $this->storeId($request))->orWhereNull('store_id'))
+            ->where('store_id', $this->storeId($request))
             ->update(['section_id' => null, 'slot' => null]);
 
         return response()->json(['ok' => true]);
@@ -174,7 +174,7 @@ class StoreSectionController extends Controller
     {
         $storeId = $this->storeId($request);
 
-        $products = \App\Models\Product::where(fn($q) => $q->where('store_id', $storeId)->orWhereNull('store_id'))
+        $products = \App\Models\Product::where('store_id', $storeId)
             ->whereNull('section_id')
             ->where('is_active', true)
             ->with([

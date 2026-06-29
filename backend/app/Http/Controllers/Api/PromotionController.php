@@ -10,9 +10,7 @@ class PromotionController extends Controller
 {
     private function baseQuery(Request $request)
     {
-        return Promotion::where(fn($q) =>
-            $q->whereNull('store_id')->orWhere('store_id', $request->user()->store_id)
-        );
+        return Promotion::where('store_id', $request->user()->store_id);
     }
 
     public function stats(Request $request)

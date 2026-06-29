@@ -99,21 +99,25 @@ class AuthController extends Controller
         $user    = $request->user();
         $storeId = (int) $data['store_id'];
 
-        // Verify the user is actually assigned to this store
-        $hasAccess = $user->stores()->where('stores.id', $storeId)->exists()
-            || (int) $user->store_id === $storeId;
+        // Platform super_admin (no organization_id) can switch to any store freely.
+        // Tenant users can only switch to stores within their own organization.
+        $isPlatformAdmin = $user->organization_id === null
+            && $user->hasRole('super_admin');
 
-        if (!$hasAccess) {
-            return response()->json(['message' => "Vous n'avez pas accès à ce magasin."], 403);
-        }
+        if (!$isPlatformAdmin) {
+            // Verify the user is actually assigned to this store
+            $hasAccess = $user->stores()->where('stores.id', $storeId)->exists()
+                || (int) $user->store_id === $storeId;
 
-        // Prevent switching to a store belonging to a different organization
-        $targetOrgId = \App\Models\Store::where('id', $storeId)->value('organization_id');
-        $userOrgId   = $user->organization_id
-            ?? \App\Models\Store::where('id', $user->store_id)->value('organization_id');
+            if (!$hasAccess) {
+                return response()->json(['message' => "Vous n'avez pas accès à ce magasin."], 403);
+            }
 
-        if ($targetOrgId && $userOrgId && (int) $targetOrgId !== (int) $userOrgId) {
-            return response()->json(['message' => "Ce magasin n'appartient pas à votre organisation."], 403);
+            // Block cross-organization switch
+            $targetOrgId = \App\Models\Store::where('id', $storeId)->value('organization_id');
+            if ($user->organization_id && $targetOrgId && (int) $user->organization_id !== (int) $targetOrgId) {
+                return response()->json(['message' => "Ce magasin n'appartient pas à votre organisation."], 403);
+            }
         }
 
         $user->update(['store_id' => $storeId]);

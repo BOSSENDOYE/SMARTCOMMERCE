@@ -12,9 +12,7 @@ class ClientCategoryController extends Controller
     {
         $storeId = $request->user()->store_id;
 
-        $categories = ClientCategory::where(function ($q) use ($storeId) {
-                $q->whereNull('store_id')->orWhere('store_id', $storeId);
-            })
+        $categories = ClientCategory::where('store_id', $storeId)
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -37,9 +35,7 @@ class ClientCategoryController extends Controller
 
         // Une seule catégorie peut être le défaut POS
         if (!empty($data['is_pos_default'])) {
-            ClientCategory::where(function ($q) use ($storeId) {
-                $q->whereNull('store_id')->orWhere('store_id', $storeId);
-            })->update(['is_pos_default' => false]);
+            ClientCategory::where('store_id', $storeId)->update(['is_pos_default' => false]);
         }
 
         $category = ClientCategory::create(array_merge($data, ['store_id' => $storeId]));
@@ -61,9 +57,9 @@ class ClientCategoryController extends Controller
         $storeId = $request->user()->store_id;
 
         if (!empty($data['is_pos_default'])) {
-            ClientCategory::where(function ($q) use ($storeId) {
-                $q->whereNull('store_id')->orWhere('store_id', $storeId);
-            })->where('id', '!=', $clientCategory->id)->update(['is_pos_default' => false]);
+            ClientCategory::where('store_id', $storeId)
+                ->where('id', '!=', $clientCategory->id)
+                ->update(['is_pos_default' => false]);
         }
 
         $clientCategory->update($data);

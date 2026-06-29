@@ -12,7 +12,7 @@ class PromotionService
     {
         $now = now();
         return Promotion::where('is_active', true)
-            ->where(fn($q) => $q->whereNull('store_id')->orWhere('store_id', $storeId))
+            ->where('store_id', $storeId)
             ->where(fn($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
             ->where(fn($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
             ->with(['products', 'categories'])
