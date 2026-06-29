@@ -145,29 +145,38 @@ Route::prefix('v1')->group(function () {
             return response()->json(null, 204);
         });
 
-        // Categories — isolées par organisation (NULL = globale, visible par tous)
-        Route::get('/categories', function (\Illuminate\Http\Request $r) {
-            $orgId = $r->user()->organization_id;
+        // Categories — isolées par organisation
+        // Helper: résout l'org de l'utilisateur (direct ou via son magasin)
+        $resolveOrgId = function (\Illuminate\Http\Request $r): ?int {
+            $user = $r->user();
+            if ($user->organization_id) return (int) $user->organization_id;
+            if ($user->store_id) {
+                return (int) \App\Models\Store::where('id', $user->store_id)->value('organization_id');
+            }
+            return null; // super_admin plateforme → voit tout
+        };
+
+        Route::get('/categories', function (\Illuminate\Http\Request $r) use ($resolveOrgId) {
             return response()->json(
                 \App\Models\Category::with('children')
-                    ->forOrganization($orgId)
+                    ->forOrganization($resolveOrgId($r))
                     ->whereNull('parent_id')
                     ->orderBy('sort_order')
                     ->get()
             );
         });
-        Route::post('/categories', function (\Illuminate\Http\Request $r) {
+        Route::post('/categories', function (\Illuminate\Http\Request $r) use ($resolveOrgId) {
             $data = $r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant']);
-            return response()->json(\App\Models\Category::create(array_merge($data, ['organization_id' => $r->user()->organization_id])), 201);
+            return response()->json(\App\Models\Category::create(array_merge($data, ['organization_id' => $resolveOrgId($r)])), 201);
         });
-        Route::put('/categories/{category}', function (\Illuminate\Http\Request $r, \App\Models\Category $category) {
-            if ($category->organization_id !== null && $category->organization_id !== $r->user()->organization_id) {
+        Route::put('/categories/{category}', function (\Illuminate\Http\Request $r, \App\Models\Category $category) use ($resolveOrgId) {
+            if ($category->organization_id !== null && $category->organization_id !== $resolveOrgId($r)) {
                 return response()->json(['message' => 'Action non autorisée.'], 403);
             }
             return response()->json(tap($category)->update($r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant'])));
         });
-        Route::delete('/categories/{category}', function (\Illuminate\Http\Request $r, \App\Models\Category $category) {
-            if ($category->organization_id !== null && $category->organization_id !== $r->user()->organization_id) {
+        Route::delete('/categories/{category}', function (\Illuminate\Http\Request $r, \App\Models\Category $category) use ($resolveOrgId) {
+            if ($category->organization_id !== null && $category->organization_id !== $resolveOrgId($r)) {
                 return response()->json(['message' => 'Action non autorisée.'], 403);
             }
             if ($category->products()->count() > 0) {
