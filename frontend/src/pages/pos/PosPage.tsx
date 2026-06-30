@@ -591,7 +591,7 @@ function ClientSearchModal({ onSelect, onClose }: {
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    if (q.length < 2) { setResults([]); setLoading(false); return }
+    if (q.length < 1) { setResults([]); setLoading(false); return }
     setLoading(true)
     const t = setTimeout(() => {
       api.get('/clients/search', { params: { q } })
@@ -601,7 +601,7 @@ function ClientSearchModal({ onSelect, onClose }: {
         })
         .catch(() => setResults([]))
         .finally(() => setLoading(false))
-    }, 300)
+    }, 250)
     return () => clearTimeout(t)
   }, [q])
 
@@ -696,7 +696,7 @@ function ClientSearchModal({ onSelect, onClose }: {
           </div>
         </div>
         <div className="max-h-64 overflow-y-auto divide-y">
-          {q.length >= 2 && !loading && results.length === 0 && (
+          {q.length >= 1 && !loading && results.length === 0 && (
             <div className="px-4 py-6 text-center">
               <p className="text-gray-400 text-sm mb-3">Aucun client trouvé pour «{q}»</p>
               <button

@@ -226,12 +226,15 @@ Route::prefix('v1')->group(function () {
         Route::get('/clients/search', function (\Illuminate\Http\Request $r) {
             $term = trim((string) $r->input('q', ''));
             if ($term === '') return response()->json([]);
+            $lower = strtolower($term);
             return response()->json(
                 \App\Models\Client::where('store_id', $r->user()->store_id)
-                    ->where(fn($q) => $q->where('phone', 'ilike', "%{$term}%")
-                                        ->orWhere('name',  'ilike', "%{$term}%"))
-                    ->orderBy('name')
-                    ->limit(15)
+                    ->where(fn($q) => $q
+                        ->whereRaw('lower(name) like ?', [$lower . '%'])
+                        ->orWhereRaw('lower(phone) like ?', [$lower . '%'])
+                    )
+                    ->orderByRaw('lower(name)')
+                    ->limit(20)
                     ->get(['id','name','phone','credit_balance','account_balance'])
             );
         });
