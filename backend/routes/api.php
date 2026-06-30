@@ -228,8 +228,8 @@ Route::prefix('v1')->group(function () {
             if ($term === '') return response()->json([]);
             return response()->json(
                 \App\Models\Client::where('store_id', $r->user()->store_id)
-                    ->where(fn($q) => $q->where('phone', 'like', "%{$term}%")
-                                        ->orWhere('name',  'like', "%{$term}%"))
+                    ->where(fn($q) => $q->where('phone', 'ilike', "%{$term}%")
+                                        ->orWhere('name',  'ilike', "%{$term}%"))
                     ->orderBy('name')
                     ->limit(15)
                     ->get(['id','name','phone','credit_balance','account_balance'])
