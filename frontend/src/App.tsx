@@ -72,8 +72,8 @@ const MailSettingsPage            = lazy(() => import('./pages/settings/MailSett
 const qc = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime:            5 * 60_000,
-      gcTime:               20 * 60_000,
+      staleTime:            30_000,
+      gcTime:               5 * 60_000,
       refetchOnWindowFocus: false,
       refetchOnReconnect:   true,
       retry: (failureCount, error) => {

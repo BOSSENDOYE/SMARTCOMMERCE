@@ -2115,7 +2115,6 @@ function ArticlesTab() {
     queryKey: ['products', queryParams],
     queryFn: () => api.get('/products', { params: queryParams }).then(r => r.data),
     placeholderData: prev => prev,
-    staleTime: 0,
   })
 
   const toggleActive = useMutation({

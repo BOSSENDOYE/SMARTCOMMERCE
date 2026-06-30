@@ -223,8 +223,8 @@ function AdjustModal({ onClose, initialProduct }: {
       qc.invalidateQueries({ queryKey: ['stock-levels'] })
       qc.invalidateQueries({ queryKey: ['stock-low'] })
       qc.invalidateQueries({ queryKey: ['stock-valuation-kpi'] })
-      qc.invalidateQueries({ queryKey: ['pos-products'], refetchType: 'all' })
-      qc.invalidateQueries({ queryKey: ['products'], refetchType: 'all' })
+      qc.invalidateQueries({ queryKey: ['pos-products'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
       onClose()
     },
   })
