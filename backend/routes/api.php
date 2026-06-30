@@ -261,13 +261,19 @@ Route::prefix('v1')->group(function () {
 
         // Stock
         Route::get('/stock', fn(\Illuminate\Http\Request $r) => response()->json(
-            \App\Models\StockLevel::where('store_id', $r->user()->store_id)
+            \App\Models\StockLevel::where('stock_levels.store_id', $r->user()->store_id)
+                ->join('products', 'products.id', '=', 'stock_levels.product_id')
+                ->whereNull('products.deleted_at')
                 ->with(['product.category', 'product.unit'])
-                ->when($r->search, fn($q) => $q->whereHas('product', fn($p) => $p->where('name', 'like', "%{$r->search}%")->orWhere('internal_code', 'like', "%{$r->search}%")))
-                ->when($r->status === 'low', fn($q) => $q->whereRaw('stock_levels.qty_on_hand > 0 AND stock_levels.qty_on_hand <= (SELECT alert_stock FROM products WHERE products.id = stock_levels.product_id)'))
-                ->when($r->status === 'out', fn($q) => $q->where('qty_on_hand', '<=', 0))
-                ->orderBy('qty_on_hand')
-                ->paginate((int)($r->per_page ?? 50))
+                ->when($r->search, fn($q) => $q->where(fn($p) => $p
+                    ->where('products.name', 'ilike', "%{$r->search}%")
+                    ->orWhere('products.internal_code', 'ilike', "%{$r->search}%")
+                ))
+                ->when($r->status === 'low', fn($q) => $q->whereRaw('stock_levels.qty_on_hand > 0 AND stock_levels.qty_on_hand <= products.alert_stock'))
+                ->when($r->status === 'out', fn($q) => $q->where('stock_levels.qty_on_hand', '<=', 0))
+                ->select('stock_levels.*')
+                ->orderBy('products.name')
+                ->paginate((int)($r->per_page ?? 25))
         ));
         Route::get('/stock/low', fn(\Illuminate\Http\Request $r) => response()->json(
             app(\App\Services\StockService::class)->getLowStockProducts($r->user()->store_id)
