@@ -4,7 +4,7 @@ import { useSuperAdminStore } from '../../store/superAdmin.store'
 import {
   LayoutDashboard, ClipboardList, Building2, CreditCard, Package,
   LogOut, ShieldCheck, ChevronLeft, ChevronRight, Bell,
-  BarChart3, FileText, Settings, Users, AlertTriangle, UserCog, LifeBuoy
+  BarChart3, FileText, Settings, Users, AlertTriangle, UserCog, LifeBuoy, Database
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -19,6 +19,7 @@ const navItems = [
   { to: '/superadmin/admins', label: 'Administrateurs', icon: <Users size={18} /> },
   { to: '/superadmin/audit', label: 'Audit Log', icon: <AlertTriangle size={18} /> },
   { to: '/superadmin/support', label: 'Support Tickets', icon: <LifeBuoy size={18} /> },
+  { to: '/superadmin/backup',  label: 'Sauvegardes',    icon: <Database size={18} /> },
 ]
 
 export default function SuperAdminLayout() {

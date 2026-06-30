@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\SuperAdmin\LicencesController;
 use App\Http\Controllers\Api\SuperAdmin\PlatformInvoicesController;
 use App\Http\Controllers\Api\SuperAdmin\AdminsManagementController;
 use App\Http\Controllers\Api\SuperAdmin\AuditLogController;
+use App\Http\Controllers\Api\SuperAdmin\BackupController;
 
 Route::prefix('v1')->group(function () {
 
@@ -84,6 +85,18 @@ Route::prefix('v1')->group(function () {
                 Route::get('/tickets/{supportTicket}',                      [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'show']);
                 Route::post('/tickets/{supportTicket}/reply',               [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'reply']);
                 Route::patch('/tickets/{supportTicket}/status',             [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'updateStatus']);
+            });
+
+            // Backup & Maintenance
+            Route::prefix('/backup')->group(function () {
+                Route::get('/settings',         [BackupController::class, 'settings']);
+                Route::put('/settings',         [BackupController::class, 'updateSettings']);
+                Route::get('/logs',             [BackupController::class, 'logs']);
+                Route::get('/stats',            [BackupController::class, 'stats']);
+                Route::post('/run',             [BackupController::class, 'run']);
+                Route::post('/test-drive',      [BackupController::class, 'testDrive']);
+                Route::post('/optimize-indexes',[BackupController::class, 'optimizeIndexes']);
+                Route::delete('/logs/{id}',     [BackupController::class, 'destroyLog']);
             });
         });
     });
