@@ -50,7 +50,7 @@ class ReportController extends Controller
     {
         [$from, $to] = $this->dateRange($request);
         $data = DB::table('sales')
-            ->join('users', 'users.id', '=', 'sales.cashier_id')
+            ->join('users', 'users.id', '=', 'sales.user_id')
             ->where('sales.store_id', $this->storeId($request))
             ->where('sales.status', 'completed')
             ->whereBetween(DB::raw("date(sales.created_at)"), [$from, $to])
@@ -99,11 +99,11 @@ class ReportController extends Controller
             ->where('sales.status', 'completed')
             ->whereBetween(DB::raw("date(sales.created_at)"), [$from, $to])
             ->select(
-                'sale_payments.method',
+                DB::raw('sale_payments.payment_method as method'),
                 DB::raw('COUNT(*) as nb_transactions'),
                 DB::raw('SUM(sale_payments.amount) as total')
             )
-            ->groupBy('sale_payments.method')
+            ->groupBy('sale_payments.payment_method')
             ->orderByDesc('total')
             ->get();
 
