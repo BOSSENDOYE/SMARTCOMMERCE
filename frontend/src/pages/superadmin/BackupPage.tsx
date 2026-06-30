@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Database, Cloud, Play, Trash2, CheckCircle, XCircle, Clock,
-  HardDrive, RefreshCw, Settings, Shield, Zap, AlertTriangle,
+  HardDrive, RefreshCw, Settings, Shield, Zap,
   ChevronDown, ChevronUp, Info
 } from 'lucide-react'
 import axios from 'axios'
@@ -94,12 +94,15 @@ export default function BackupPage() {
 
   const { data: settings, isLoading: settingsLoading } = useQuery<BackupSettings>({
     queryKey: ['backup-settings'],
-    queryFn: () => saApi.get('/superadmin/backup/settings').then(r => r.data),
-    onSuccess: (d) => {
-      setForm(d)
-      setDriveFolderId(d.drive_folder_id ?? '')
-    },
+    queryFn: (): Promise<BackupSettings> => saApi.get('/superadmin/backup/settings').then(r => r.data),
   })
+
+  useEffect(() => {
+    if (settings) {
+      setForm(settings)
+      setDriveFolderId(settings.drive_folder_id ?? '')
+    }
+  }, [settings])
 
   const { data: logsData, isLoading: logsLoading } = useQuery<LogsResponse>({
     queryKey: ['backup-logs'],
