@@ -491,9 +491,10 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
       if (imageFile) {
         const fd = new FormData()
         fd.append('image', imageFile)
-        await api.post(`/products/${res.data.id}/image`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        }).catch(() => toast.error('Produit sauvegardé mais erreur upload photo'))
+        await api.post(`/products/${res.data.id}/image`, fd).catch((err: { response?: { data?: { message?: string; errors?: Record<string, string[]> } } }) => {
+          const msg = err?.response?.data?.errors?.image?.[0] ?? err?.response?.data?.message ?? 'Erreur serveur'
+          toast.error(`Photo non uploadée : ${msg}`)
+        })
       }
       qc.invalidateQueries({ queryKey: ['products'] })
       qc.invalidateQueries({ queryKey: ['product-stats'] })

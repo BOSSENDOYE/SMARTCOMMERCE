@@ -280,7 +280,7 @@ class ProductController extends Controller
 
     public function uploadImage(Request $request, Product $product)
     {
-        $request->validate(['image' => 'required|image|max:2048']);
+        $request->validate(['image' => 'required|image|max:5120']);
 
         // Remove old image
         if ($product->image && str_starts_with($product->image, '/storage/')) {
