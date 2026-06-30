@@ -219,7 +219,7 @@ class InvoiceController extends Controller
 
         $data = $request->validate([
             'amount'    => 'required|numeric|min:0.01',
-            'method'    => 'required|in:cash,mobile_money,bank_transfer,check,other',
+            'method'    => 'required|in:cash,mobile_money,bank_transfer,check,other,account',
             'reference' => 'nullable|string|max:100',
             'paid_at'   => 'nullable|date',
             'notes'     => 'nullable|string',
@@ -237,6 +237,26 @@ class InvoiceController extends Controller
             ]);
 
             $invoice->refreshPaidAmount();
+
+            // Déduire du compte client si paiement par compte
+            if ($data['method'] === 'account' && $invoice->client_id) {
+                $client = \App\Models\Client::find($invoice->client_id);
+                if ($client) {
+                    $before = (float) $client->account_balance;
+                    $after  = $before - (float) $data['amount'];
+                    $client->update(['account_balance' => $after]);
+                    \App\Models\ClientAccountTransaction::create([
+                        'client_id'      => $client->id,
+                        'sale_id'        => null,
+                        'created_by'     => Auth::id(),
+                        'type'           => 'invoice_debit',
+                        'amount'         => $data['amount'],
+                        'balance_before' => $before,
+                        'balance_after'  => $after,
+                        'note'           => 'Paiement facture ' . $invoice->reference,
+                    ]);
+                }
+            }
 
             return response()->json($invoice->fresh()->load(['payments.recordedBy']));
         });

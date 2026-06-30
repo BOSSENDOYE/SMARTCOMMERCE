@@ -33,7 +33,7 @@ interface LineItem {
   total_ttc?: number
 }
 
-interface ClientEntry { id: number; name: string; phone: string; email?: string }
+interface ClientEntry { id: number; name: string; phone: string; email?: string; account_balance?: number }
 
 // Produit de catalogue normalisé (produit boutique OU article restaurant)
 interface CatalogItem {
@@ -1077,6 +1077,7 @@ function InvoiceDetail({
               <PaymentPanel
                 total={inv.balance}
                 clientName={inv.client?.name}
+                clientAccountBalance={inv.client?.account_balance}
                 value={payEntries}
                 onChange={setPayEntries}
                 hideCredit={false}
