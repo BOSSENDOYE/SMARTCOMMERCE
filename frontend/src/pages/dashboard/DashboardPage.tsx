@@ -131,7 +131,7 @@ function StockValueCard({ purchase, sale }: { purchase: number; sale: number }) 
           <div className="bg-blue-50 rounded-xl p-2.5">
             <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-0.5">Achat</p>
             <p className="text-sm font-bold text-blue-900 leading-tight">{formatCurrency(purchase)}</p>
-            <p className="text-[10px] text-blue-400 mt-0.5">prix moyen (PUMP)</p>
+            <p className="text-[10px] text-blue-400 mt-0.5">prix d'achat catalogue HT</p>
           </div>
           <div className="bg-indigo-50 rounded-xl p-2.5">
             <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wide mb-0.5">Vente</p>

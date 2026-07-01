@@ -170,7 +170,7 @@ class StockService
             ->join('products', 'products.id', '=', 'stock_levels.product_id')
             ->whereNull('products.deleted_at')
             ->selectRaw('
-                COALESCE(SUM(stock_levels.qty_on_hand * stock_levels.avg_cost), 0)       AS purchase_value,
+                COALESCE(SUM(stock_levels.qty_on_hand * products.purchase_price_ht), 0)  AS purchase_value,
                 COALESCE(SUM(stock_levels.qty_on_hand * products.sale_price_ttc), 0)     AS sale_value
             ')
             ->first();

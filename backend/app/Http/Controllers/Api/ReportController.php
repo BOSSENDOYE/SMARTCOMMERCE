@@ -124,20 +124,19 @@ class ReportController extends Controller
                 'products.name',
                 DB::raw("COALESCE(categories.name, 'Sans catégorie') as category_name"),
                 'stock_levels.qty_on_hand',
-                'stock_levels.avg_cost',
-                'stock_levels.total_value',
+                'products.purchase_price_ht',
+                DB::raw('ROUND(stock_levels.qty_on_hand * products.purchase_price_ht, 2) as purchase_value'),
                 'products.sale_price_ttc',
                 DB::raw('ROUND(stock_levels.qty_on_hand * products.sale_price_ttc, 2) as sale_value')
             )
-            ->orderByDesc('total_value')
+            ->orderByDesc(DB::raw('stock_levels.qty_on_hand * products.purchase_price_ht'))
             ->get();
 
         return response()->json([
             'data'                 => $data,
-            'total_purchase_value' => round((float) $data->sum('total_value'), 2),
-            'total_sale_value'     => round((float) $data->sum('sale_value'),  2),
-            // backward compat
-            'total_value'          => round((float) $data->sum('total_value'), 2),
+            'total_purchase_value' => round((float) $data->sum('purchase_value'), 2),
+            'total_sale_value'     => round((float) $data->sum('sale_value'),     2),
+            'total_value'          => round((float) $data->sum('purchase_value'), 2),
         ]);
     }
 

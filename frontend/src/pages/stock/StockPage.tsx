@@ -511,7 +511,7 @@ export default function StockPage() {
               <TrendingUp size={16} className="text-blue-500" />
             </div>
             <p className="text-lg font-bold text-gray-900">{formatCurrency(purchaseValue)}</p>
-            <p className="text-[10px] text-gray-400">prix moyen pondéré (PUMP)</p>
+            <p className="text-[10px] text-gray-400">prix d'achat catalogue HT</p>
           </div>
         </div>
         {/* Valeur vente */}
