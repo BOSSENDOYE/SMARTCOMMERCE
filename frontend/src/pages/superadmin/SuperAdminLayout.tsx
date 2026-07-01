@@ -19,7 +19,8 @@ const navItems = [
   { to: '/superadmin/admins', label: 'Administrateurs', icon: <Users size={18} /> },
   { to: '/superadmin/audit', label: 'Audit Log', icon: <AlertTriangle size={18} /> },
   { to: '/superadmin/support', label: 'Support Tickets', icon: <LifeBuoy size={18} /> },
-  { to: '/superadmin/backup',  label: 'Sauvegardes',    icon: <Database size={18} /> },
+  { to: '/superadmin/backup',       label: 'Sauvegardes',  icon: <Database size={18} /> },
+  { to: '/superadmin/analytics',    label: 'Statistiques', icon: <BarChart3 size={18} /> },
 ]
 
 export default function SuperAdminLayout() {

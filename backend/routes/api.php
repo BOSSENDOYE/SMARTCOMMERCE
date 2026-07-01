@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\SuperAdmin\PlatformInvoicesController;
 use App\Http\Controllers\Api\SuperAdmin\AdminsManagementController;
 use App\Http\Controllers\Api\SuperAdmin\AuditLogController;
 use App\Http\Controllers\Api\SuperAdmin\BackupController;
+use App\Http\Controllers\Api\SuperAdmin\AnalyticsController;
 
 Route::prefix('v1')->group(function () {
 
@@ -86,6 +87,9 @@ Route::prefix('v1')->group(function () {
                 Route::post('/tickets/{supportTicket}/reply',               [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'reply']);
                 Route::patch('/tickets/{supportTicket}/status',             [\App\Http\Controllers\Api\SuperAdmin\SupportAdminController::class, 'updateStatus']);
             });
+
+            // Analytics
+            Route::get('/analytics', [AnalyticsController::class, 'index']);
 
             // Backup & Maintenance
             Route::prefix('/backup')->group(function () {
