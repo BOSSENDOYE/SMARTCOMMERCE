@@ -56,10 +56,6 @@ interface Analytics {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtTime(iso: string): string {
-  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
-}
-
 function fmtDay(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
   return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' }).format(d)
@@ -177,8 +173,8 @@ export default function AnalyticsPage() {
                   <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #e5e7eb' }}
-                    labelFormatter={fmtDay}
-                    formatter={(val: number, name: string) => [
+                    labelFormatter={(label) => fmtDay(String(label))}
+                    formatter={(val, name) => [
                       val,
                       name === 'sessions' ? 'Sessions' : 'Utilisateurs uniques',
                     ]}
@@ -245,7 +241,7 @@ export default function AnalyticsPage() {
                     <YAxis type="category" dataKey="org_name" tick={{ fontSize: 11, fill: '#374151' }} width={120} />
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #e5e7eb' }}
-                      formatter={(val: number) => [val, 'Sessions']}
+                      formatter={(val) => [val, 'Sessions']}
                     />
                     <Bar dataKey="sessions" radius={[0, 6, 6, 0]}>
                       {data!.top_orgs.slice(0, 8).map((_, i) => (
