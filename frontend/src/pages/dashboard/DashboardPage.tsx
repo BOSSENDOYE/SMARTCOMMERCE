@@ -25,7 +25,7 @@ interface DashboardData {
   payment_breakdown: { method: string; total: number; count: number }[]
   hourly_sales:      { hour: number; count: number; total: number }[]
   week_sales:        { day: string; total: number; count: number }[]
-  stock_value:       number
+  stock_value:       { purchase: number; sale: number }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -106,6 +106,43 @@ function KpiCard({
             </span>
             {trendPct}
             {trendLabel && <span className="font-normal text-gray-400">{trendLabel}</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Stock Value Card (dual: achat + vente) ───────────────────────────────────
+
+function StockValueCard({ purchase, sale }: { purchase: number; sale: number }) {
+  const margin = purchase > 0 ? ((sale - purchase) / purchase * 100) : 0
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+      <div className="h-1 w-full bg-gradient-to-r from-blue-400 to-indigo-500" />
+      <div className="p-5 flex flex-col gap-3 flex-1">
+        <div className="flex items-start justify-between">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Valeur du Stock</p>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-100">
+            <Boxes size={16} className="text-blue-600" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-blue-50 rounded-xl p-2.5">
+            <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-0.5">Achat</p>
+            <p className="text-sm font-bold text-blue-900 leading-tight">{formatCurrency(purchase)}</p>
+            <p className="text-[10px] text-blue-400 mt-0.5">prix moyen (PUMP)</p>
+          </div>
+          <div className="bg-indigo-50 rounded-xl p-2.5">
+            <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wide mb-0.5">Vente</p>
+            <p className="text-sm font-bold text-indigo-900 leading-tight">{formatCurrency(sale)}</p>
+            <p className="text-[10px] text-indigo-400 mt-0.5">prix catalogue TTC</p>
+          </div>
+        </div>
+        {margin > 0 && (
+          <div className="flex items-center gap-1 text-xs text-emerald-600 font-semibold mt-auto">
+            <ArrowUp size={11} className="text-emerald-500" />
+            Marge potentielle : {margin.toFixed(1)}%
           </div>
         )}
       </div>
@@ -250,13 +287,9 @@ export default function DashboardPage() {
           iconClass="bg-violet-100"
           accentClass="bg-gradient-to-r from-violet-400 to-violet-500"
         />
-        <KpiCard
-          label="Valeur du Stock"
-          value={formatCurrency(data!.stock_value)}
-          sub="valorisation PUMP"
-          icon={<Boxes size={16} className="text-blue-600" />}
-          iconClass="bg-blue-100"
-          accentClass="bg-gradient-to-r from-blue-400 to-blue-500"
+        <StockValueCard
+          purchase={data!.stock_value.purchase}
+          sale={data!.stock_value.sale}
         />
       </div>
 

@@ -116,6 +116,7 @@ class ReportController extends Controller
             ->join('products', 'products.id', '=', 'stock_levels.product_id')
             ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
             ->where('stock_levels.store_id', $this->storeId($request))
+            ->whereNull('products.deleted_at')
             ->where('stock_levels.qty_on_hand', '>', 0)
             ->select(
                 'products.id',
@@ -124,13 +125,20 @@ class ReportController extends Controller
                 DB::raw("COALESCE(categories.name, 'Sans catégorie') as category_name"),
                 'stock_levels.qty_on_hand',
                 'stock_levels.avg_cost',
-                'stock_levels.total_value'
+                'stock_levels.total_value',
+                'products.sale_price_ttc',
+                DB::raw('ROUND(stock_levels.qty_on_hand * products.sale_price_ttc, 2) as sale_value')
             )
             ->orderByDesc('total_value')
             ->get();
 
-        $totalValue = $data->sum('total_value');
-        return response()->json(['data' => $data, 'total_value' => $totalValue]);
+        return response()->json([
+            'data'                 => $data,
+            'total_purchase_value' => round((float) $data->sum('total_value'), 2),
+            'total_sale_value'     => round((float) $data->sum('sale_value'),  2),
+            // backward compat
+            'total_value'          => round((float) $data->sum('total_value'), 2),
+        ]);
     }
 
     public function supplierBalances(Request $request)

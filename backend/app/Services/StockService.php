@@ -163,11 +163,22 @@ class StockService
         }
     }
 
-    public function getStockValue(int $storeId): float
+    public function getStockValue(int $storeId): array
     {
-        return StockLevel::where('store_id', $storeId)
-            ->where('qty_on_hand', '>', 0)
-            ->sum(DB::raw('qty_on_hand * avg_cost'));
+        $row = StockLevel::where('stock_levels.store_id', $storeId)
+            ->where('stock_levels.qty_on_hand', '>', 0)
+            ->join('products', 'products.id', '=', 'stock_levels.product_id')
+            ->whereNull('products.deleted_at')
+            ->selectRaw('
+                COALESCE(SUM(stock_levels.qty_on_hand * stock_levels.avg_cost), 0)       AS purchase_value,
+                COALESCE(SUM(stock_levels.qty_on_hand * products.sale_price_ttc), 0)     AS sale_value
+            ')
+            ->first();
+
+        return [
+            'purchase' => (float) ($row->purchase_value ?? 0),
+            'sale'     => (float) ($row->sale_value     ?? 0),
+        ];
     }
 
     public function getLowStockProducts(int $storeId): \Illuminate\Support\Collection

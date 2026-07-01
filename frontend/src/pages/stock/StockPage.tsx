@@ -453,14 +453,19 @@ export default function StockPage() {
     enabled: tab === 'rotation',
   })
 
-  const { data: valuation } = useQuery<{ data: { value: number }[] }>({
+  const { data: valuation } = useQuery<{
+    data: unknown[]
+    total_purchase_value: number
+    total_sale_value: number
+  }>({
     queryKey: ['stock-valuation-kpi'],
     queryFn: () => api.get('/reports/stock-valuation').then(r => r.data),
   })
 
   // ── KPI values ───────────────────────────────────────────────────────────
 
-  const totalValue = (valuation?.data ?? []).reduce((s, v) => s + (v.value ?? 0), 0)
+  const purchaseValue = valuation?.total_purchase_value ?? 0
+  const saleValue     = valuation?.total_sale_value     ?? 0
   const outProducts = lowStock.filter(p => (p.stock_level?.qty_on_hand ?? 0) <= 0)
   const alertProducts = lowStock.filter(p => (p.stock_level?.qty_on_hand ?? 0) > 0)
 
@@ -496,9 +501,36 @@ export default function StockPage() {
       </div>
 
       {/* ── KPI cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard color="blue"  icon={<TrendingUp size={20} />}
-          label="Valeur totale stock"  value={formatCurrency(totalValue)} />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Valeur achat */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-gradient-to-r from-blue-400 to-blue-500" />
+          <div className="p-4 flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Valeur achat</p>
+              <TrendingUp size={16} className="text-blue-500" />
+            </div>
+            <p className="text-lg font-bold text-gray-900">{formatCurrency(purchaseValue)}</p>
+            <p className="text-[10px] text-gray-400">prix moyen pondéré (PUMP)</p>
+          </div>
+        </div>
+        {/* Valeur vente */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-gradient-to-r from-indigo-400 to-indigo-500" />
+          <div className="p-4 flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Valeur vente</p>
+              <ShoppingCart size={16} className="text-indigo-500" />
+            </div>
+            <p className="text-lg font-bold text-gray-900">{formatCurrency(saleValue)}</p>
+            <p className="text-[10px] text-gray-400">prix catalogue TTC</p>
+            {purchaseValue > 0 && (
+              <p className="text-[10px] text-emerald-600 font-semibold">
+                +{((saleValue - purchaseValue) / purchaseValue * 100).toFixed(1)}% marge potentielle
+              </p>
+            )}
+          </div>
+        </div>
         <KpiCard color="green" icon={<PackagePlus size={20} />}
           label="Articles en stock"    value={levels?.total ?? '—'} sub="références actives" />
         <KpiCard color="amber" icon={<AlertTriangle size={20} />}
