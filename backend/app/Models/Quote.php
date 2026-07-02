@@ -55,7 +55,7 @@ class Quote extends Model
         $maxNum = DB::selectOne(
             "SELECT COALESCE(MAX(CAST(SUBSTRING(reference, ?) AS INTEGER)), 0) AS n
              FROM quotes
-             WHERE store_id = ? AND reference LIKE ? AND deleted_at IS NULL",
+             WHERE store_id = ? AND reference LIKE ?",
             [$len + 1, $storeId, $prefix . '%']
         )->n ?? 0;
 
