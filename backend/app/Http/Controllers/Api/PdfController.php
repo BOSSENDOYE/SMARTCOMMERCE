@@ -53,10 +53,26 @@ class PdfController extends Controller
     {
         $sale->load(['client', 'items.product', 'items.restaurantItem', 'payments', 'user', 'store']);
 
-        $store    = $sale->store ?? $this->store($request);
+        $store = $sale->store ?? $this->store($request);
+
+        $tpl = \App\Models\PrintTemplate::where('store_id', $store->id)
+            ->where('document_type', 'sale_receipt')
+            ->where('is_default', true)
+            ->where('is_active', true)
+            ->first();
+        $tplConfig = array_replace_recursive(
+            \App\Models\PrintTemplate::defaultConfig(),
+            $tpl?->config ?? []
+        );
+
+        $paperFormat = in_array($tplConfig['layout']['paper_format'], ['a4', 'a5'])
+            ? $tplConfig['layout']['paper_format']
+            : 'a4';
+
         $filename = 'Recu-' . $sale->reference . '.pdf';
 
-        return $this->pdf('pdf.sale', compact('sale', 'store'))
+        return $this->pdf('pdf.sale', compact('sale', 'store', 'tplConfig'))
+            ->setPaper($paperFormat, 'portrait')
             ->download($filename);
     }
 

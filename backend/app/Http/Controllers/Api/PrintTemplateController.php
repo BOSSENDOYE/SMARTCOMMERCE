@@ -66,7 +66,7 @@ class PrintTemplateController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'document_type' => 'required|in:receipt,invoice,delivery_note,purchase_order,label',
+            'document_type' => 'required|in:receipt,sale_receipt,invoice,delivery_note,purchase_order,label',
             'name'          => 'required|string|max:100',
             'config'        => 'required|array',
             'is_default'    => 'boolean',

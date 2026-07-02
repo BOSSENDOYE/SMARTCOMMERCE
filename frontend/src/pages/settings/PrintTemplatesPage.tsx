@@ -10,7 +10,7 @@ import { useConfirm } from '../../hooks/useConfirm'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type DocType = 'receipt' | 'invoice' | 'delivery_note' | 'purchase_order' | 'label'
+export type DocType = 'receipt' | 'invoice' | 'delivery_note' | 'purchase_order' | 'label' | 'sale_receipt'
 
 export interface PrintConfig {
   header: {
@@ -69,6 +69,7 @@ interface PrintTemplate {
 
 const DOC_TYPES: { type: DocType; label: string; desc: string; icon: string }[] = [
   { type: 'receipt',       label: 'Ticket de caisse',     desc: 'Format thermique (POS)',     icon: '🧾' },
+  { type: 'sale_receipt',  label: 'Reçu de vente A4',    desc: 'Vente au comptoir format A4',icon: '🖨️' },
   { type: 'invoice',       label: 'Facture',              desc: 'Document de facturation A4', icon: '📄' },
   { type: 'delivery_note', label: 'Bon de livraison',     desc: 'Accompagnement colis',       icon: '📦' },
   { type: 'purchase_order',label: 'Bon de commande',      desc: 'Commande fournisseur',       icon: '🛒' },
@@ -459,7 +460,15 @@ function TemplateModal({
   const isEdit = !!template
   const [name, setName] = useState(template?.name ?? '')
   const [isDefault, setIsDefault] = useState(template?.is_default ?? false)
-  const [config, setConfig] = useState<PrintConfig>(template?.config ?? defaultConfig())
+  const [config, setConfig] = useState<PrintConfig>(() => {
+    if (template?.config) return template.config
+    const cfg = defaultConfig()
+    if (docType === 'sale_receipt' || docType === 'invoice') {
+      cfg.layout.paper_format = 'a4'
+      cfg.typography.font = 'arial'
+    }
+    return cfg
+  })
   const [showPreview, setShowPreview] = useState(false)
 
   const docLabel = DOC_TYPES.find(d => d.type === docType)?.label ?? docType
