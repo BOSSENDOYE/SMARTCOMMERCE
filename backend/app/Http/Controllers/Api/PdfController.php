@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Quote;
+use App\Models\Sale;
 use App\Models\Store;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -43,6 +44,19 @@ class PdfController extends Controller
         $filename = 'Facture-' . $invoice->reference . '.pdf';
 
         return $this->pdf('pdf.invoice', compact('invoice', 'store'))
+            ->download($filename);
+    }
+
+    // ─── Vente au comptoir ────────────────────────────────────────────────────
+
+    public function sale(Request $request, Sale $sale)
+    {
+        $sale->load(['client', 'items.product', 'items.restaurantItem', 'payments', 'user', 'store']);
+
+        $store    = $sale->store ?? $this->store($request);
+        $filename = 'Recu-' . $sale->reference . '.pdf';
+
+        return $this->pdf('pdf.sale', compact('sale', 'store'))
             ->download($filename);
     }
 

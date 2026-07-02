@@ -568,6 +568,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('pdf')->group(function () {
             Route::get('/invoices/{invoice}',        [\App\Http\Controllers\Api\PdfController::class, 'invoice']);
             Route::get('/quotes/{quote}',            [\App\Http\Controllers\Api\PdfController::class, 'quote']);
+            Route::get('/sales/{sale}',              [\App\Http\Controllers\Api\PdfController::class, 'sale']);
             Route::get('/reports/sales-by-product',  [\App\Http\Controllers\Api\PdfController::class, 'reportSalesByProduct']);
             Route::get('/reports/sales-by-cashier',  [\App\Http\Controllers\Api\PdfController::class, 'reportSalesByCashier']);
             Route::get('/reports/sales-by-category', [\App\Http\Controllers\Api\PdfController::class, 'reportSalesByCategory']);

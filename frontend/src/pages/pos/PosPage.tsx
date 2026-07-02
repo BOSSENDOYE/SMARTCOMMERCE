@@ -6,7 +6,7 @@ import api from '../../lib/api'
 import { usePosStore, type CartItem } from '../../store/pos.store'
 import { useAuthStore } from '../../store/auth.store'
 import { db, findProductByBarcode, searchProductsOffline, savePendingSale, cacheProducts, type CachedProduct } from '../../lib/offline-db'
-import { formatCurrency, formatNumber, imageUrl } from '../../lib/format'
+import { formatCurrency, formatNumber, imageUrl, downloadPdf } from '../../lib/format'
 import toast from 'react-hot-toast'
 import {
   Search, Scan, Trash2, Plus, Minus, Percent, CreditCard, Banknote,
@@ -14,6 +14,7 @@ import {
   Wifi, WifiOff, Receipt, ChevronRight, Lock, Unlock, ArrowLeft,
   DollarSign, Tag, Users, Printer, Clock, Ban, RotateCcw, Edit2, Eye,
   History, TrendingUp, Calendar, User, AlertTriangle, CheckCircle2, Loader2,
+  FileText,
 } from 'lucide-react'
 import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
 import { useThermalPrinter } from '../../hooks/useThermalPrinter'
@@ -940,6 +941,9 @@ function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =>
 
   const handlePrint = () => window.print()
 
+  const handleA4Print = () =>
+    downloadPdf(`/pdf/sales/${sale.id}`, `Recu-${sale.reference}.pdf`)
+
   const sep = <div style={{ borderTop: '1px dashed #666', margin: '7px 0' }} />
 
   // Receipt body — shared by screen preview and print div
@@ -1083,29 +1087,36 @@ function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =>
         </div>
 
         {/* Action buttons */}
-        <div className="w-full max-w-sm bg-white rounded-b-2xl border-t px-4 pb-5 pt-3 flex gap-2 flex-shrink-0 shadow-2xl">
-          {/* Impression thermique si imprimante connectée, sinon navigateur */}
+        <div className="w-full max-w-sm bg-white rounded-b-2xl border-t px-4 pb-5 pt-3 flex gap-2 flex-shrink-0 shadow-2xl flex-wrap">
+          {/* Ticket thermique ou PDF 80mm */}
           {thermalReady ? (
             <button
               onClick={handleThermalPrint}
               disabled={thermalStatus === 'printing'}
-              className="flex-1 flex items-center justify-center gap-2 py-3 border-2 text-sm font-semibold rounded-xl transition-colors border-orange-500 text-orange-600 hover:bg-orange-50 disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1.5 py-3 border-2 text-sm font-semibold rounded-xl transition-colors border-orange-500 text-orange-600 hover:bg-orange-50 disabled:opacity-50"
             >
-              <Printer size={17} />
+              <Printer size={16} />
               {thermalStatus === 'printing' ? 'Impression...' : 'Ticket ESC/POS'}
             </button>
           ) : (
             <button
               onClick={handlePrint}
-              className="flex-1 flex items-center justify-center gap-2 py-3 border-2 text-sm font-semibold rounded-xl transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 py-3 border-2 text-sm font-semibold rounded-xl transition-colors"
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
             >
-              <Printer size={17} /> Imprimer PDF
+              <Printer size={16} /> Ticket 80mm
             </button>
           )}
+          {/* Reçu format A4 */}
+          <button
+            onClick={handleA4Print}
+            className="flex-1 flex items-center justify-center gap-1.5 py-3 border-2 border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            <FileText size={16} /> Format A4
+          </button>
           <button
             onClick={onNewSale}
-            className="flex-1 py-3 btn-primary text-sm font-semibold rounded-xl flex items-center justify-center gap-2"
+            className="w-full py-3 btn-primary text-sm font-semibold rounded-xl flex items-center justify-center gap-2"
           >
             <Receipt size={17} /> Nouvelle vente
           </button>
