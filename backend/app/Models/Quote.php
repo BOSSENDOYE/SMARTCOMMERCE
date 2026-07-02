@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Quote extends Model
 {
@@ -49,15 +50,15 @@ class Quote extends Model
     {
         $year   = now()->year;
         $prefix = "DEV-{$year}-";
+        $len    = strlen($prefix);
 
-        $last = static::withTrashed()
-            ->where('store_id', $storeId)
-            ->where('reference', 'like', $prefix . '%')
-            ->orderByDesc('id')
-            ->value('reference');
+        $maxNum = DB::selectOne(
+            "SELECT COALESCE(MAX(CAST(SUBSTRING(reference, ?) AS INTEGER)), 0) AS n
+             FROM quotes
+             WHERE store_id = ? AND reference LIKE ? AND deleted_at IS NULL",
+            [$len + 1, $storeId, $prefix . '%']
+        )->n ?? 0;
 
-        $next = $last ? ((int) substr($last, strlen($prefix))) + 1 : 1;
-
-        return $prefix . str_pad($next, 6, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((int) $maxNum + 1, 6, '0', STR_PAD_LEFT);
     }
 }
