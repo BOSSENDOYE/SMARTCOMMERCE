@@ -52,11 +52,12 @@ class Quote extends Model
         $prefix = "DEV-{$year}-";
         $len    = strlen($prefix);
 
+        $pos    = $len + 1;
         $maxNum = DB::selectOne(
-            "SELECT COALESCE(MAX(CAST(SUBSTRING(reference, ?) AS INTEGER)), 0) AS n
+            "SELECT COALESCE(MAX(CAST(SUBSTRING(reference, {$pos}) AS INTEGER)), 0) AS n
              FROM quotes
-             WHERE store_id = ? AND reference LIKE ?",
-            [$len + 1, $storeId, $prefix . '%']
+             WHERE reference LIKE ?",
+            [$prefix . '%']
         )->n ?? 0;
 
         return $prefix . str_pad((int) $maxNum + 1, 6, '0', STR_PAD_LEFT);
