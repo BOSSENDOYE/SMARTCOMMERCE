@@ -90,8 +90,9 @@ class InvoiceController extends Controller
             'monthly_revenue'=> Invoice::where('store_id', $storeId)
                 ->where('status', 'paid')
                 ->whereYear('paid_at', $year)
-                ->selectRaw('MONTH(paid_at) as month, SUM(total_ttc) as total')
+                ->selectRaw("EXTRACT(MONTH FROM paid_at) as month, SUM(total_ttc) as total")
                 ->groupBy('month')
+                ->orderBy('month')
                 ->pluck('total', 'month'),
         ]);
     }
