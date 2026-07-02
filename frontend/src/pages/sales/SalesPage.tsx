@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
 import api from '../../lib/api'
 import { useAuthStore } from '../../store/auth.store'
-import { formatCurrency, downloadPdf } from '../../lib/format'
+import { formatCurrency, openPdf } from '../../lib/format'
 import toast from 'react-hot-toast'
 import {
   Plus, Trash2, User, ArrowLeft, ChevronRight,
@@ -1332,7 +1332,10 @@ function SaleDetailModal({
               <Printer size={14} /> Ticket
             </button>
             {sale?.id && (
-              <button onClick={() => downloadPdf(`/pdf/sales/${sale.id}`, `Recu-${sale.reference}.pdf`)}
+              <button onClick={() =>
+                openPdf(`/pdf/sales/${sale.id}`)
+                  .catch(() => toast.error('Erreur lors de la génération du PDF'))
+              }
                 className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
                 <FileText size={14} /> Format A4
               </button>

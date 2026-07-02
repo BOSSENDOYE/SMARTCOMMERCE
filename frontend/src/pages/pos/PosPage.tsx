@@ -6,7 +6,7 @@ import api from '../../lib/api'
 import { usePosStore, type CartItem } from '../../store/pos.store'
 import { useAuthStore } from '../../store/auth.store'
 import { db, findProductByBarcode, searchProductsOffline, savePendingSale, cacheProducts, type CachedProduct } from '../../lib/offline-db'
-import { formatCurrency, formatNumber, imageUrl, downloadPdf } from '../../lib/format'
+import { formatCurrency, formatNumber, imageUrl, openPdf } from '../../lib/format'
 import toast from 'react-hot-toast'
 import {
   Search, Scan, Trash2, Plus, Minus, Percent, CreditCard, Banknote,
@@ -942,7 +942,8 @@ function ReceiptModal({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =>
   const handlePrint = () => window.print()
 
   const handleA4Print = () =>
-    downloadPdf(`/pdf/sales/${sale.id}`, `Recu-${sale.reference}.pdf`)
+    openPdf(`/pdf/sales/${sale.id}`)
+      .catch(() => {})
 
   const sep = <div style={{ borderTop: '1px dashed #666', margin: '7px 0' }} />
 

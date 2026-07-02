@@ -57,21 +57,17 @@ export function imageUrl(path?: string | null): string | null {
  * @param filename - nom du fichier téléchargé
  * @param params   - query params optionnels
  */
-export async function downloadPdf(
+async function fetchPdfBlob(
   path: string,
-  filename: string,
   params?: Record<string, string>,
-): Promise<void> {
+): Promise<Blob> {
   const token = localStorage.getItem('sc_token')
   const url = new URL(`${API_BASE}/api/v1${path}`)
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
   }
 
-  // Propager le contexte super-admin si nécessaire
-  const headers: Record<string, string> = {
-    'Accept': 'application/pdf',
-  }
+  const headers: Record<string, string> = { 'Accept': 'application/pdf' }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
   try {
@@ -84,8 +80,16 @@ export async function downloadPdf(
 
   const res = await fetch(url.toString(), { headers })
   if (!res.ok) throw new Error(`Erreur PDF (${res.status})`)
+  return res.blob()
+}
 
-  const blob = await res.blob()
+/** Télécharge un PDF depuis le backend. */
+export async function downloadPdf(
+  path: string,
+  filename: string,
+  params?: Record<string, string>,
+): Promise<void> {
+  const blob = await fetchPdfBlob(path, params)
   const blobUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = blobUrl
@@ -94,4 +98,17 @@ export async function downloadPdf(
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(blobUrl)
+}
+
+/** Ouvre un PDF dans un nouvel onglet pour visualisation et impression. */
+export async function openPdf(
+  path: string,
+  params?: Record<string, string>,
+): Promise<void> {
+  const blob = await fetchPdfBlob(path, params)
+  const blobUrl = URL.createObjectURL(blob)
+  const win = window.open(blobUrl, '_blank')
+  if (win) {
+    win.addEventListener('load', () => URL.revokeObjectURL(blobUrl), { once: true })
+  }
 }
