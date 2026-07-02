@@ -2,26 +2,111 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#ff7631" />
-    <meta name="description" content="Gestion commerciale intelligente pour l'Afrique" />
 
-    <!-- Apple / Safari PWA (iOS ne supporte pas beforeinstallprompt) -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Baobab" />
+    <!-- ============================================================
+         SEO — Titre & Description
+    ============================================================ -->
+    <title>Baobab — Logiciel de Gestion Commerciale pour l'Afrique | ERP POS Caisse</title>
+    <meta name="description" content="Baobab est le logiciel ERP tout-en-un conçu pour l'Afrique francophone. Gestion des ventes, stocks, caisse (POS), restaurant, Mobile Money (Wave, Orange Money), comptabilité OHADA. Simple, rapide et abordable." />
+    <meta name="keywords" content="logiciel gestion commerciale Afrique, ERP Afrique francophone, POS caisse Sénégal, logiciel restaurant Afrique, gestion stock Afrique, Mobile Money Wave Orange Money, comptabilité OHADA, Baobab SmartCommerce, logiciel PME Afrique, caisse enregistreuse Dakar" />
+    <meta name="author" content="SmartCommerce Suite — Baobab" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://senbaobab.com/" />
+
+    <!-- ============================================================
+         Google Search Console Verification
+    ============================================================ -->
+    <meta name="google-site-verification" content="8c9c3311e3b98289" />
+
+    <!-- ============================================================
+         Open Graph (Facebook, WhatsApp, LinkedIn)
+    ============================================================ -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://senbaobab.com/" />
+    <meta property="og:site_name" content="Baobab — SmartCommerce" />
+    <meta property="og:title" content="Baobab — Logiciel de Gestion Commerciale pour l'Afrique" />
+    <meta property="og:description" content="ERP tout-en-un pour les PME africaines : ventes, stocks, caisse POS, restaurant, Mobile Money, comptabilité OHADA. Fonctionne hors-ligne. Essai gratuit." />
+    <meta property="og:image" content="https://senbaobab.com/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Baobab — Logiciel ERP pour l'Afrique" />
+    <meta property="og:locale" content="fr_SN" />
+    <meta property="og:locale:alternate" content="fr_FR" />
+
+    <!-- ============================================================
+         Twitter / X Card
+    ============================================================ -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@BaobabERP" />
+    <meta name="twitter:title" content="Baobab — Logiciel de Gestion Commerciale pour l'Afrique" />
+    <meta name="twitter:description" content="ERP tout-en-un pour les PME africaines : ventes, stocks, POS, restaurant, Mobile Money, comptabilité OHADA. Hors-ligne. Simple. Abordable." />
+    <meta name="twitter:image" content="https://senbaobab.com/icon-512.png" />
+
+    <!-- ============================================================
+         PWA / Icônes
+    ============================================================ -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+    <meta name="theme-color" content="#ff7631" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Baobab" />
+    <link rel="manifest" href="/manifest.json" />
 
-    <title>Baobab</title>
+    <!-- ============================================================
+         Sitemap
+    ============================================================ -->
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+
+    <!-- ============================================================
+         Données Structurées JSON-LD (Schema.org)
+    ============================================================ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Baobab — SmartCommerce",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, Android, iOS",
+      "description": "Logiciel ERP tout-en-un pour les PME et commerces d'Afrique francophone. Gestion des ventes, stocks, caisse POS, restaurant, Mobile Money (Wave, Orange Money), comptabilité OHADA. Fonctionne hors-ligne.",
+      "url": "https://senbaobab.com/",
+      "logo": "https://senbaobab.com/icon-512.png",
+      "screenshot": "https://senbaobab.com/icon-512.png",
+      "inLanguage": "fr",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "XOF",
+        "description": "Essai gratuit disponible"
+      },
+      "featureList": [
+        "Point de Vente (POS / Caisse)",
+        "Gestion des stocks",
+        "Module Restaurant (tables, KDS, menus)",
+        "Mobile Money natif (Wave, Orange Money, Free Money)",
+        "Comptabilité OHADA",
+        "Multi-magasins",
+        "Mode hors-ligne (PWA)",
+        "Gestion des rôles et droits"
+      ],
+      "publisher": {
+        "@type": "Organization",
+        "name": "SmartCommerce Suite",
+        "url": "https://senbaobab.com/"
+      },
+      "sameAs": []
+    }
+    </script>
 
     <!--
       Capturer beforeinstallprompt AVANT que React monte.
       Chrome peut déclencher cet événement très tôt — si React n'a pas
       encore monté son useEffect, l'event serait perdu.
-      On le stocke dans window.__pwaPrompt et on dispatche un custom event.
     -->
     <script>
       window.__pwaPrompt = null;

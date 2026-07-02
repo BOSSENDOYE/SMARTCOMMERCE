@@ -1,0 +1,15 @@
+# robots.txt — Baobab SmartCommerce
+# https://senbaobab.com/
+
+User-agent: *
+Allow: /
+
+# Bloquer les routes privées de l'application
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /pos
+Disallow: /settings
+Disallow: /admin
+
+# Sitemap
+Sitemap: https://senbaobab.com/sitemap.xml
