@@ -1494,11 +1494,9 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
             <div className="text-xs text-gray-400 font-medium">Ventes confirmées</div>
-            <div className="text-lg font-bold text-gray-800 mt-0.5">{totals.completed_count ?? 0}</div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-            <div className="text-xs text-gray-400 font-medium">Annulées</div>
-            <div className="text-lg font-bold text-red-500 mt-0.5">{totals.cancelled_count ?? 0}</div>
+            <div className="text-lg font-bold text-gray-800 mt-0.5">{totals.completed_count ?? 0}
+              <span className="text-xs font-normal text-red-400 ml-2">{totals.cancelled_count ?? 0} annulée{(totals.cancelled_count ?? 0) !== 1 ? 's' : ''}</span>
+            </div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
             <div className="text-xs text-gray-400 font-medium">Total TTC (confirmées)</div>
@@ -1507,6 +1505,12 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
           <div className="bg-emerald-50 rounded-xl border border-emerald-200 px-4 py-3">
             <div className="text-xs text-emerald-600 font-medium">Montant encaissé</div>
             <div className="text-lg font-bold text-emerald-700 mt-0.5 font-mono">{formatCurrency(totals.paid_amount ?? 0)}</div>
+          </div>
+          <div className="bg-orange-50 rounded-xl border border-orange-200 px-4 py-3">
+            <div className="text-xs text-orange-600 font-medium">En cours (non encaissé)</div>
+            <div className="text-lg font-bold text-orange-700 mt-0.5 font-mono">
+              {formatCurrency(Math.max(0, (totals.total_ttc ?? 0) - (totals.paid_amount ?? 0)))}
+            </div>
           </div>
         </div>
       )}
@@ -1519,88 +1523,119 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
               <th className="px-4 py-3 text-left">Référence</th>
               <th className="px-4 py-3 text-left">Date & Heure</th>
               <th className="px-4 py-3 text-left">Client</th>
-              <th className="px-4 py-3 text-left">Vendeur</th>
               <th className="px-4 py-3 text-center">Canal</th>
               <th className="px-4 py-3 text-right">Avant remise</th>
               <th className="px-4 py-3 text-right">Remise</th>
               <th className="px-4 py-3 text-right">Total TTC</th>
-              <th className="px-4 py-3 text-center">Statut</th>
+              <th className="px-4 py-3 text-right">Encaissé</th>
+              <th className="px-4 py-3 text-right">Restant</th>
+              <th className="px-4 py-3 text-left">Vendeur</th>
               <th className="px-4 py-3 text-center w-20">Actions</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={10} className="py-16 text-center">
+              <tr><td colSpan={11} className="py-16 text-center">
                 <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </td></tr>
             )}
             {!isLoading && sales.length === 0 && (
-              <tr><td colSpan={10} className="py-16 text-center text-gray-400 text-sm">
+              <tr><td colSpan={11} className="py-16 text-center text-gray-400 text-sm">
                 Aucune vente trouvée pour cette période.
               </td></tr>
             )}
-            {sales.map(s => (
+            {sales.map(s => {
+              const totalTtc   = parseFloat(s.total_ttc ?? 0)
+              const paidAmt    = parseFloat(s.paid_amount ?? 0)
+              const restant    = Math.max(0, totalTtc - paidAmt)
+              const cancelled  = s.status === 'cancelled'
+              return (
               <tr
                 key={s.id}
                 onClick={() => setDetailSaleId(s.id)}
                 className={`border-b border-gray-100 transition-colors cursor-pointer ${
-                  s.status === 'cancelled' ? 'bg-red-50/30 hover:bg-red-50/60' : 'hover:bg-blue-50/30'
+                  cancelled ? 'bg-red-50/30 hover:bg-red-50/60' : 'hover:bg-blue-50/30'
                 }`}
               >
+                {/* Référence + statut */}
                 <td className="px-4 py-3">
-                  <span className={`font-mono text-xs px-2 py-0.5 rounded ${
-                    s.status === 'cancelled' ? 'bg-red-100 text-red-700 line-through' : 'bg-gray-100 text-gray-600'
-                  }`}>{s.reference}</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className={`font-mono text-xs px-2 py-0.5 rounded w-fit ${
+                      cancelled ? 'bg-red-100 text-red-700 line-through' : 'bg-gray-100 text-gray-600'
+                    }`}>{s.reference}</span>
+                    <span className={`text-[10px] font-medium ${
+                      s.status === 'completed' ? 'text-green-600' :
+                      cancelled ? 'text-red-500' : 'text-amber-600'
+                    }`}>
+                      {s.status === 'completed' ? '✓ Confirmée' : cancelled ? '✕ Annulée' : '⏳ Brouillon'}
+                      {cancelled && s.refund_method && s.refund_method !== 'none' && (
+                        <span className="ml-1 text-blue-500">· Remb. {formatCurrency(parseFloat(s.refund_amount ?? 0))}</span>
+                      )}
+                    </span>
+                  </div>
                 </td>
-                <td className="px-4 py-3 text-gray-600 text-xs">
+                {/* Date */}
+                <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
                   {new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   {' '}<span className="text-gray-400">{new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </td>
-                <td className="px-4 py-3 text-gray-700">{s.client?.name ?? <span className="text-gray-300">—</span>}</td>
-                <td className="px-4 py-3 text-gray-600 text-xs">{s.user?.name ?? '—'}</td>
+                {/* Client */}
+                <td className="px-4 py-3 text-gray-700 text-sm">{s.client?.name ?? <span className="text-gray-300">—</span>}</td>
+                {/* Canal */}
                 <td className="px-4 py-3 text-center">
                   <ChannelBadge channel={s.channel} />
                 </td>
+                {/* Avant remise */}
                 <td className="px-4 py-3 text-right">
                   {parseFloat(s.discount_amount ?? 0) > 0 ? (
-                    <span className={`font-mono text-xs ${s.status === 'cancelled' ? 'text-gray-300 line-through' : 'text-gray-500'}`}>
-                      {formatCurrency(parseFloat(s.total_ttc) + parseFloat(s.discount_amount))}
+                    <span className={`font-mono text-xs ${cancelled ? 'text-gray-300 line-through' : 'text-gray-500'}`}>
+                      {formatCurrency(totalTtc + parseFloat(s.discount_amount))}
                     </span>
                   ) : (
                     <span className="text-gray-300">—</span>
                   )}
                 </td>
+                {/* Remise */}
                 <td className="px-4 py-3 text-right">
                   {parseFloat(s.discount_amount ?? 0) > 0 ? (
-                    <span className={`font-mono text-xs font-semibold ${s.status === 'cancelled' ? 'text-gray-300 line-through' : 'text-green-600'}`}>
+                    <span className={`font-mono text-xs font-semibold ${cancelled ? 'text-gray-300 line-through' : 'text-green-600'}`}>
                       −{formatCurrency(parseFloat(s.discount_amount))}
                     </span>
                   ) : (
                     <span className="text-gray-300">—</span>
                   )}
                 </td>
+                {/* Total TTC */}
                 <td className="px-4 py-3 text-right">
-                  <span className={`font-semibold ${s.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                    {formatCurrency(parseFloat(s.total_ttc))}
+                  <span className={`font-semibold ${cancelled ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                    {formatCurrency(totalTtc)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-center">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      s.status === 'completed' ? 'bg-green-100 text-green-700' :
-                      s.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                      'bg-amber-100 text-amber-700'
-                    }`}>
-                      {s.status === 'completed' ? 'Confirmée' : s.status === 'cancelled' ? 'Annulée' : 'Brouillon'}
+                {/* Encaissé */}
+                <td className="px-4 py-3 text-right">
+                  {cancelled ? (
+                    <span className="text-gray-300">—</span>
+                  ) : (
+                    <span className={`font-mono text-xs font-semibold ${paidAmt > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                      {paidAmt > 0 ? formatCurrency(paidAmt) : '—'}
                     </span>
-                    {s.status === 'cancelled' && s.refund_method && s.refund_method !== 'none' && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 flex items-center gap-1">
-                        <RotateCcw size={9} />
-                        Remb. {formatCurrency(parseFloat(s.refund_amount ?? 0))}
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </td>
+                {/* Restant */}
+                <td className="px-4 py-3 text-right">
+                  {cancelled ? (
+                    <span className="text-gray-300">—</span>
+                  ) : restant > 0 ? (
+                    <span className="font-mono text-xs font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                      {formatCurrency(restant)}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 text-xs">—</span>
+                  )}
+                </td>
+                {/* Vendeur */}
+                <td className="px-4 py-3 text-gray-600 text-xs">{s.user?.name ?? '—'}</td>
+                {/* Actions */}
                 <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                   <button
                     onClick={() => setDetailSaleId(s.id)}
@@ -1611,15 +1646,16 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
                   </button>
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
 
           {/* Totals footer */}
           {!isLoading && sales.length > 0 && (
             <tfoot>
               <tr className="bg-gray-900 text-white text-xs font-bold">
-                <td colSpan={5} className="px-4 py-3 text-right uppercase tracking-wider text-gray-300">
-                  Total sur {totals.count ?? 0} vente{(totals.count ?? 0) !== 1 ? 's' : ''} ({totals.completed_count ?? 0} confirmée{(totals.completed_count ?? 0) !== 1 ? 's' : ''})
+                <td colSpan={4} className="px-4 py-3 text-right uppercase tracking-wider text-gray-300">
+                  Total · {totals.count ?? 0} vente{(totals.count ?? 0) !== 1 ? 's' : ''} ({totals.completed_count ?? 0} confirmée{(totals.completed_count ?? 0) !== 1 ? 's' : ''})
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-gray-400">
                   {(totals.total_discounts ?? 0) > 0 ? formatCurrency((totals.total_ttc ?? 0) + (totals.total_discounts ?? 0)) : '—'}
@@ -1627,13 +1663,16 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
                 <td className="px-4 py-3 text-right font-mono text-green-300">
                   {(totals.total_discounts ?? 0) > 0 ? `−${formatCurrency(totals.total_discounts ?? 0)}` : '—'}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-base text-orange-300">
+                <td className="px-4 py-3 text-right font-mono text-base text-white">
                   {formatCurrency(totals.total_ttc ?? 0)}
                 </td>
-                <td className="px-4 py-3 text-center text-emerald-300 font-mono">
-                  Encaissé : {formatCurrency(totals.paid_amount ?? 0)}
+                <td className="px-4 py-3 text-right font-mono text-emerald-300">
+                  {formatCurrency(totals.paid_amount ?? 0)}
                 </td>
-                <td />
+                <td className="px-4 py-3 text-right font-mono text-orange-300">
+                  {formatCurrency(Math.max(0, (totals.total_ttc ?? 0) - (totals.paid_amount ?? 0)))}
+                </td>
+                <td colSpan={2} />
               </tr>
             </tfoot>
           )}
