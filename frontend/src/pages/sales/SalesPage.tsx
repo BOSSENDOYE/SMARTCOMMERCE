@@ -1519,18 +1519,18 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <th className="px-4 py-3 text-left">Référence</th>
-              <th className="px-4 py-3 text-left">Date & Heure</th>
-              <th className="px-4 py-3 text-left">Client</th>
-              <th className="px-4 py-3 text-center">Canal</th>
-              <th className="px-4 py-3 text-right">Avant remise</th>
-              <th className="px-4 py-3 text-right">Remise</th>
-              <th className="px-4 py-3 text-right">Total TTC</th>
-              <th className="px-4 py-3 text-right">Encaissé</th>
-              <th className="px-4 py-3 text-right">Restant</th>
-              <th className="px-4 py-3 text-left">Vendeur</th>
-              <th className="px-4 py-3 text-center w-20">Actions</th>
+            <tr className="bg-gray-50 border-b border-gray-100 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2.5 text-left">Référence</th>
+              <th className="px-3 py-2.5 text-left whitespace-nowrap">Date & Heure</th>
+              <th className="px-3 py-2.5 text-left">Client</th>
+              <th className="px-3 py-2.5 text-center">Canal</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Av. Remise</th>
+              <th className="px-3 py-2.5 text-right">Remise</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Total TTC</th>
+              <th className="px-3 py-2.5 text-right">Encaissé</th>
+              <th className="px-3 py-2.5 text-right">Restant</th>
+              <th className="px-3 py-2.5 text-left">Vendeur</th>
+              <th className="px-3 py-2.5 text-center w-16">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1545,104 +1545,91 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
               </td></tr>
             )}
             {sales.map(s => {
-              const totalTtc   = parseFloat(s.total_ttc ?? 0)
-              const paidAmt    = parseFloat(s.paid_amount ?? 0)
-              const restant    = Math.max(0, totalTtc - paidAmt)
-              const cancelled  = s.status === 'cancelled'
+              const totalTtc  = parseFloat(s.total_ttc ?? 0)
+              const paidAmt   = parseFloat(s.paid_amount ?? 0)
+              const restant   = Math.max(0, totalTtc - paidAmt)
+              const cancelled = s.status === 'cancelled'
+              const dt        = new Date(s.created_at)
               return (
               <tr
                 key={s.id}
                 onClick={() => setDetailSaleId(s.id)}
-                className={`border-b border-gray-100 transition-colors cursor-pointer ${
-                  cancelled ? 'bg-red-50/30 hover:bg-red-50/60' : 'hover:bg-blue-50/30'
+                className={`border-b border-gray-100 transition-colors cursor-pointer text-xs ${
+                  cancelled ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-blue-50/30'
                 }`}
               >
-                {/* Référence + statut */}
-                <td className="px-4 py-3">
-                  <div className="flex flex-col gap-0.5">
-                    <span className={`font-mono text-xs px-2 py-0.5 rounded w-fit ${
-                      cancelled ? 'bg-red-100 text-red-700 line-through' : 'bg-gray-100 text-gray-600'
-                    }`}>{s.reference}</span>
-                    <span className={`text-[10px] font-medium ${
-                      s.status === 'completed' ? 'text-green-600' :
-                      cancelled ? 'text-red-500' : 'text-amber-600'
-                    }`}>
-                      {s.status === 'completed' ? '✓ Confirmée' : cancelled ? '✕ Annulée' : '⏳ Brouillon'}
-                      {cancelled && s.refund_method && s.refund_method !== 'none' && (
-                        <span className="ml-1 text-blue-500">· Remb. {formatCurrency(parseFloat(s.refund_amount ?? 0))}</span>
-                      )}
+                {/* Référence — 1 ligne : dot couleur + référence */}
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      cancelled ? 'bg-red-400' :
+                      s.status === 'completed' ? 'bg-emerald-400' : 'bg-amber-400'
+                    }`} />
+                    <span className={`font-mono text-[11px] ${cancelled ? 'text-red-500 line-through' : 'text-gray-700'}`}>
+                      {s.reference}
                     </span>
+                    {cancelled && s.refund_method && s.refund_method !== 'none' && (
+                      <span className="text-[10px] text-blue-500 font-medium">↩{formatCurrency(parseFloat(s.refund_amount ?? 0))}</span>
+                    )}
                   </div>
                 </td>
                 {/* Date */}
-                <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
-                  {new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                  {' '}<span className="text-gray-400">{new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                  {dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                  {' '}<span className="text-gray-400">{dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </td>
                 {/* Client */}
-                <td className="px-4 py-3 text-gray-700 text-sm">{s.client?.name ?? <span className="text-gray-300">—</span>}</td>
+                <td className="px-3 py-2 text-gray-700 max-w-[130px]">
+                  <span className="block truncate">{s.client?.name ?? <span className="text-gray-300">—</span>}</span>
+                </td>
                 {/* Canal */}
-                <td className="px-4 py-3 text-center">
+                <td className="px-3 py-2 text-center">
                   <ChannelBadge channel={s.channel} />
                 </td>
                 {/* Avant remise */}
-                <td className="px-4 py-3 text-right">
-                  {parseFloat(s.discount_amount ?? 0) > 0 ? (
-                    <span className={`font-mono text-xs ${cancelled ? 'text-gray-300 line-through' : 'text-gray-500'}`}>
-                      {formatCurrency(totalTtc + parseFloat(s.discount_amount))}
-                    </span>
-                  ) : (
-                    <span className="text-gray-300">—</span>
-                  )}
+                <td className="px-3 py-2 text-right font-mono text-gray-400">
+                  {parseFloat(s.discount_amount ?? 0) > 0
+                    ? <span className={cancelled ? 'line-through' : ''}>{formatCurrency(totalTtc + parseFloat(s.discount_amount))}</span>
+                    : <span className="text-gray-200">—</span>}
                 </td>
                 {/* Remise */}
-                <td className="px-4 py-3 text-right">
-                  {parseFloat(s.discount_amount ?? 0) > 0 ? (
-                    <span className={`font-mono text-xs font-semibold ${cancelled ? 'text-gray-300 line-through' : 'text-green-600'}`}>
-                      −{formatCurrency(parseFloat(s.discount_amount))}
-                    </span>
-                  ) : (
-                    <span className="text-gray-300">—</span>
-                  )}
+                <td className="px-3 py-2 text-right font-mono">
+                  {parseFloat(s.discount_amount ?? 0) > 0
+                    ? <span className={`font-semibold ${cancelled ? 'text-gray-300 line-through' : 'text-emerald-600'}`}>−{formatCurrency(parseFloat(s.discount_amount))}</span>
+                    : <span className="text-gray-200">—</span>}
                 </td>
                 {/* Total TTC */}
-                <td className="px-4 py-3 text-right">
-                  <span className={`font-semibold ${cancelled ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                    {formatCurrency(totalTtc)}
-                  </span>
+                <td className="px-3 py-2 text-right font-mono font-semibold">
+                  <span className={cancelled ? 'text-gray-400 line-through' : 'text-gray-800'}>{formatCurrency(totalTtc)}</span>
                 </td>
                 {/* Encaissé */}
-                <td className="px-4 py-3 text-right">
-                  {cancelled ? (
-                    <span className="text-gray-300">—</span>
-                  ) : (
-                    <span className={`font-mono text-xs font-semibold ${paidAmt > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
-                      {paidAmt > 0 ? formatCurrency(paidAmt) : '—'}
-                    </span>
-                  )}
+                <td className="px-3 py-2 text-right font-mono">
+                  {cancelled
+                    ? <span className="text-gray-200">—</span>
+                    : paidAmt > 0
+                      ? <span className="text-emerald-600 font-semibold">{formatCurrency(paidAmt)}</span>
+                      : <span className="text-gray-200">—</span>}
                 </td>
                 {/* Restant */}
-                <td className="px-4 py-3 text-right">
-                  {cancelled ? (
-                    <span className="text-gray-300">—</span>
-                  ) : restant > 0 ? (
-                    <span className="font-mono text-xs font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
-                      {formatCurrency(restant)}
-                    </span>
-                  ) : (
-                    <span className="text-gray-300 text-xs">—</span>
-                  )}
+                <td className="px-3 py-2 text-right font-mono">
+                  {cancelled
+                    ? <span className="text-gray-200">—</span>
+                    : restant > 0
+                      ? <span className="font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">{formatCurrency(restant)}</span>
+                      : <span className="text-gray-200">—</span>}
                 </td>
                 {/* Vendeur */}
-                <td className="px-4 py-3 text-gray-600 text-xs">{s.user?.name ?? '—'}</td>
+                <td className="px-3 py-2 text-gray-500 max-w-[90px]">
+                  <span className="block truncate">{s.user?.name ?? '—'}</span>
+                </td>
                 {/* Actions */}
-                <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
                   <button
                     onClick={() => setDetailSaleId(s.id)}
                     title="Voir le détail"
-                    className="text-gray-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary/5"
+                    className="text-gray-400 hover:text-primary transition-colors p-1 rounded hover:bg-primary/5"
                   >
-                    <Eye size={15} />
+                    <Eye size={14} />
                   </button>
                 </td>
               </tr>
@@ -1654,22 +1641,22 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
           {!isLoading && sales.length > 0 && (
             <tfoot>
               <tr className="bg-gray-900 text-white text-xs font-bold">
-                <td colSpan={4} className="px-4 py-3 text-right uppercase tracking-wider text-gray-300">
-                  Total · {totals.count ?? 0} vente{(totals.count ?? 0) !== 1 ? 's' : ''} ({totals.completed_count ?? 0} confirmée{(totals.completed_count ?? 0) !== 1 ? 's' : ''})
+                <td colSpan={4} className="px-3 py-2.5 text-right uppercase tracking-wider text-gray-400">
+                  {totals.count ?? 0} vente{(totals.count ?? 0) !== 1 ? 's' : ''} · {totals.completed_count ?? 0} confirmée{(totals.completed_count ?? 0) !== 1 ? 's' : ''}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-gray-400">
+                <td className="px-3 py-2.5 text-right font-mono text-gray-400">
                   {(totals.total_discounts ?? 0) > 0 ? formatCurrency((totals.total_ttc ?? 0) + (totals.total_discounts ?? 0)) : '—'}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-green-300">
+                <td className="px-3 py-2.5 text-right font-mono text-emerald-300">
                   {(totals.total_discounts ?? 0) > 0 ? `−${formatCurrency(totals.total_discounts ?? 0)}` : '—'}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-base text-white">
+                <td className="px-3 py-2.5 text-right font-mono text-white">
                   {formatCurrency(totals.total_ttc ?? 0)}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-emerald-300">
+                <td className="px-3 py-2.5 text-right font-mono text-emerald-300">
                   {formatCurrency(totals.paid_amount ?? 0)}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-orange-300">
+                <td className="px-3 py-2.5 text-right font-mono text-orange-300">
                   {formatCurrency(Math.max(0, (totals.total_ttc ?? 0) - (totals.paid_amount ?? 0)))}
                 </td>
                 <td colSpan={2} />
@@ -1679,17 +1666,39 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
         </table>
 
         {/* Pagination */}
-        {meta.last_page > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-            <span className="text-xs text-gray-500">
-              {meta.from}–{meta.to} sur {meta.total} ventes
+        {(meta.total ?? 0) > 0 && (
+          <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+            <span className="text-xs text-gray-400">
+              {meta.from ?? 1}–{meta.to ?? sales.length} sur <span className="font-semibold text-gray-600">{meta.total ?? sales.length}</span> ventes
             </span>
-            <div className="flex gap-1">
-              <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1.5 text-xs border rounded-lg disabled:opacity-40 hover:bg-white transition-colors">Précédent</button>
-              <button disabled={page === meta.last_page} onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1.5 text-xs border rounded-lg disabled:opacity-40 hover:bg-white transition-colors">Suivant</button>
-            </div>
+            {(meta.last_page ?? 1) > 1 && (
+              <div className="flex items-center gap-1">
+                <button disabled={page === 1} onClick={() => setPage(1)}
+                  className="px-2 py-1 text-xs border rounded disabled:opacity-30 hover:bg-white transition-colors">«</button>
+                <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
+                  className="px-2.5 py-1 text-xs border rounded disabled:opacity-30 hover:bg-white transition-colors">‹</button>
+                {Array.from({ length: meta.last_page ?? 1 }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === (meta.last_page ?? 1) || Math.abs(p - page) <= 2)
+                  .reduce<(number | '...')[]>((acc, p, i, arr) => {
+                    if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('...')
+                    acc.push(p)
+                    return acc
+                  }, [])
+                  .map((p, i) =>
+                    p === '...'
+                      ? <span key={`e${i}`} className="px-1.5 text-xs text-gray-400">…</span>
+                      : <button key={p} onClick={() => setPage(p as number)}
+                          className={`px-2.5 py-1 text-xs border rounded transition-colors ${
+                            page === p ? 'bg-primary text-white border-primary font-semibold' : 'hover:bg-white'
+                          }`}>{p}</button>
+                  )
+                }
+                <button disabled={page === (meta.last_page ?? 1)} onClick={() => setPage(p => p + 1)}
+                  className="px-2.5 py-1 text-xs border rounded disabled:opacity-30 hover:bg-white transition-colors">›</button>
+                <button disabled={page === (meta.last_page ?? 1)} onClick={() => setPage(meta.last_page ?? 1)}
+                  className="px-2 py-1 text-xs border rounded disabled:opacity-30 hover:bg-white transition-colors">»</button>
+              </div>
+            )}
           </div>
         )}
       </div>
