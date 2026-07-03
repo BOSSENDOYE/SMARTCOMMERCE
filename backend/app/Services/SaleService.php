@@ -138,9 +138,10 @@ class SaleService
             // Add cart-level global discount to per-item discounts
             $discountAmount += $globalDiscount;
             $totalTtc   = $subtotalHt + $vatAmount - $discountAmount;
-            // account_deposit = monnaie déposée sur le compte client, ne compte pas comme paiement de la vente
+            // account_deposit = dépôt sur compte client, pas un encaissement de la vente
+            // credit = dette client (pas encore encaissé)
             $paidAmount = collect($payments)
-                ->filter(fn($p) => $p['payment_method'] !== 'account_deposit')
+                ->filter(fn($p) => !in_array($p['payment_method'], ['account_deposit', 'credit']))
                 ->sum('amount');
 
             $sale->update([
