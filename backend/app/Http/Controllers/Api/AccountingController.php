@@ -428,17 +428,21 @@ class AccountingController extends Controller
         $from    = $request->input('date_from', now()->toDateString());
         $to      = $request->input('date_to',   now()->toDateString());
 
-        // Comptes obligatoires
+        // Comptes obligatoires (411 Clients pour les ventes à crédit)
         $accounts = AccountingAccount::where('store_id', $storeId)
-            ->whereIn('code', ['571', '521', '701', '44571'])
+            ->whereIn('code', ['411', '571', '521', '701', '44571'])
             ->pluck('id', 'code');
 
-        $missing = array_diff(['571', '701', '44571'], $accounts->keys()->toArray());
+        $missing = array_diff(['571', '701', '44571', '411'], $accounts->keys()->toArray());
         if ($missing) {
             return response()->json([
                 'message' => 'Comptes manquants : ' . implode(', ', $missing) . '. Initialisez le plan comptable.',
             ], 422);
         }
+
+        // Méthodes de paiement cash (571) vs banque/mobile (521)
+        $cashMethods   = ['cash', 'especes'];
+        $bankMethods   = ['card', 'wave', 'orange_money', 'free_money', 'check', 'voucher', 'loyalty_points', 'account'];
 
         $sales = Sale::where('store_id', $storeId)
             ->where('status', 'completed')
@@ -454,51 +458,92 @@ class AccountingController extends Controller
 
         $created = 0;
         foreach ($sales as $sale) {
-            DB::transaction(function () use ($sale, $storeId, $accounts, $request, &$created) {
-                // Choisir compte trésorerie selon mode de paiement dominant
-                $cashMethods = ['especes', 'cash'];
-                $hasCash = $sale->payments->contains(fn($p) => in_array($p->method, $cashMethods));
-                $treasuryCode = $hasCash ? '571' : ($accounts->has('521') ? '521' : '571');
-                $treasuryId   = $accounts[$treasuryCode] ?? $accounts['571'];
+            DB::transaction(function () use ($sale, $storeId, $accounts, $request, $cashMethods, $bankMethods, &$created) {
+                // Ventiler les paiements par nature
+                $cashAmt   = (float) $sale->payments
+                    ->filter(fn($p) => in_array($p->payment_method, $cashMethods))
+                    ->sum('amount');
+
+                $bankAmt   = (float) $sale->payments
+                    ->filter(fn($p) => in_array($p->payment_method, $bankMethods))
+                    ->sum('amount');
+
+                $creditAmt = (float) $sale->payments
+                    ->filter(fn($p) => $p->payment_method === 'credit')
+                    ->sum('amount');
+
+                // Si aucune ventilation détaillée, mettre tout en paid_amount → trésorerie
+                $totalEncaisse = $cashAmt + $bankAmt;
+                if ($totalEncaisse == 0 && $creditAmt == 0) {
+                    $cashAmt = (float) $sale->paid_amount;
+                }
+
+                $ref = $sale->reference;
 
                 $entry = JournalEntry::create([
-                    'store_id'    => $storeId,
-                    'reference'   => $this->nextReference($storeId, 'VTE'),
-                    'entry_date'  => $sale->created_at->toDateString(),
-                    'description' => "Vente #{$sale->receipt_number}",
-                    'type'        => 'vente',
-                    'source_id'   => $sale->id,
-                    'source_type' => 'sale',
-                    'status'      => 'valide',
-                    'created_by'  => $request->user()->id,
+                    'store_id'     => $storeId,
+                    'reference'    => $this->nextReference($storeId, 'VTE'),
+                    'entry_date'   => $sale->created_at->toDateString(),
+                    'description'  => "Vente {$ref}",
+                    'type'         => 'vente',
+                    'source_id'    => $sale->id,
+                    'source_type'  => 'sale',
+                    'status'       => 'valide',
+                    'created_by'   => $request->user()->id,
                     'validated_by' => $request->user()->id,
                     'validated_at' => now(),
                 ]);
 
-                // Débit trésorerie = total TTC
-                $entry->lines()->create([
-                    'account_id' => $treasuryId,
-                    'label'      => "Encaissement vente #{$sale->receipt_number}",
-                    'debit'      => $sale->total_ttc,
-                    'credit'     => 0,
-                ]);
+                // ── DÉBITS ────────────────────────────────────────────────────
+                // Débit 571 — Caisse (paiements espèces)
+                if ($cashAmt > 0) {
+                    $entry->lines()->create([
+                        'account_id' => $accounts['571'],
+                        'label'      => "Encaissement espèces — {$ref}",
+                        'debit'      => $cashAmt,
+                        'credit'     => 0,
+                    ]);
+                }
 
-                // Crédit ventes HT
-                $htAmount = $sale->subtotal_ht ?? ($sale->total_ttc - ($sale->vat_amount ?? 0));
+                // Débit 521 — Banque / Mobile (card, wave, orange money…)
+                if ($bankAmt > 0) {
+                    $bankId = $accounts['521'] ?? $accounts['571'];
+                    $entry->lines()->create([
+                        'account_id' => $bankId,
+                        'label'      => "Encaissement banque/mobile — {$ref}",
+                        'debit'      => $bankAmt,
+                        'credit'     => 0,
+                    ]);
+                }
+
+                // Débit 411 — Clients (vente à crédit, créance à recouvrer)
+                if ($creditAmt > 0) {
+                    $entry->lines()->create([
+                        'account_id' => $accounts['411'],
+                        'label'      => "Créance client — {$ref}",
+                        'debit'      => $creditAmt,
+                        'credit'     => 0,
+                    ]);
+                }
+
+                // ── CRÉDITS ───────────────────────────────────────────────────
+                // Crédit 701 — Ventes HT (chiffre d'affaires reconnu à la vente)
+                $htAmount = (float) ($sale->subtotal_ht ?? ($sale->total_ttc - ($sale->vat_amount ?? 0)));
                 $entry->lines()->create([
                     'account_id' => $accounts['701'],
-                    'label'      => "Ventes marchandises #{$sale->receipt_number}",
+                    'label'      => "Ventes marchandises — {$ref}",
                     'debit'      => 0,
                     'credit'     => $htAmount,
                 ]);
 
-                // Crédit TVA collectée
-                if ($sale->vat_amount > 0) {
+                // Crédit 44571 — TVA collectée
+                $vatAmount = (float) ($sale->vat_amount ?? 0);
+                if ($vatAmount > 0) {
                     $entry->lines()->create([
                         'account_id' => $accounts['44571'],
-                        'label'      => "TVA collectée #{$sale->receipt_number}",
+                        'label'      => "TVA collectée — {$ref}",
                         'debit'      => 0,
-                        'credit'     => $sale->vat_amount,
+                        'credit'     => $vatAmount,
                     ]);
                 }
 
