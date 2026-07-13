@@ -5,10 +5,12 @@ import { formatCurrency, formatDate, downloadPdf } from '../../lib/format'
 import { BookOpen, Plus, RefreshCw, CheckCircle, ChevronRight, AlertCircle, TrendingUp, TrendingDown, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useConfirm } from '../../hooks/useConfirm'
+import ReconciliationPage from '../reconciliation/ReconciliationPage'
+import FixedAssetsPage from '../fixed-assets/FixedAssetsPage'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AccountingTab = 'plan' | 'journal' | 'ledger' | 'balance' | 'resultat' | 'bilan'
+type AccountingTab = 'plan' | 'journal' | 'ledger' | 'balance' | 'resultat' | 'bilan' | 'lettrage' | 'immobilisations'
 
 interface Account {
   id: number
@@ -117,12 +119,14 @@ export default function AccountingPage() {
   const qc = useQueryClient()
 
   const tabs: { id: AccountingTab; label: string }[] = [
-    { id: 'plan',     label: 'Plan comptable' },
-    { id: 'journal',  label: 'Journal' },
-    { id: 'ledger',   label: 'Grand livre' },
-    { id: 'balance',  label: 'Balance' },
-    { id: 'resultat', label: 'Résultat' },
-    { id: 'bilan',    label: 'Bilan OHADA' },
+    { id: 'plan',             label: 'Plan comptable' },
+    { id: 'journal',          label: 'Journal' },
+    { id: 'ledger',           label: 'Grand livre' },
+    { id: 'balance',          label: 'Balance' },
+    { id: 'resultat',         label: 'Résultat' },
+    { id: 'bilan',            label: 'Bilan OHADA' },
+    { id: 'lettrage',         label: 'Lettrage' },
+    { id: 'immobilisations',  label: 'Immobilisations' },
   ]
 
   return (
@@ -162,12 +166,14 @@ export default function AccountingPage() {
       </div>
 
       {/* Content */}
-      {tab === 'plan'     && <PlanComptable qc={qc} />}
-      {tab === 'journal'  && <Journal dateFrom={dateFrom} dateTo={dateTo} qc={qc} />}
-      {tab === 'ledger'   && <GrandLivre dateFrom={dateFrom} dateTo={dateTo} />}
-      {tab === 'balance'  && <Balance dateFrom={dateFrom} dateTo={dateTo} />}
-      {tab === 'resultat' && <Resultat dateFrom={dateFrom} dateTo={dateTo} />}
-      {tab === 'bilan'    && <Bilan dateTo={dateTo} />}
+      {tab === 'plan'            && <PlanComptable qc={qc} />}
+      {tab === 'journal'         && <Journal dateFrom={dateFrom} dateTo={dateTo} qc={qc} />}
+      {tab === 'ledger'          && <GrandLivre dateFrom={dateFrom} dateTo={dateTo} />}
+      {tab === 'balance'         && <Balance dateFrom={dateFrom} dateTo={dateTo} />}
+      {tab === 'resultat'        && <Resultat dateFrom={dateFrom} dateTo={dateTo} />}
+      {tab === 'bilan'           && <Bilan dateTo={dateTo} />}
+      {tab === 'lettrage'        && <div className="-mx-3 sm:-mx-6 -mb-4"><ReconciliationPage /></div>}
+      {tab === 'immobilisations' && <div className="-mx-3 sm:-mx-6 -mb-4"><FixedAssetsPage /></div>}
     </div>
   )
 }

@@ -672,6 +672,57 @@ Route::prefix('v1')->group(function () {
             Route::delete('/activities/{crmActivity}',             [\App\Http\Controllers\Api\CrmController::class, 'destroyActivity']);
         });
 
+        // ── Livraisons / BL client ────────────────────────────────────────────
+        Route::prefix('/deliveries')->group(function () {
+            Route::get('/from-invoice/{invoice}',              [\App\Http\Controllers\Api\DeliveryController::class, 'fromInvoice']);
+            Route::get('/from-sale/{sale}',                    [\App\Http\Controllers\Api\DeliveryController::class, 'fromSale']);
+            Route::get('/',                                    [\App\Http\Controllers\Api\DeliveryController::class, 'index']);
+            Route::post('/',                                   [\App\Http\Controllers\Api\DeliveryController::class, 'store']);
+            Route::get('/{delivery}',                          [\App\Http\Controllers\Api\DeliveryController::class, 'show']);
+            Route::put('/{delivery}',                          [\App\Http\Controllers\Api\DeliveryController::class, 'update']);
+            Route::delete('/{delivery}',                       [\App\Http\Controllers\Api\DeliveryController::class, 'destroy']);
+            Route::post('/{delivery}/confirm',                 [\App\Http\Controllers\Api\DeliveryController::class, 'confirm']);
+            Route::post('/{delivery}/ship',                    [\App\Http\Controllers\Api\DeliveryController::class, 'ship']);
+            Route::post('/{delivery}/deliver',                 [\App\Http\Controllers\Api\DeliveryController::class, 'deliver']);
+            Route::post('/{delivery}/cancel',                  [\App\Http\Controllers\Api\DeliveryController::class, 'cancel']);
+        });
+
+        // ── Lettrage comptable ────────────────────────────────────────────────
+        Route::prefix('/reconciliations')->group(function () {
+            Route::get('/available-lines',                     [\App\Http\Controllers\Api\ReconciliationController::class, 'availableLines']);
+            Route::get('/',                                    [\App\Http\Controllers\Api\ReconciliationController::class, 'index']);
+            Route::post('/',                                   [\App\Http\Controllers\Api\ReconciliationController::class, 'store']);
+            Route::get('/{reconciliation}',                    [\App\Http\Controllers\Api\ReconciliationController::class, 'show']);
+            Route::delete('/{reconciliation}',                 [\App\Http\Controllers\Api\ReconciliationController::class, 'destroy']);
+        });
+
+        // ── Budgets vs Réalisé ────────────────────────────────────────────────
+        Route::prefix('/budgets')->group(function () {
+            Route::get('/',                                    [\App\Http\Controllers\Api\BudgetController::class, 'index']);
+            Route::post('/',                                   [\App\Http\Controllers\Api\BudgetController::class, 'store']);
+            Route::get('/{budget}',                            [\App\Http\Controllers\Api\BudgetController::class, 'show']);
+            Route::put('/{budget}',                            [\App\Http\Controllers\Api\BudgetController::class, 'update']);
+            Route::delete('/{budget}',                         [\App\Http\Controllers\Api\BudgetController::class, 'destroy']);
+            Route::post('/{budget}/activate',                  [\App\Http\Controllers\Api\BudgetController::class, 'activate']);
+            Route::post('/{budget}/close',                     [\App\Http\Controllers\Api\BudgetController::class, 'close']);
+            Route::get('/{budget}/comparison',                 [\App\Http\Controllers\Api\BudgetController::class, 'comparison']);
+        });
+
+        // ── Immobilisations ───────────────────────────────────────────────────
+        Route::prefix('/fixed-assets')->group(function () {
+            Route::get('/summary',                             [\App\Http\Controllers\Api\FixedAssetController::class, 'summary']);
+            Route::post('/post-all-due',                       [\App\Http\Controllers\Api\FixedAssetController::class, 'postAllDue']);
+            Route::get('/',                                    [\App\Http\Controllers\Api\FixedAssetController::class, 'index']);
+            Route::post('/',                                   [\App\Http\Controllers\Api\FixedAssetController::class, 'store']);
+            Route::get('/{fixedAsset}',                        [\App\Http\Controllers\Api\FixedAssetController::class, 'show']);
+            Route::put('/{fixedAsset}',                        [\App\Http\Controllers\Api\FixedAssetController::class, 'update']);
+            Route::delete('/{fixedAsset}',                     [\App\Http\Controllers\Api\FixedAssetController::class, 'destroy']);
+            Route::get('/{fixedAsset}/schedule',               [\App\Http\Controllers\Api\FixedAssetController::class, 'schedule']);
+            Route::post('/{fixedAsset}/post-depreciation',     [\App\Http\Controllers\Api\FixedAssetController::class, 'postDepreciation']);
+            Route::post('/{fixedAsset}/sell',                  [\App\Http\Controllers\Api\FixedAssetController::class, 'sell']);
+            Route::post('/{fixedAsset}/scrap',                 [\App\Http\Controllers\Api\FixedAssetController::class, 'scrap']);
+        });
+
         // ── Support Tickets ───────────────────────────────────────────────────
         Route::prefix('/support')->group(function () {
             Route::get('/stats',                                           [\App\Http\Controllers\Api\SupportTicketController::class, 'stats']);

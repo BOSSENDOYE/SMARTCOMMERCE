@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             ClientSeeder::class,
             SalesSeeder::class,
             RestaurantSeeder::class,
+            RestaurantMenuSeeder::class,
             PromotionSeeder::class,
             LossSeeder::class,
             SaasSeeder::class,

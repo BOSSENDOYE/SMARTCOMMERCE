@@ -68,6 +68,10 @@ const PreferencesPage             = lazy(() => import('./pages/settings/Preferen
 const MenuSettingsPage            = lazy(() => import('./pages/settings/MenuSettingsPage'))
 const ClientCategoriesPage        = lazy(() => import('./pages/settings/ClientCategoriesPage'))
 const MailSettingsPage            = lazy(() => import('./pages/settings/MailSettingsPage'))
+const DeliveriesPage              = lazy(() => import('./pages/deliveries/DeliveriesPage'))
+const ReconciliationPage          = lazy(() => import('./pages/reconciliation/ReconciliationPage'))
+const BudgetPage                  = lazy(() => import('./pages/budget/BudgetPage'))
+const FixedAssetsPage             = lazy(() => import('./pages/fixed-assets/FixedAssetsPage'))
 
 // ── Query client ──────────────────────────────────────────────────────────────
 
@@ -224,6 +228,10 @@ export default function App() {
               <Route path="encours" element={<Suspense fallback={<PageLoader />}><EncourPage /></Suspense>} />
               <Route path="support" element={<Suspense fallback={<PageLoader />}><SupportPage /></Suspense>} />
               <Route path="support/:id" element={<Suspense fallback={<PageLoader />}><SupportTicketPage /></Suspense>} />
+              <Route path="deliveries" element={<Suspense fallback={<PageLoader />}><DeliveriesPage /></Suspense>} />
+              <Route path="reconciliation" element={<Suspense fallback={<PageLoader />}><ReconciliationPage /></Suspense>} />
+              <Route path="budget" element={<Suspense fallback={<PageLoader />}><BudgetPage /></Suspense>} />
+              <Route path="fixed-assets" element={<Suspense fallback={<PageLoader />}><FixedAssetsPage /></Suspense>} />
             </Route>
 
             {/* ── Catch-all ────────────────────────────────────────────── */}

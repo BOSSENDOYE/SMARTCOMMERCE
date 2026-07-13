@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import DeliveriesPage from '../deliveries/DeliveriesPage'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
@@ -1512,7 +1513,7 @@ function PaginationBar({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-type Tab = 'invoices' | 'quotes' | 'reminders'
+type Tab = 'invoices' | 'quotes' | 'reminders' | 'livraisons'
 
 interface ReminderQueueItem {
   id: number
@@ -1864,7 +1865,7 @@ export default function InvoicesPage() {
       {/* Tabs */}
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
         <div className="flex border-b">
-          {(['invoices', 'quotes', 'reminders'] as Tab[]).map(t => (
+          {(['invoices', 'quotes', 'reminders', 'livraisons'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => { setTab(t); resetFilters() }}
@@ -1872,7 +1873,7 @@ export default function InvoicesPage() {
                 tab === t ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {t === 'invoices' ? 'Factures' : t === 'quotes' ? 'Devis' : 'Relances'}
+              {t === 'invoices' ? 'Factures' : t === 'quotes' ? 'Devis' : t === 'reminders' ? 'Relances' : 'Livraisons'}
               {t === 'invoices' && invoicesData?.meta?.total != null && (
                 <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
                   {invoicesData.meta.total}
@@ -2295,6 +2296,11 @@ export default function InvoicesPage() {
               />
             )}
           </div>
+        )}
+
+        {/* ── Onglet Livraisons ──────────────────────────────────────────── */}
+        {tab === 'livraisons' && (
+          <DeliveriesPage />
         )}
       </div>
 

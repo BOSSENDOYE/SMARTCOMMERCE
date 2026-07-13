@@ -8,28 +8,62 @@ import toast from 'react-hot-toast'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 const ALL_FEATURES = [
+  // ── Ventes & Commerce ──────────────────────────────────────────
   'pos_sales', 'stock_inventory', 'clients_loyalty', 'purchases_suppliers',
-  'invoicing_quotes', 'crm_pipeline', 'restaurant_kds', 'accounting_syscohada',
+  'invoicing_quotes', 'deliveries',
+  // ── Modules métier ─────────────────────────────────────────────
+  'crm_pipeline', 'restaurant_kds',
+  // ── Finance & Comptabilité ─────────────────────────────────────
+  'accounting_syscohada', 'accounting_reconciliation', 'budget_tracking', 'fixed_assets',
+  // ── Infrastructure ─────────────────────────────────────────────
   'multi_stores', 'offline_pwa', 'advanced_reports', 'api_webhooks',
   'sms_whatsapp', 'mobile_money',
 ] as const
 
 const FEATURE_LABELS: Record<string, string> = {
-  pos_sales: 'POS + Ventes',
-  stock_inventory: 'Stock / Inventaire',
-  clients_loyalty: 'Clients + Fidélité',
-  purchases_suppliers: 'Achats / Fournisseurs',
-  invoicing_quotes: 'Facturation / Devis',
-  crm_pipeline: 'CRM Pipeline',
-  restaurant_kds: 'Restaurant / KDS',
-  accounting_syscohada: 'Comptabilité SYSCOHADA',
-  multi_stores: 'Multi-magasins',
-  offline_pwa: 'Sync Offline PWA',
-  advanced_reports: 'Rapports avancés',
-  api_webhooks: 'API / Webhooks',
-  sms_whatsapp: 'SMS / WhatsApp',
-  mobile_money: 'Mobile Money (Wave/OM)',
+  // Ventes & Commerce
+  pos_sales:             'POS + Ventes',
+  stock_inventory:       'Stock / Inventaire',
+  clients_loyalty:       'Clients + Fidélité',
+  purchases_suppliers:   'Achats / Fournisseurs',
+  invoicing_quotes:      'Facturation / Devis',
+  deliveries:            'Livraisons / BL client',
+  // Modules métier
+  crm_pipeline:          'CRM Pipeline',
+  restaurant_kds:        'Restaurant / KDS',
+  // Finance & Comptabilité
+  accounting_syscohada:       'Comptabilité SYSCOHADA',
+  accounting_reconciliation:  'Lettrage comptable',
+  budget_tracking:            'Budget vs Réalisé',
+  fixed_assets:               'Immobilisations & Amortissements',
+  // Infrastructure
+  multi_stores:          'Multi-magasins',
+  offline_pwa:           'Sync Offline PWA',
+  advanced_reports:      'Rapports avancés',
+  api_webhooks:          'API / Webhooks',
+  sms_whatsapp:          'SMS / WhatsApp',
+  mobile_money:          'Mobile Money (Wave/OM)',
 }
+
+// Groupes de features pour l'affichage organisé dans le modal
+const FEATURE_GROUPS: { label: string; features: string[] }[] = [
+  {
+    label: 'Ventes & Commerce',
+    features: ['pos_sales', 'stock_inventory', 'clients_loyalty', 'purchases_suppliers', 'invoicing_quotes', 'deliveries'],
+  },
+  {
+    label: 'Modules Métier',
+    features: ['crm_pipeline', 'restaurant_kds'],
+  },
+  {
+    label: 'Finance & Comptabilité',
+    features: ['accounting_syscohada', 'accounting_reconciliation', 'budget_tracking', 'fixed_assets'],
+  },
+  {
+    label: 'Infrastructure',
+    features: ['multi_stores', 'offline_pwa', 'advanced_reports', 'api_webhooks', 'sms_whatsapp', 'mobile_money'],
+  },
+]
 
 interface Plan {
   id: number
@@ -65,7 +99,7 @@ saApi.interceptors.request.use(cfg => {
 
 const BLANK_FORM: PlanForm = {
   name: '', slug: '', description: '', max_stores: 1, max_users: 5,
-  features: ['pos_sales', 'stock_inventory', 'clients_loyalty', 'offline_pwa', 'mobile_money'],
+  features: ['pos_sales', 'stock_inventory', 'clients_loyalty', 'invoicing_quotes', 'offline_pwa', 'mobile_money'],
   price_monthly: 0, price_quarterly: 0, price_yearly: 0,
   trial_days: 14, grace_period_days: 7, is_active: true,
 }
@@ -137,20 +171,31 @@ function PlanModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-2">Fonctionnalités incluses</label>
-            <div className="grid grid-cols-2 gap-2">
-              {ALL_FEATURES.map(feat => (
-                <label key={feat}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer border text-sm transition-colors ${
-                    form.features.includes(feat)
-                      ? 'bg-primary/10 border-primary/30 text-primary'
-                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <input type="checkbox" className="sr-only" checked={form.features.includes(feat)} onChange={() => toggleFeature(feat)} />
-                  {form.features.includes(feat) ? <Check size={12} /> : <X size={12} className="opacity-40" />}
-                  <span>{FEATURE_LABELS[feat]}</span>
-                </label>
+            <label className="block text-xs font-semibold text-gray-600 mb-3">Fonctionnalités incluses</label>
+            <div className="space-y-4">
+              {FEATURE_GROUPS.map(group => (
+                <div key={group.label}>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <span className="flex-1 border-t border-gray-100" />
+                    {group.label}
+                    <span className="flex-1 border-t border-gray-100" />
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {group.features.map(feat => (
+                      <label key={feat}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer border text-sm transition-colors ${
+                          form.features.includes(feat)
+                            ? 'bg-primary/10 border-primary/30 text-primary'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <input type="checkbox" className="sr-only" checked={form.features.includes(feat)} onChange={() => toggleFeature(feat)} />
+                        {form.features.includes(feat) ? <Check size={12} /> : <X size={12} className="opacity-40" />}
+                        <span>{FEATURE_LABELS[feat] ?? feat}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class JournalEntryLine extends Model
 {
     protected $fillable = [
-        'journal_entry_id', 'account_id', 'label', 'debit', 'credit',
+        'journal_entry_id', 'account_id', 'label', 'debit', 'credit', 'reconciliation_id',
     ];
 
     protected $casts = [
@@ -16,6 +16,7 @@ class JournalEntryLine extends Model
         'credit' => 'decimal:2',
     ];
 
-    public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }
-    public function account(): BelongsTo      { return $this->belongsTo(AccountingAccount::class, 'account_id'); }
+    public function journalEntry(): BelongsTo    { return $this->belongsTo(JournalEntry::class); }
+    public function account(): BelongsTo         { return $this->belongsTo(AccountingAccount::class, 'account_id'); }
+    public function reconciliation(): BelongsTo  { return $this->belongsTo(AccountReconciliation::class, 'reconciliation_id'); }
 }

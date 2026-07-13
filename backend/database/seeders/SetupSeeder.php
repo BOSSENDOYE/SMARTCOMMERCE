@@ -77,6 +77,7 @@ class SetupSeeder extends Seeder
             'rc'                    => 'SN-DKR-2024-B-00123',
             'currency'              => 'XOF',
             'timezone'              => 'Africa/Dakar',
+            'business_type'         => 'mixte',
             'license_grande_surface' => true,
             'license_restaurant'    => true,
             'receipt_footer'        => 'Merci de votre confiance ! SmartCommerce Dakar — +221 33 821 00 00',
