@@ -288,8 +288,13 @@ class ProductController extends Controller
             Storage::delete($old);
         }
 
-        $path = $request->file('image')->store('products', 'public');
-        $product->update(['image' => Storage::url($path)]);
+        $file      = $request->file('image');
+        $ext       = $file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'jpg';
+        $filename  = 'products/' . \Illuminate\Support\Str::random(40) . '.' . $ext;
+        $contents  = file_get_contents($file->getRealPath());
+
+        Storage::disk('public')->put($filename, $contents);
+        $product->update(['image' => Storage::disk('public')->url($filename)]);
 
         return response()->json(['image' => $product->image]);
     }
