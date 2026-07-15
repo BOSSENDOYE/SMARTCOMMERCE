@@ -12,6 +12,18 @@ class Category extends Model
 
     protected $casts = ['is_active' => 'boolean'];
 
+    protected static function boot(): void
+    {
+        parent::boot();
+        static::creating(function (self $cat) {
+            if (empty($cat->slug)) {
+                $base  = \Illuminate\Support\Str::slug($cat->name) ?: \Illuminate\Support\Str::random(8);
+                $count = static::where('slug', 'like', $base . '%')->count();
+                $cat->slug = $count > 0 ? $base . '-' . ($count + 1) : $base;
+            }
+        });
+    }
+
     public function parent(): BelongsTo { return $this->belongsTo(Category::class, 'parent_id'); }
     public function children(): HasMany { return $this->hasMany(Category::class, 'parent_id'); }
     public function products(): HasMany { return $this->hasMany(Product::class); }
