@@ -21,6 +21,9 @@ class Category extends Model
                 $count = static::where('slug', 'like', $base . '%')->count();
                 $cat->slug = $count > 0 ? $base . '-' . ($count + 1) : $base;
             }
+            if (empty($cat->type)) {
+                $cat->type = 'common';
+            }
         });
     }
 
