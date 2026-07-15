@@ -193,13 +193,24 @@ Route::prefix('v1')->group(function () {
         });
         Route::post('/categories', function (\Illuminate\Http\Request $r) use ($resolveOrgId) {
             $data = $r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant']);
-            return response()->json(\App\Models\Category::create(array_merge($data, ['organization_id' => $resolveOrgId($r)])), 201);
+            $base = \Illuminate\Support\Str::slug($data['name']);
+            $slug = $base ?: \Illuminate\Support\Str::random(8);
+            $count = \App\Models\Category::where('slug', 'like', $slug . '%')->count();
+            if ($count > 0) $slug .= '-' . ($count + 1);
+            return response()->json(\App\Models\Category::create(array_merge($data, [
+                'organization_id' => $resolveOrgId($r),
+                'slug'            => $slug,
+            ])), 201);
         });
         Route::put('/categories/{category}', function (\Illuminate\Http\Request $r, \App\Models\Category $category) use ($resolveOrgId) {
             if ($category->organization_id !== null && $category->organization_id !== $resolveOrgId($r)) {
                 return response()->json(['message' => 'Action non autorisée.'], 403);
             }
-            return response()->json(tap($category)->update($r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant'])));
+            $data = $r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant']);
+            if (empty($category->slug)) {
+                $data['slug'] = \Illuminate\Support\Str::slug($data['name']) ?: \Illuminate\Support\Str::random(8);
+            }
+            return response()->json(tap($category)->update($data));
         });
         Route::delete('/categories/{category}', function (\Illuminate\Http\Request $r, \App\Models\Category $category) use ($resolveOrgId) {
             if ($category->organization_id !== null && $category->organization_id !== $resolveOrgId($r)) {
