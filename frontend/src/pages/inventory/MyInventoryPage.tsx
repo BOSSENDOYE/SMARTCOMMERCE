@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import api from '../../lib/api'
@@ -509,13 +510,22 @@ function ScannerOverlay({
 
 export default function MyInventoryPage() {
   const [activeSheetId, setActiveSheetId] = useState<number | null>(null)
+  const navigate = useNavigate()
   const qc = useQueryClient()
 
   const { data, isLoading, isError, refetch } = useQuery<MyData>({
     queryKey: ['my-inventory'],
     queryFn: () => api.get('/inventory-sessions/my-sheets').then(r => r.data),
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
   })
+
+  // Rediriger vers le dashboard quand l'inventaire est clôturé
+  useEffect(() => {
+    if (!isLoading && !isError && data && !data.session) {
+      const timer = setTimeout(() => navigate('/dashboard', { replace: true }), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [isLoading, isError, data, navigate])
 
   if (isLoading) {
     return (
@@ -528,9 +538,15 @@ export default function MyInventoryPage() {
   if (isError || !data?.session) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <AlertTriangle size={48} className="text-gray-300" />
-        <h2 className="text-lg font-semibold text-gray-700">Aucun inventaire actif</h2>
-        <p className="text-sm text-gray-500">Vous n'avez pas de fiches d'inventaire en cours.</p>
+        <CheckCircle2 size={48} className="text-emerald-400" />
+        <h2 className="text-lg font-semibold text-gray-700">Inventaire terminé</h2>
+        <p className="text-sm text-gray-500">L'inventaire a été clôturé. Redirection en cours...</p>
+        <button
+          onClick={() => navigate('/dashboard', { replace: true })}
+          className="btn-primary flex items-center gap-2"
+        >
+          Retour au tableau de bord
+        </button>
         <button onClick={() => refetch()} className="btn-secondary flex items-center gap-2">
           <RefreshCw size={14} /> Actualiser
         </button>
