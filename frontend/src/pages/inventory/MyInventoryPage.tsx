@@ -519,13 +519,20 @@ export default function MyInventoryPage() {
     refetchInterval: 30_000,
   })
 
-  // Rediriger vers le dashboard quand l'inventaire est clôturé
+  // Quand l'inventaire est clôturé : vider le cache du guard PUIS naviguer
+  const handleExit = useCallback(() => {
+    // Forcer le guard à voir active:false avant de naviguer (évite la boucle)
+    qc.setQueryData(['inventory-active-guard'], { active: false, my_sheets: [] })
+    qc.invalidateQueries({ queryKey: ['inventory-active-guard'] })
+    navigate('/dashboard', { replace: true })
+  }, [qc, navigate])
+
   useEffect(() => {
     if (!isLoading && !isError && data && !data.session) {
-      const timer = setTimeout(() => navigate('/dashboard', { replace: true }), 3000)
+      const timer = setTimeout(handleExit, 2000)
       return () => clearTimeout(timer)
     }
-  }, [isLoading, isError, data, navigate])
+  }, [isLoading, isError, data, handleExit])
 
   if (isLoading) {
     return (
@@ -542,7 +549,7 @@ export default function MyInventoryPage() {
         <h2 className="text-lg font-semibold text-gray-700">Inventaire terminé</h2>
         <p className="text-sm text-gray-500">L'inventaire a été clôturé. Redirection en cours...</p>
         <button
-          onClick={() => navigate('/dashboard', { replace: true })}
+          onClick={handleExit}
           className="btn-primary flex items-center gap-2"
         >
           Retour au tableau de bord

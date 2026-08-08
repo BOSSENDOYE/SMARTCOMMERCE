@@ -115,30 +115,28 @@ function InventoryGuard({ children }: { children: React.ReactNode }) {
 
   const isAdmin       = user?.roles.some(r => ['admin', 'super_admin'].includes(r)) ?? false
   const onMyInventory = location.pathname.startsWith('/my-inventory')
-  // Ne sauter que pour /login — on surveille même sur /my-inventory pour pouvoir en sortir
   const skip          = isAdmin || location.pathname.startsWith('/login')
 
-  const { data } = useQuery({
-    queryKey: ['inventory-active-guard'],
-    queryFn: () => api.get('/inventory-sessions/active').then(r => r.data),
+  const { data, isFetched } = useQuery({
+    queryKey:        ['inventory-active-guard'],
+    queryFn:         () => api.get('/inventory-sessions/active').then(r => r.data),
     enabled:         !skip,
     refetchInterval: 30_000,
-    staleTime:       0,       // toujours fraîches pour ne pas rester bloqué
+    staleTime:       10_000,
+    refetchOnMount:  true,
   })
 
   useEffect(() => {
-    if (skip || data === undefined) return
+    // Attendre que le fetch soit réellement complété (pas de données périmées)
+    if (skip || !isFetched) return
 
-    const inventoryActive = data?.active && (data?.my_sheets?.length ?? 0) > 0
+    const inventoryActive = !!data?.active && (data?.my_sheets?.length ?? 0) > 0
 
     if (inventoryActive && !onMyInventory) {
-      // Inventaire actif + fiches assignées → forcer /my-inventory
       navigate('/my-inventory', { replace: true })
-    } else if (!inventoryActive && onMyInventory) {
-      // Inventaire clôturé ou plus de fiches → libérer vers /dashboard
-      navigate('/dashboard', { replace: true })
     }
-  }, [data, skip, onMyInventory, navigate])
+    // La sortie de /my-inventory est gérée par MyInventoryPage directement
+  }, [data, isFetched, skip, onMyInventory, navigate])
 
   return <>{children}</>
 }
