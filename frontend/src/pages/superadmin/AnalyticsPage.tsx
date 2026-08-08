@@ -73,7 +73,7 @@ const ORG_COLORS = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#818
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
-  const { data, isLoading, refetch, isFetching } = useQuery<Analytics>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<Analytics>({
     queryKey: ['superadmin-analytics'],
     queryFn: (): Promise<Analytics> => saApi.get('/superadmin/analytics').then(r => r.data),
     refetchInterval: 60_000,
@@ -107,6 +107,18 @@ export default function AnalyticsPage() {
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-28 bg-gray-100 animate-pulse rounded-2xl" />
           ))}
+        </div>
+      ) : isError || !data ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <Activity size={40} className="text-gray-300" />
+          <p className="text-gray-500 font-medium">Impossible de charger les analytiques</p>
+          <p className="text-sm text-gray-400">Vérifiez que la table <code>personal_access_tokens</code> est accessible.</p>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-xl hover:opacity-90 transition-opacity"
+          >
+            <RefreshCw size={14} /> Réessayer
+          </button>
         </div>
       ) : (
         <>
