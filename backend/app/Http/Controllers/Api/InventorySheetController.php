@@ -117,7 +117,7 @@ class InventorySheetController extends Controller
             ->whereNotIn('status', ['cancelled'])
             ->with([
                 'section:id,name,color,icon',
-                'items.product:id,name,internal_code,barcode',
+                'items.product:id,name,internal_code',
                 'items.product.unit:id,abbreviation',
                 'items.countedBy:id,name',
             ])
