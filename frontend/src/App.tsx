@@ -113,7 +113,7 @@ function InventoryGuard({ children }: { children: React.ReactNode }) {
   const navigate      = useNavigate()
   const location      = useLocation()
 
-  const isAdmin       = user?.roles.some(r => ['admin', 'super_admin'].includes(r)) ?? false
+  const isAdmin       = user?.roles.some(r => ['admin', 'super_admin', 'gerant', 'proprietaire'].includes(r)) ?? false
   const onMyInventory = location.pathname.startsWith('/my-inventory')
   const skip          = isAdmin || location.pathname.startsWith('/login')
 
