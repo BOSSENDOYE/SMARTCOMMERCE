@@ -34,6 +34,14 @@ class PlatformInvoice extends Model
     {
         $year = now()->format('Y');
         $last = static::whereYear('created_at', $year)->count() + 1;
-        return "INV-{$year}-" . str_pad($last, 5, '0', STR_PAD_LEFT);
+        $number = "INV-{$year}-" . str_pad($last, 5, '0', STR_PAD_LEFT);
+
+        // Guard against gaps left by rolled-back or partial transactions
+        while (static::where('invoice_number', $number)->exists()) {
+            $last++;
+            $number = "INV-{$year}-" . str_pad($last, 5, '0', STR_PAD_LEFT);
+        }
+
+        return $number;
     }
 }

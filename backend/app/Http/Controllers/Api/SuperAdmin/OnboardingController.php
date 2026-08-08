@@ -204,16 +204,18 @@ class OnboardingController extends Controller
                 default     => $plan->price_monthly * $data['duration_months'],
             };
 
-            PlatformInvoice::create([
-                'organization_id' => $org->id,
-                'subscription_id' => $subscription->id,
-                'invoice_number'  => PlatformInvoice::generateNumber(),
-                'amount'          => $amount,
-                'currency'        => 'XOF',
-                'status'          => 'sent',
-                'issued_at'       => now(),
-                'due_at'          => now()->addDays(15),
-            ]);
+            PlatformInvoice::firstOrCreate(
+                ['subscription_id' => $subscription->id],
+                [
+                    'organization_id' => $org->id,
+                    'invoice_number'  => PlatformInvoice::generateNumber(),
+                    'amount'          => $amount,
+                    'currency'        => 'XOF',
+                    'status'          => 'sent',
+                    'issued_at'       => now(),
+                    'due_at'          => now()->addDays(15),
+                ]
+            );
 
             // ── 6. Mise à jour de la demande ──────────────────────────────────
             $onboardingRequest->update([
