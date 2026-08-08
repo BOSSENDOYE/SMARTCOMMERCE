@@ -95,7 +95,8 @@ class InventoryController extends Controller
      */
     public function active(Request $request)
     {
-        $storeId = $request->user()->store_id;
+        $user    = $request->user();
+        $storeId = $user->store_id;
 
         $session = InventorySession::where('store_id', $storeId)
             ->whereIn('status', ['draft', 'counting', 'pending'])
@@ -106,12 +107,18 @@ class InventoryController extends Controller
             return response()->json(['active' => false]);
         }
 
-        $mySheets = $session->sheets()
-            ->where('assigned_to', $request->user()->id)
-            ->whereNotIn('status', ['cancelled'])
-            ->with(['section:id,name,color,icon'])
-            ->withCount(['items', 'items as counted_count' => fn($q) => $q->whereNotNull('counted_qty')])
-            ->get();
+        // Managers bypass the counting redirect — return empty sheets so the
+        // frontend guard does not force them onto /my-inventory.
+        $isManager = $user->hasAnyRole(['super_admin', 'admin', 'gerant', 'proprietaire']);
+
+        $mySheets = $isManager
+            ? collect()
+            : $session->sheets()
+                ->where('assigned_to', $user->id)
+                ->whereNotIn('status', ['cancelled'])
+                ->with(['section:id,name,color,icon'])
+                ->withCount(['items', 'items as counted_count' => fn($q) => $q->whereNotNull('counted_qty')])
+                ->get();
 
         return response()->json([
             'active'        => true,
