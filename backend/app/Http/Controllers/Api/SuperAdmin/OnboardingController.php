@@ -86,142 +86,164 @@ class OnboardingController extends Controller
             'duration_months' => 'required|integer|min:1',
         ]);
 
-        $plan  = SubscriptionPlan::where('slug', $data['plan_slug'])->firstOrFail();
-        $admin = $request->user();
-
-        // ── Générer un code unique pour l'organisation ────────────────────────
-        $base = strtoupper(preg_replace('/[^A-Z0-9]/', '', strtoupper($onboardingRequest->company_name)));
-        $base = substr($base, 0, 6) ?: 'ORG';
-        $code = $base;
-        $i = 1;
-        while (Organization::where('code', $code)->exists()) {
-            $code = $base . $i++;
+        $plan = SubscriptionPlan::where('slug', $data['plan_slug'])->first();
+        if (!$plan) {
+            return response()->json(['message' => "Plan \"{$data['plan_slug']}\" introuvable. Vérifiez que les plans sont bien créés."], 422);
         }
 
-        // ── 1. Créer l'organisation ───────────────────────────────────────────
+        $admin = $request->user();
+
         $address = implode(', ', array_filter([
             $onboardingRequest->city,
             $onboardingRequest->country ?? 'Sénégal',
         ]));
 
-        $org = Organization::firstOrCreate(
-            ['name' => $onboardingRequest->company_name],
-            [
-                'code'      => $code,
-                'email'     => $onboardingRequest->email,
-                'phone'     => $onboardingRequest->phone,
-                'address'   => $address,
-                'is_active' => true,
-            ]
-        );
+        $result = \Illuminate\Support\Facades\DB::transaction(function () use (
+            $onboardingRequest, $data, $plan, $admin, $address
+        ) {
+            // ── 1. Organisation ───────────────────────────────────────────────
+            $base = strtoupper(preg_replace('/[^A-Z0-9]/', '', strtoupper($onboardingRequest->company_name)));
+            $base = substr($base, 0, 6) ?: 'ORG';
+            $code = $base;
+            $i = 1;
+            while (Organization::where('code', $code)->exists()) {
+                $code = $base . $i++;
+            }
 
-        // ── 2. Créer le magasin principal ─────────────────────────────────────
-        $storeBase = $org->wasRecentlyCreated ? $code : strtoupper(preg_replace('/[^A-Z0-9]/', '', strtoupper($onboardingRequest->company_name)));
-        $storeBase = substr($storeBase, 0, 6) ?: 'STR';
-        $storeCode = $storeBase . '-001';
-        $si = 2;
-        while (Store::where('code', $storeCode)->exists()) {
-            $storeCode = $storeBase . '-00' . $si++;
-        }
-        $store = Store::firstOrCreate(
-            ['organization_id' => $org->id, 'is_central' => true],
-            [
-                'name'          => $onboardingRequest->company_name,
-                'code'          => $storeCode,
-                'business_type' => $this->inferBusinessType($onboardingRequest->activity_type),
-                'address'       => $address,
-                'phone'         => $onboardingRequest->phone,
-                'email'         => $onboardingRequest->email,
-                'currency'      => 'XOF',
-                'timezone'      => 'Africa/Dakar',
-                'is_active'     => true,
-                'is_central'    => true,
-            ]
-        );
+            $org = Organization::firstOrCreate(
+                ['name' => $onboardingRequest->company_name],
+                [
+                    'code'      => $code,
+                    'email'     => $onboardingRequest->email,
+                    'phone'     => $onboardingRequest->phone,
+                    'address'   => $address,
+                    'is_active' => true,
+                ]
+            );
 
-        // ── 3. Créer l'utilisateur admin du tenant ────────────────────────────
-        $password = Str::random(10) . '!';
+            // ── 2. Magasin principal ──────────────────────────────────────────
+            $storeBase = $org->wasRecentlyCreated ? $code : strtoupper(preg_replace('/[^A-Z0-9]/', '', strtoupper($onboardingRequest->company_name)));
+            $storeBase = substr($storeBase, 0, 6) ?: 'STR';
+            $storeCode = $storeBase . '-001';
+            $si = 2;
+            while (Store::where('code', $storeCode)->exists()) {
+                $storeCode = $storeBase . '-00' . $si++;
+            }
 
-        // Si l'email existe déjà, on génère un email unique
-        $email = $onboardingRequest->email;
-        if (User::where('email', $email)->exists()) {
-            $email = 'admin+' . $org->id . '@' . Str::slug($onboardingRequest->company_name) . '.sn';
-        }
+            $store = Store::firstOrCreate(
+                ['organization_id' => $org->id, 'is_central' => true],
+                [
+                    'name'          => $onboardingRequest->company_name,
+                    'code'          => $storeCode,
+                    'business_type' => $this->inferBusinessType($onboardingRequest->activity_type),
+                    'address'       => $address,
+                    'phone'         => $onboardingRequest->phone,
+                    'email'         => $onboardingRequest->email,
+                    'currency'      => 'XOF',
+                    'timezone'      => 'Africa/Dakar',
+                    'is_active'     => true,
+                    'is_central'    => true,
+                ]
+            );
 
-        $tenantAdmin = User::create([
-            'name'            => $onboardingRequest->contact_name,
-            'email'           => $email,
-            'password'        => Hash::make($password),
-            'organization_id' => $org->id,
-            'store_id'        => $store->id,
-            'is_active'       => true,
-        ]);
-        $tenantAdmin->assignRole('super_admin');
+            // ── 3. Utilisateur admin du tenant ────────────────────────────────
+            $password = Str::random(10) . '!';
+            $email    = $onboardingRequest->email;
 
-        // ── 4. Créer l'abonnement ─────────────────────────────────────────────
-        $startsAt = now();
-        $endsAt   = $startsAt->copy()->addMonths($data['duration_months']);
+            // Chercher un admin existant pour cette organisation
+            $tenantAdmin = User::where('organization_id', $org->id)->first();
 
-        $billing = match(true) {
-            $data['duration_months'] >= 12 => 'yearly',
-            $data['duration_months'] >= 3  => 'quarterly',
-            default                        => 'monthly',
-        };
+            if (!$tenantAdmin) {
+                if (User::where('email', $email)->exists()) {
+                    $email = 'admin+' . $org->id . '@' . Str::slug($onboardingRequest->company_name) . '.sn';
+                }
+                $tenantAdmin = User::create([
+                    'name'            => $onboardingRequest->contact_name,
+                    'email'           => $email,
+                    'password'        => Hash::make($password),
+                    'organization_id' => $org->id,
+                    'store_id'        => $store->id,
+                    'is_active'       => true,
+                ]);
+                // Assigner rôle gérant (admin du tenant)
+                \Spatie\Permission\Models\Role::firstOrCreate(
+                    ['name' => 'gerant', 'guard_name' => 'web']
+                );
+                $tenantAdmin->assignRole('gerant');
+            } else {
+                $email    = $tenantAdmin->email;
+                $password = '(mot de passe existant)';
+            }
 
-        $subscription = Subscription::create([
-            'organization_id' => $org->id,
-            'plan_id'         => $plan->id,
-            'status'          => 'active',
-            'billing_cycle'   => $billing,
-            'starts_at'       => $startsAt,
-            'ends_at'         => $endsAt,
-            'grace_ends_at'   => $endsAt->copy()->addDays($plan->grace_period_days),
-        ]);
+            // ── 4. Abonnement ─────────────────────────────────────────────────
+            $startsAt = now();
+            $endsAt   = $startsAt->copy()->addMonths($data['duration_months']);
 
-        // ── 5. Générer la facture ─────────────────────────────────────────────
-        $amount = match($billing) {
-            'yearly'    => (int) ($plan->price_yearly  * ($data['duration_months'] / 12)),
-            'quarterly' => (int) ($plan->price_quarterly * ($data['duration_months'] / 3)),
-            default     => $plan->price_monthly * $data['duration_months'],
-        };
+            $billing = match(true) {
+                $data['duration_months'] >= 12 => 'yearly',
+                $data['duration_months'] >= 3  => 'quarterly',
+                default                        => 'monthly',
+            };
 
-        PlatformInvoice::create([
-            'organization_id' => $org->id,
-            'subscription_id' => $subscription->id,
-            'invoice_number'  => PlatformInvoice::generateNumber(),
-            'amount'          => $amount,
-            'currency'        => 'XOF',
-            'status'          => 'sent',
-            'issued_at'       => now(),
-            'due_at'          => now()->addDays(15),
-        ]);
+            $subscription = Subscription::firstOrCreate(
+                ['organization_id' => $org->id],
+                [
+                    'plan_id'       => $plan->id,
+                    'status'        => 'active',
+                    'billing_cycle' => $billing,
+                    'starts_at'     => $startsAt,
+                    'ends_at'       => $endsAt,
+                    'grace_ends_at' => $endsAt->copy()->addDays($plan->grace_period_days ?? 7),
+                ]
+            );
 
-        // ── 6. Mettre à jour la demande ───────────────────────────────────────
-        $onboardingRequest->update([
-            'status'      => 'approved',
-            'reviewed_by' => $admin->id,
-            'reviewed_at' => now(),
-        ]);
+            // ── 5. Facture ────────────────────────────────────────────────────
+            $amount = match($billing) {
+                'yearly'    => (int) ($plan->price_yearly   * ($data['duration_months'] / 12)),
+                'quarterly' => (int) ($plan->price_quarterly * ($data['duration_months'] / 3)),
+                default     => $plan->price_monthly * $data['duration_months'],
+            };
 
-        PlatformAuditLog::record(
-            'onboarding.approved',
-            $admin->id,
-            'OnboardingRequest',
-            $onboardingRequest->id,
-            [
+            PlatformInvoice::create([
                 'organization_id' => $org->id,
-                'plan'            => $plan->slug,
-                'admin_email'     => $email,
-            ]
-        );
+                'subscription_id' => $subscription->id,
+                'invoice_number'  => PlatformInvoice::generateNumber(),
+                'amount'          => $amount,
+                'currency'        => 'XOF',
+                'status'          => 'sent',
+                'issued_at'       => now(),
+                'due_at'          => now()->addDays(15),
+            ]);
 
-        // Envoyer les identifiants au nouveau client
+            // ── 6. Mise à jour de la demande ──────────────────────────────────
+            $onboardingRequest->update([
+                'status'      => 'approved',
+                'reviewed_by' => $admin->id,
+                'reviewed_at' => now(),
+            ]);
+
+            try {
+                PlatformAuditLog::record(
+                    'onboarding.approved',
+                    $admin->id,
+                    'OnboardingRequest',
+                    $onboardingRequest->id,
+                    ['organization_id' => $org->id, 'plan' => $plan->slug, 'admin_email' => $email]
+                );
+            } catch (\Throwable $e) {
+                Log::warning('PlatformAuditLog::record failed: ' . $e->getMessage());
+            }
+
+            return compact('org', 'subscription', 'email', 'password', 'tenantAdmin');
+        });
+
+        // ── Email de bienvenue (hors transaction) ─────────────────────────────
         try {
-            Mail::to($email)->send(new OnboardingApprovedMail(
+            Mail::to($result['email'])->send(new OnboardingApprovedMail(
                 contactName: $onboardingRequest->contact_name,
                 companyName: $onboardingRequest->company_name,
-                email:       $email,
-                password:    $password,
+                email:       $result['email'],
+                password:    $result['password'],
                 appUrl:      rtrim(config('app.frontend_url', env('FRONTEND_URL', 'https://www.senbaobab.com')), '/'),
             ));
         } catch (\Throwable $e) {
@@ -230,10 +252,10 @@ class OnboardingController extends Controller
 
         return response()->json([
             'message'         => 'Demande approuvée. Organisation et compte admin créés.',
-            'organization_id' => $org->id,
-            'subscription_id' => $subscription->id,
-            'admin_email'     => $email,
-            'admin_password'  => $password,
+            'organization_id' => $result['org']->id,
+            'subscription_id' => $result['subscription']->id,
+            'admin_email'     => $result['email'],
+            'admin_password'  => $result['password'],
         ]);
     }
 
