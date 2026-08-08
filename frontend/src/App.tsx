@@ -109,27 +109,36 @@ function RequireSuperAdmin({ children }: { children: React.ReactNode }) {
  * Admin and super_admin can still access any page.
  */
 function InventoryGuard({ children }: { children: React.ReactNode }) {
-  const user     = useAuthStore(s => s.user)
-  const navigate = useNavigate()
-  const location = useLocation()
+  const user          = useAuthStore(s => s.user)
+  const navigate      = useNavigate()
+  const location      = useLocation()
 
-  const isAdmin  = user?.roles.some(r => ['admin', 'super_admin'].includes(r)) ?? false
-  const excluded = ['/my-inventory', '/login']
-  const skip     = isAdmin || excluded.some(p => location.pathname.startsWith(p))
+  const isAdmin       = user?.roles.some(r => ['admin', 'super_admin'].includes(r)) ?? false
+  const onMyInventory = location.pathname.startsWith('/my-inventory')
+  // Ne sauter que pour /login — on surveille même sur /my-inventory pour pouvoir en sortir
+  const skip          = isAdmin || location.pathname.startsWith('/login')
 
   const { data } = useQuery({
     queryKey: ['inventory-active-guard'],
     queryFn: () => api.get('/inventory-sessions/active').then(r => r.data),
-    enabled: !skip,
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    enabled:         !skip,
+    refetchInterval: 30_000,
+    staleTime:       0,       // toujours fraîches pour ne pas rester bloqué
   })
 
   useEffect(() => {
-    if (!skip && data?.active && data?.my_sheets?.length > 0) {
+    if (skip || data === undefined) return
+
+    const inventoryActive = data?.active && (data?.my_sheets?.length ?? 0) > 0
+
+    if (inventoryActive && !onMyInventory) {
+      // Inventaire actif + fiches assignées → forcer /my-inventory
       navigate('/my-inventory', { replace: true })
+    } else if (!inventoryActive && onMyInventory) {
+      // Inventaire clôturé ou plus de fiches → libérer vers /dashboard
+      navigate('/dashboard', { replace: true })
     }
-  }, [data, skip, navigate])
+  }, [data, skip, onMyInventory, navigate])
 
   return <>{children}</>
 }
