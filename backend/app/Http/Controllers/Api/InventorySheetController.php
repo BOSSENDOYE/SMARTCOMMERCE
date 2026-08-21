@@ -80,6 +80,38 @@ class InventorySheetController extends Controller
             }
         }
 
+        // Pre-populate items for free sheets created with explicit product_ids (e.g. category-based)
+        if ($data['type'] === 'free' && !empty($productIds)) {
+            $products = Product::whereIn('id', $productIds)->get();
+
+            if ($products->isNotEmpty()) {
+                $stockLevels = StockLevel::where('store_id', $inventorySession->store_id)
+                    ->whereIn('product_id', $products->pluck('id'))
+                    ->get()
+                    ->keyBy('product_id');
+
+                $existingProductIds = InventorySessionItem::where('session_id', $inventorySession->id)
+                    ->pluck('product_id')
+                    ->all();
+
+                $rows = $products
+                    ->filter(fn($p) => !in_array($p->id, $existingProductIds))
+                    ->map(fn($p) => [
+                        'session_id'      => $inventorySession->id,
+                        'sheet_id'        => $sheet->id,
+                        'product_id'      => $p->id,
+                        'theoretical_qty' => $stockLevels[$p->id]->qty_on_hand ?? 0,
+                        'unit_cost'       => $stockLevels[$p->id]->avg_cost ?? 0,
+                        'created_at'      => now(),
+                        'updated_at'      => now(),
+                    ])->values()->toArray();
+
+                if (!empty($rows)) {
+                    InventorySessionItem::insert($rows);
+                }
+            }
+        }
+
         if (in_array($inventorySession->status, ['draft', 'scheduled'])) {
             $inventorySession->update(['status' => 'counting']);
         }

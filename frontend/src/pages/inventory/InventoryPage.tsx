@@ -365,13 +365,18 @@ interface SectionProduct {
 
 interface AppUser { id: number; name: string }
 
+interface SheetCategory { id: number; name: string; children?: SheetCategory[] }
+
 function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: () => void }) {
   const [name, setName]                         = useState('')
-  const [type, setType]                         = useState<'section' | 'free'>('section')
+  const [type, setType]                         = useState<'section' | 'category' | 'free'>('section')
   const [sectionId, setSectionId]               = useState<number | ''>('')
+  const [catSheetCatId, setCatSheetCatId]       = useState<number | ''>('')
   const [assignedTo, setAssignedTo]             = useState<number | ''>('')
   const [productSearch, setProductSearch]       = useState('')
   const [selectedIds, setSelectedIds]           = useState<Set<number>>(new Set())
+  const [productCatFilter, setProductCatFilter] = useState('')
+  const [sortBy, setSortBy]                     = useState<'name' | 'stock_asc' | 'stock_desc'>('name')
   const qc = useQueryClient()
 
   const { data: users } = useQuery<AppUser[]>({
@@ -384,19 +389,63 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
     queryFn: () => api.get('/sections').then(r => r.data),
   })
 
+  const { data: sheetCategoriesRaw = [] } = useQuery<SheetCategory[]>({
+    queryKey: ['categories'],
+    queryFn: () => api.get('/categories').then(r => r.data),
+    staleTime: 300_000,
+  })
+  // Aplatir catégories + sous-catégories pour le dropdown
+  const sheetCategories = sheetCategoriesRaw.flatMap(c => [
+    c,
+    ...(c.children ?? []),
+  ])
+
   const { data: sectionProducts, isLoading: loadingProducts } = useQuery<SectionProduct[]>({
     queryKey: ['section-products-inv', sectionId],
     queryFn: () => api.get(`/sections/${sectionId}/products`).then(r => r.data),
     enabled: type === 'section' && sectionId !== '',
   })
 
-  const filtered = (sectionProducts ?? []).filter(p => {
-    if (!productSearch) return true
-    const q = productSearch.toLowerCase()
-    return p.name.toLowerCase().includes(q) ||
-      (p.internal_code ?? '').toLowerCase().includes(q) ||
-      (p.category?.name ?? '').toLowerCase().includes(q)
+  const { data: categoryProductsRaw, isLoading: loadingCatProducts } = useQuery<SectionProduct[]>({
+    queryKey: ['category-products-inv', catSheetCatId],
+    queryFn: () => api.get('/products', {
+      params: { category_id: catSheetCatId, per_page: 500 },
+    }).then(r => (r.data.data ?? []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      internal_code: p.internal_code,
+      category: p.category,
+      unit: p.unit,
+      stock_level: p.stock_level,
+    }))),
+    enabled: type === 'category' && catSheetCatId !== '',
   })
+
+  const displayProducts = type === 'section' ? (sectionProducts ?? [])
+    : type === 'category' ? (categoryProductsRaw ?? [])
+    : []
+  const isLoadingDisplay = type === 'section' ? loadingProducts : type === 'category' ? loadingCatProducts : false
+
+  const productCategories = [...new Set(
+    displayProducts.map(p => p.category?.name).filter(Boolean) as string[]
+  )].sort()
+
+  const filtered = displayProducts
+    .filter(p => {
+      const matchCat = !productCatFilter || p.category?.name === productCatFilter
+      if (!productSearch) return matchCat
+      const q = productSearch.toLowerCase()
+      return matchCat && (
+        p.name.toLowerCase().includes(q) ||
+        (p.internal_code ?? '').toLowerCase().includes(q) ||
+        (p.category?.name ?? '').toLowerCase().includes(q)
+      )
+    })
+    .sort((a, b) => {
+      if (sortBy === 'stock_asc')  return (a.stock_level?.qty_on_hand ?? 0) - (b.stock_level?.qty_on_hand ?? 0)
+      if (sortBy === 'stock_desc') return (b.stock_level?.qty_on_hand ?? 0) - (a.stock_level?.qty_on_hand ?? 0)
+      return a.name.localeCompare(b.name, 'fr')
+    })
 
   const allSelected   = filtered.length > 0 && filtered.every(p => selectedIds.has(p.id))
   const someSelected  = filtered.some(p => selectedIds.has(p.id))
@@ -413,24 +462,35 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
     setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   }
 
-  // Reset selections when section changes
-  const handleSectionChange = (id: number | '') => {
-    setSectionId(id)
+  const resetProductList = () => {
     setSelectedIds(new Set())
     setProductSearch('')
+    setProductCatFilter('')
+    setSortBy('name')
+  }
+
+  const handleSectionChange = (id: number | '') => {
+    setSectionId(id)
+    resetProductList()
   }
 
   const selectedSection = sections?.find(s => s.id === Number(sectionId))
+  const selectedCat     = sheetCategories?.find(c => c.id === Number(catSheetCatId))
 
   const mutation = useMutation({
     mutationFn: () => {
+      const defaultName = type === 'section'
+        ? (selectedSection?.name ?? 'Fiche rayon')
+        : type === 'category'
+          ? (selectedCat?.name ?? 'Fiche catégorie')
+          : 'Fiche libre'
       const payload: Record<string, unknown> = {
-        name: name || (type === 'section' ? (selectedSection?.name ?? 'Fiche rayon') : 'Fiche libre'),
-        type,
+        name:        name || defaultName,
+        type:        type === 'category' ? 'free' : type,
         section_id:  type === 'section' ? sectionId || null : null,
         assigned_to: assignedTo || null,
       }
-      if (type === 'section' && selectedIds.size > 0) {
+      if ((type === 'section' || type === 'category') && selectedIds.size > 0) {
         payload.product_ids = [...selectedIds]
       }
       return api.post(`/inventory-sessions/${sessionId}/sheets`, payload)
@@ -445,7 +505,9 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
     },
   })
 
-  const canCreate = type === 'free' || (type === 'section' && sectionId !== '' && selectedIds.size > 0)
+  const canCreate = type === 'free'
+    || (type === 'section' && sectionId !== '' && selectedIds.size > 0)
+    || (type === 'category' && catSheetCatId !== '' && selectedIds.size > 0)
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -465,15 +527,22 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
           {/* Type selector */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Type de fiche</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               {([
-                { v: 'section', title: 'Par rayon', desc: 'Sélectionnez les produits du rayon à inventorier.' },
-                { v: 'free',    title: 'Libre',     desc: 'Ajoutez les produits manuellement un par un.' },
+                { v: 'section',  title: 'Par rayon',      desc: 'Produits d\'un rayon.' },
+                { v: 'category', title: 'Par catégorie',  desc: 'Produits d\'une catégorie.' },
+                { v: 'free',     title: 'Libre',          desc: 'Ajout manuel.' },
               ] as const).map(opt => (
-                <button key={opt.v} type="button" onClick={() => { setType(opt.v); setSectionId(''); setSelectedIds(new Set()) }}
-                  className={`text-left p-4 rounded-xl border-2 transition-all ${type === opt.v ? 'border-primary bg-primary-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <button key={opt.v} type="button"
+                  onClick={() => {
+                    setType(opt.v)
+                    setSectionId('')
+                    setCatSheetCatId('')
+                    resetProductList()
+                  }}
+                  className={`text-left p-3 rounded-xl border-2 transition-all ${type === opt.v ? 'border-primary bg-primary-50' : 'border-gray-200 hover:border-gray-300'}`}>
                   <p className={`text-sm font-semibold ${type === opt.v ? 'text-primary-600' : 'text-gray-800'}`}>{opt.title}</p>
-                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">{opt.desc}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{opt.desc}</p>
                 </button>
               ))}
             </div>
@@ -493,8 +562,23 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
             </div>
           )}
 
-          {/* Product selection (section type) */}
-          {type === 'section' && sectionId !== '' && (
+          {/* Category selector */}
+          {type === 'category' && (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Catégorie *</label>
+              <select value={catSheetCatId}
+                onChange={e => { setCatSheetCatId(e.target.value ? Number(e.target.value) : ''); resetProductList() }}
+                className="input text-sm">
+                <option value="">— Choisir une catégorie —</option>
+                {(sheetCategories ?? []).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Product selection (section or category type) */}
+          {((type === 'section' && sectionId !== '') || (type === 'category' && catSheetCatId !== '')) && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-semibold text-gray-700">
@@ -524,15 +608,39 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
                 )}
               </div>
 
+              {/* Category filter + sort */}
+              {productCategories.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={productCatFilter}
+                    onChange={e => setProductCatFilter(e.target.value)}
+                    className="input text-xs h-8 flex-1 min-w-0"
+                  >
+                    <option value="">Toutes catégories ({displayProducts.length})</option>
+                    {productCategories.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-1 flex-shrink-0">
+                    {(['name', 'stock_asc', 'stock_desc'] as const).map(s => (
+                      <button key={s} onClick={() => setSortBy(s)}
+                        className={`px-2 py-1 rounded text-xs font-semibold transition-colors ${sortBy === s ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {s === 'name' ? 'A→Z' : s === 'stock_asc' ? 'Stock ↑' : 'Stock ↓'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Product list */}
-              {loadingProducts ? (
+              {isLoadingDisplay ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 size={20} className="animate-spin text-primary" />
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="py-8 text-center text-sm text-gray-400">
-                  {(sectionProducts ?? []).length === 0
-                    ? 'Aucun produit dans ce rayon.'
+                  {displayProducts.length === 0
+                    ? (type === 'category' ? 'Aucun produit dans cette catégorie.' : 'Aucun produit dans ce rayon.')
                     : 'Aucun produit ne correspond au filtre.'}
                 </div>
               ) : (
@@ -586,7 +694,7 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
                 </div>
               )}
 
-              {(sectionProducts ?? []).length > 0 && selectedIds.size === 0 && (
+              {displayProducts.length > 0 && selectedIds.size === 0 && (
                 <p className="text-xs text-amber-600 flex items-center gap-1">
                   <AlertTriangle size={11} /> Sélectionnez au moins un produit pour créer la fiche.
                 </p>
@@ -602,9 +710,9 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
             <input type="text" value={name} onChange={e => setName(e.target.value)}
               className="input text-sm"
               placeholder={
-                type === 'section' && selectedSection
-                  ? selectedSection.name
-                  : 'Ex: Produits frais, Lot promotions...'
+                type === 'section' && selectedSection ? selectedSection.name
+                : type === 'category' && selectedCat  ? selectedCat.name
+                : 'Ex: Produits frais, Lot promotions...'
               } />
           </div>
 
@@ -649,6 +757,127 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
   )
 }
 
+// ─── Quick Create Product Modal ───────────────────────────────────────────────
+
+function QuickCreateProductModal({ initialName, onCreated, onClose }: {
+  initialName: string
+  onCreated: (product: ProductHit) => void
+  onClose: () => void
+}) {
+  const [name, setName]               = useState(initialName)
+  const [internalCode, setCode]       = useState('')
+  const [purchasePrice, setPurchase]  = useState('')
+  const [salePrice, setSale]          = useState('')
+  const [vatRate, setVat]             = useState<0 | 18>(18)
+  const [unitId, setUnitId]           = useState<number | ''>('')
+
+  const { data: units } = useQuery<{ id: number; name: string; abbreviation: string }[]>({
+    queryKey: ['units-list'],
+    queryFn: () => api.get('/units').then(r => r.data?.data ?? r.data),
+  })
+
+  const mutation = useMutation({
+    mutationFn: () => api.post('/products', {
+      name: name.trim(),
+      internal_code:      internalCode || undefined,
+      purchase_price_ht:  parseFloat(purchasePrice),
+      sale_price_ttc:     parseFloat(salePrice),
+      vat_rate:           vatRate,
+      unit_id:            unitId || null,
+    }),
+    onSuccess: (res) => {
+      const p = res.data
+      onCreated({ id: p.id, name: p.name, internal_code: p.internal_code, unit: p.unit })
+      toast.success(`Produit "${p.name}" créé`)
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? 'Erreur lors de la création')
+    },
+  })
+
+  const valid = name.trim() &&
+    purchasePrice && !isNaN(parseFloat(purchasePrice)) &&
+    salePrice    && !isNaN(parseFloat(salePrice))
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-y-auto max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            <Plus size={18} className="text-primary" /> Créer un produit
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X size={17} />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Création rapide — vous pourrez compléter les détails depuis la fiche produit.
+          </p>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Nom *</label>
+            <input value={name} onChange={e => setName(e.target.value)}
+              className="input text-sm" placeholder="Nom du produit" autoFocus />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Code interne <span className="text-gray-400 font-normal">(optionnel)</span>
+            </label>
+            <input value={internalCode} onChange={e => setCode(e.target.value)}
+              className="input text-sm" placeholder="Généré automatiquement si vide" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Prix achat HT *</label>
+              <input type="number" min="0" step="0.01" value={purchasePrice}
+                onChange={e => setPurchase(e.target.value)}
+                className="input text-sm" placeholder="0" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Prix vente TTC *</label>
+              <input type="number" min="0" step="0.01" value={salePrice}
+                onChange={e => setSale(e.target.value)}
+                className="input text-sm" placeholder="0" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">TVA</label>
+              <select value={vatRate} onChange={e => setVat(Number(e.target.value) as 0 | 18)} className="input text-sm">
+                <option value={0}>0 % (exonéré)</option>
+                <option value={18}>18 %</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Unité</label>
+              <select value={unitId} onChange={e => setUnitId(e.target.value ? Number(e.target.value) : '')} className="input text-sm">
+                <option value="">— Sans unité —</option>
+                {(units ?? []).map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {mutation.isError && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+              {(mutation.error as any)?.response?.data?.message ?? 'Une erreur est survenue.'}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-3 px-6 pb-6">
+          <button onClick={onClose} className="flex-1 btn-secondary text-sm">Annuler</button>
+          <button onClick={() => mutation.mutate()} disabled={!valid || mutation.isPending}
+            className="flex-1 btn-primary text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+            {mutation.isPending
+              ? <><Loader2 size={14} className="animate-spin" /> Création...</>
+              : <><Plus size={14} /> Créer le produit</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Add Product to Sheet Modal ──────────────────────────────────────────────
 
 function AddProductModal({ sessionId, sheetId, onClose }: {
@@ -656,9 +885,10 @@ function AddProductModal({ sessionId, sheetId, onClose }: {
   sheetId: number | null
   onClose: () => void
 }) {
-  const [search, setSearch]     = useState('')
-  const [selected, setSelected] = useState<ProductHit | null>(null)
-  const [qty, setQty]           = useState('')
+  const [search, setSearch]           = useState('')
+  const [selected, setSelected]       = useState<ProductHit | null>(null)
+  const [qty, setQty]                 = useState('')
+  const [showCreate, setShowCreate]   = useState(false)
   const qc = useQueryClient()
 
   const { data: hits, isFetching } = useQuery({
@@ -728,8 +958,15 @@ function AddProductModal({ sessionId, sheetId, onClose }: {
                         <Loader2 size={11} className="animate-spin" /> Recherche en cours...
                       </div>
                     ) : (hits ?? []).length === 0 ? (
-                      <div className="px-4 py-3 text-xs text-gray-500 flex items-center gap-1.5">
-                        <Package size={11} /> Aucun produit trouvé pour &laquo;{search}&raquo;
+                      <div className="px-4 py-3 space-y-1">
+                        <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                          <Package size={11} /> Aucun produit trouvé pour &laquo;{search}&raquo;
+                        </p>
+                        <button
+                          onMouseDown={e => { e.preventDefault(); setShowCreate(true) }}
+                          className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
+                          <Plus size={11} /> Créer ce produit
+                        </button>
                       </div>
                     ) : (
                       (hits ?? []).map(p => (
@@ -762,6 +999,14 @@ function AddProductModal({ sessionId, sheetId, onClose }: {
           </button>
         </div>
       </div>
+
+      {showCreate && (
+        <QuickCreateProductModal
+          initialName={search}
+          onCreated={(p) => { setSelected(p); setSearch(p.name); setShowCreate(false) }}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
     </div>
   )
 }
