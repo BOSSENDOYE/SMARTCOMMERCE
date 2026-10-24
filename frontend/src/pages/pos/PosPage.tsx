@@ -1499,6 +1499,8 @@ export default function PosPage() {
 
   const storeBusinessType = user?.store?.business_type ?? 'grande_surface'
   const isRestaurant = storeBusinessType === 'restaurant' || storeBusinessType === 'mixte'
+  // Boulangerie : la caisse ne propose que les produits finis (pas la farine, le sel…)
+  const posKind = storeBusinessType === 'boulangerie' ? 'finished' : undefined
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [search, setSearch]                 = useState('')
@@ -1565,8 +1567,8 @@ export default function PosPage() {
 
   // ── Categories tree ───────────────────────────────────────────────────────
   const { data: categoryTree = [] } = useQuery<CategoryTree[]>({
-    queryKey: ['categories-tree'],
-    queryFn:  () => api.get('/categories').then(r => r.data),
+    queryKey: ['categories-tree', posKind],
+    queryFn:  () => api.get('/categories', { params: { kind: posKind } }).then(r => r.data),
   })
 
   // Reset page on category/course change
@@ -1582,7 +1584,7 @@ export default function PosPage() {
   } = useQuery<ProductPageResult>({
     queryKey: isRestaurant
       ? ['pos-restaurant-items', selectedCourse]
-      : ['pos-products', selectedCategoryId, page],
+      : ['pos-products', selectedCategoryId, page, posKind],
     queryFn: isRestaurant
       ? () => api.get('/restaurant-items', {
           params: { course: selectedCourse ?? undefined, available: 1, active: 1 },
@@ -1600,7 +1602,7 @@ export default function PosPage() {
           totalPages: 1,
         }))
       : () => api.get('/products', {
-          params: { category_id: selectedCategoryId ?? undefined, per_page: PER_PAGE, page, is_active: true, has_stock: 1 },
+          params: { category_id: selectedCategoryId ?? undefined, per_page: PER_PAGE, page, is_active: true, has_stock: 1, kind: posKind },
         }).then(res => ({
           items: res.data.data.map((p: any) => ({
             id: p.id, name: p.name, short_name: p.short_name,
@@ -1673,8 +1675,8 @@ export default function PosPage() {
         const isPriceSearch = /^\d+$/.test(search.trim()) && parseInt(search) >= 100
         try {
           const params = isPriceSearch
-            ? { price_exact: search.trim(), per_page: 30, is_active: true }
-            : { search, per_page: 15, is_active: true }
+            ? { price_exact: search.trim(), per_page: 30, is_active: true, kind: posKind }
+            : { search, per_page: 15, is_active: true, kind: posKind }
           const res = await api.get('/products', { params })
           setSearchResults(res.data.data.map((p: any) => ({
             id: p.id, name: p.name, short_name: p.short_name,
@@ -1688,7 +1690,7 @@ export default function PosPage() {
       }
     }, 200)
     return () => clearTimeout(timer)
-  }, [search, is_offline, isRestaurant])
+  }, [search, is_offline, isRestaurant, posKind])
 
   // ── Barcode scan / add to cart ────────────────────────────────────────────
   const handleScanOrSearch = async (value: string) => {
@@ -1699,7 +1701,7 @@ export default function PosPage() {
         product = await findProductByBarcode(value.trim())
       } else {
         try {
-          const res = await api.get('/products/barcode', { params: { barcode: value.trim() } })
+          const res = await api.get('/products/barcode', { params: { barcode: value.trim(), kind: posKind } })
           product = res.data
         } catch { product = await findProductByBarcode(value.trim()) }
       }

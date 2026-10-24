@@ -11,6 +11,8 @@ import {
   QrCode, Camera, Barcode, Clock, Play, Users, ShieldAlert,
 } from 'lucide-react'
 import { useConfirm } from '../../hooks/useConfirm'
+import { ProductKindSwitch } from '../../components/ProductKindSwitch'
+import { useProductKindScope } from '../../hooks/useProductKindScope'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -359,6 +361,7 @@ interface SectionProduct {
   category?: { name: string }
   unit?: { abbreviation: string }
   stock_level?: { qty_on_hand: number }
+  product_kind?: 'finished' | 'raw_material'
 }
 
 // ─── Create Sheet Modal ──────────────────────────────────────────────────────
@@ -377,6 +380,8 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
   const [selectedIds, setSelectedIds]           = useState<Set<number>>(new Set())
   const [productCatFilter, setProductCatFilter] = useState('')
   const [sortBy, setSortBy]                     = useState<'name' | 'stock_asc' | 'stock_desc'>('name')
+  // Boulangerie : l'inventaire porte d'abord sur les matières premières
+  const { enabled: kindScoped, kind, setKind } = useProductKindScope()
   const qc = useQueryClient()
 
   const { data: users } = useQuery<AppUser[]>({
@@ -390,8 +395,8 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
   })
 
   const { data: sheetCategoriesRaw = [] } = useQuery<SheetCategory[]>({
-    queryKey: ['categories'],
-    queryFn: () => api.get('/categories').then(r => r.data),
+    queryKey: ['categories', kind],
+    queryFn: () => api.get('/categories', { params: { kind } }).then(r => r.data),
     staleTime: 300_000,
   })
   // Aplatir catégories + sous-catégories pour le dropdown
@@ -407,11 +412,12 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
   })
 
   const { data: categoryProductsRaw, isLoading: loadingCatProducts } = useQuery<SectionProduct[]>({
-    queryKey: ['category-products-inv', catSheetCatId],
+    queryKey: ['category-products-inv', catSheetCatId, kind],
     queryFn: () => api.get('/products', {
-      params: { category_id: catSheetCatId, per_page: 500 },
+      params: { category_id: catSheetCatId, per_page: 500, kind },
     }).then(r => (r.data.data ?? []).map((p: any) => ({
       id: p.id,
+      product_kind: p.product_kind,
       name: p.name,
       internal_code: p.internal_code,
       category: p.category,
@@ -421,9 +427,10 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
     enabled: type === 'category' && catSheetCatId !== '',
   })
 
-  const displayProducts = type === 'section' ? (sectionProducts ?? [])
+  const displayProducts = (type === 'section' ? (sectionProducts ?? [])
     : type === 'category' ? (categoryProductsRaw ?? [])
     : []
+  ).filter(p => !kind || (p.product_kind ?? 'finished') === kind)
   const isLoadingDisplay = type === 'section' ? loadingProducts : type === 'category' ? loadingCatProducts : false
 
   const productCategories = [...new Set(
@@ -524,6 +531,10 @@ function CreateSheetModal({ sessionId, onClose }: { sessionId: number; onClose: 
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6 space-y-5">
+          {kindScoped && kind && (
+            <ProductKindSwitch kind={kind} onChange={k => { setKind(k); setCatSheetCatId(''); resetProductList() }} />
+          )}
+
           {/* Type selector */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Type de fiche</label>
@@ -889,11 +900,12 @@ function AddProductModal({ sessionId, sheetId, onClose }: {
   const [selected, setSelected]       = useState<ProductHit | null>(null)
   const [qty, setQty]                 = useState('')
   const [showCreate, setShowCreate]   = useState(false)
+  const { enabled: kindScoped, kind, setKind } = useProductKindScope()
   const qc = useQueryClient()
 
   const { data: hits, isFetching } = useQuery({
-    queryKey: ['products-search-inv', search],
-    queryFn: () => api.get('/products', { params: { search, per_page: 10 } }).then(r => r.data.data as ProductHit[]),
+    queryKey: ['products-search-inv', search, kind],
+    queryFn: () => api.get('/products', { params: { search, per_page: 10, kind } }).then(r => r.data.data as ProductHit[]),
     enabled: search.length >= 2,
     staleTime: 0,
   })
@@ -922,6 +934,7 @@ function AddProductModal({ sessionId, sheetId, onClose }: {
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={17} /></button>
         </div>
         <div className="p-6 space-y-4">
+          {kindScoped && kind && !selected && <ProductKindSwitch kind={kind} onChange={setKind} />}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Produit *</label>
             {selected ? (

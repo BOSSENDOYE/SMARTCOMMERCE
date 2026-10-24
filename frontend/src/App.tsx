@@ -45,6 +45,9 @@ const InventoryPage               = lazy(() => import('./pages/inventory/Invento
 const MyInventoryPage             = lazy(() => import('./pages/inventory/MyInventoryPage'))
 const PromotionsPage              = lazy(() => import('./pages/promotions/PromotionsPage'))
 const LossesPage                  = lazy(() => import('./pages/losses/LossesPage'))
+const ProductionPage              = lazy(() => import('./pages/production/ProductionPage'))
+const CustomerOrdersPage          = lazy(() => import('./pages/customer-orders/CustomerOrdersPage'))
+const DistributionPage            = lazy(() => import('./pages/distribution/DistributionPage'))
 const ReportsPage                 = lazy(() => import('./pages/reports/ReportsPage'))
 const RestaurantPage              = lazy(() => import('./pages/restaurant/RestaurantPage'))
 const SettingsPage                = lazy(() => import('./pages/settings/SettingsPage'))
@@ -212,6 +215,11 @@ export default function App() {
               <Route path="my-inventory" element={<Suspense fallback={<PageLoader />}><MyInventoryPage /></Suspense>} />
               <Route path="promotions" element={<Suspense fallback={<PageLoader />}><PromotionsPage /></Suspense>} />
               <Route path="losses" element={<Suspense fallback={<PageLoader />}><LossesPage /></Suspense>} />
+              <Route path="production" element={<Navigate to="/production/plan" replace />} />
+              <Route path="production/:tab" element={<Suspense fallback={<PageLoader />}><ProductionPage /></Suspense>} />
+              <Route path="customer-orders" element={<Suspense fallback={<PageLoader />}><CustomerOrdersPage /></Suspense>} />
+              <Route path="distribution" element={<Navigate to="/distribution/pending" replace />} />
+              <Route path="distribution/:tab" element={<Suspense fallback={<PageLoader />}><DistributionPage /></Suspense>} />
               <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
               <Route path="restaurant/*" element={<Suspense fallback={<PageLoader />}><RestaurantPage /></Suspense>} />
               <Route path="accounting" element={<Suspense fallback={<PageLoader />}><AccountingPage /></Suspense>} />

@@ -11,8 +11,8 @@ import {
   Utensils, ClipboardList, ArrowLeftRight, Percent, TrendingDown,
   Boxes, BookOpen, FileText, Store, ChevronDown, Check, Receipt,
   UtensilsCrossed, UserCircle, Wifi, WifiOff, FilePlus2, Target, Palette, Sun, Moon,
-  FolderOpen, MapPin, Banknote, Menu, Smartphone, LifeBuoy,
-  PackageCheck, Scale, PieChart, Landmark,
+  MapPin, Banknote, Menu, Smartphone, LifeBuoy,
+  PackageCheck, Scale, PieChart, Landmark, ChefHat, CakeSlice, Factory, NotebookPen, PackageX, Split, Bike, Contact,
 } from 'lucide-react'
 import { usePreferencesStore } from '../../store/preferences.store'
 import { useMenuStore, type MenuNode } from '../../store/menu.store'
@@ -20,8 +20,10 @@ import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import { useOfflineSync } from '../../hooks/useOfflineSync'
 import { getPendingSalesCount } from '../../lib/offline-db'
 import NotificationBell from './NotificationBell'
+import { buildDefaultMenu } from '../../lib/default-menus'
 
-type BusinessType = 'grande_surface' | 'restaurant' | 'depot' | 'mixte'
+type BusinessType = 'grande_surface' | 'restaurant' | 'depot' | 'mixte' | 'boulangerie'
+  | 'cafe_snack' | 'pharmacie' | 'boutique' | 'superette'
 
 interface NavItem {
   id: string
@@ -32,6 +34,8 @@ interface NavItem {
   license?: 'grande_surface' | 'restaurant'
   onlyFor?: BusinessType[]
   hideFor?: BusinessType[]
+  /** Visible seulement si l'utilisateur a accès à plusieurs magasins */
+  multiStoreOnly?: boolean
 }
 
 const navItems: NavItem[] = [
@@ -40,30 +44,58 @@ const navItems: NavItem[] = [
   { id: 'sales',           label: 'Vente Comptoir',  to: '/sales',          icon: <FileText size={18} />,          permission: 'create_sales',          hideFor: ['depot'] },
   { id: 'products',        label: 'Catalogue',       to: '/products',       icon: <Package size={18} />,           permission: 'manage_products',       hideFor: ['restaurant'] },
   { id: 'restaurant-menu', label: 'Menu Restaurant', to: '/restaurant-menu',icon: <UtensilsCrossed size={18} />,   permission: 'manage_products',       onlyFor: ['restaurant', 'mixte'] },
+  { id: 'production',         label: 'Planning du jour', to: '/production/plan',    icon: <ChefHat size={18} />,     permission: 'manage_production', onlyFor: ['boulangerie', 'mixte'] },
+  { id: 'production-orders',  label: 'Productions',      to: '/production/orders',  icon: <Factory size={18} />,     permission: 'manage_production', onlyFor: ['boulangerie', 'mixte'] },
+  { id: 'production-recipes', label: 'Recettes',         to: '/production/recipes', icon: <NotebookPen size={18} />, permission: 'manage_production', onlyFor: ['boulangerie', 'mixte'] },
+  { id: 'distribution',       label: 'Répartition',      to: '/distribution/pending',  icon: <Split size={18} />,   permission: 'manage_distribution', onlyFor: ['boulangerie', 'mixte'] },
+  { id: 'courier-rounds',     label: 'Tournées livreurs', to: '/distribution/rounds',  icon: <Bike size={18} />,    permission: 'manage_distribution', onlyFor: ['boulangerie', 'mixte'] },
+  { id: 'couriers',           label: 'Livreurs',         to: '/distribution/couriers', icon: <Contact size={18} />, permission: 'manage_distribution', onlyFor: ['boulangerie', 'mixte'] },
+  { id: 'production-unsold',  label: 'Invendus',         to: '/production/unsold',  icon: <PackageX size={18} />,    permission: 'manage_production', onlyFor: ['boulangerie', 'mixte'] },
+  { id: 'customer-orders', label: 'Commandes clients', to: '/customer-orders', icon: <CakeSlice size={18} />,       permission: 'create_sales',          onlyFor: ['boulangerie', 'mixte'] },
   { id: 'stock',           label: 'Stocks',          to: '/stock',          icon: <Boxes size={18} />,             permission: 'view_stock' },
   { id: 'inventory',       label: 'Inventaire',      to: '/inventory',      icon: <ClipboardList size={18} />,     permission: 'manage_inventory' },
   { id: 'suppliers',       label: 'Fournisseurs',    to: '/suppliers',      icon: <Truck size={18} />,             permission: 'manage_suppliers' },
   { id: 'purchases',       label: 'Achats',          to: '/purchases',      icon: <ArrowLeftRight size={18} />,    permission: 'create_purchase_orders' },
   { id: 'clients',         label: 'Clients',         to: '/clients',        icon: <Users size={18} />,             permission: 'manage_clients',        hideFor: ['depot'] },
   { id: 'encours',         label: 'Encaissements',   to: '/encours',        icon: <Banknote size={18} />,          permission: 'manage_clients',        hideFor: ['depot'] },
+  { id: 'deliveries',      label: 'Livraisons',      to: '/deliveries',     icon: <PackageCheck size={18} />,      permission: 'manage_invoices' },
   { id: 'invoices',        label: 'Facturation',     to: '/invoices',       icon: <FilePlus2 size={18} />,         permission: 'manage_invoices',       hideFor: ['depot'] },
   { id: 'crm',             label: 'CRM / Leads',     to: '/crm',            icon: <Target size={18} />,            permission: 'manage_crm',            hideFor: ['depot'] },
   { id: 'users',           label: 'Utilisateurs',    to: '/users',          icon: <UserCircle size={18} />,        permission: 'manage_users' },
   { id: 'promotions',      label: 'Promotions',      to: '/promotions',     icon: <Percent size={18} />,           permission: 'manage_promotions',     hideFor: ['depot'] },
   { id: 'losses',          label: 'Pertes',          to: '/losses',         icon: <TrendingDown size={18} />,      permission: 'manage_losses' },
   { id: 'expenses',        label: 'Dépenses',        to: '/expenses',       icon: <Receipt size={18} />,           permission: 'manage_expenses' },
-  { id: 'transfers',       label: 'Transferts',      to: '/transfers',      icon: <ArrowLeftRight size={18} />,    permission: 'manage_transfers' },
+  { id: 'transfers',       label: 'Transferts',      to: '/transfers',      icon: <ArrowLeftRight size={18} />,    permission: 'manage_transfers',      multiStoreOnly: true },
   { id: 'stores',          label: 'Magasins',        to: '/stores',         icon: <Store size={18} />,             permission: 'manage_stores' },
   { id: 'restaurant',      label: 'Restaurant',      to: '/restaurant',     icon: <Utensils size={18} />,          license: 'restaurant' },
   { id: 'reports',         label: 'Rapports',        to: '/reports',        icon: <BarChart3 size={18} />,         permission: 'view_reports' },
   { id: 'accounting',      label: 'Comptabilité',    to: '/accounting',     icon: <BookOpen size={18} />,          permission: 'view_accounting' },
   { id: 'budget',          label: 'Budget',           to: '/budget',         icon: <PieChart size={18} />,          permission: 'view_accounting' },
+  { id: 'reconciliation',  label: 'Lettrage',        to: '/reconciliation', icon: <Scale size={18} />,             permission: 'manage_accounting' },
+  { id: 'fixed-assets',    label: 'Immobilisations', to: '/fixed-assets',   icon: <Landmark size={18} />,          permission: 'view_accounting' },
   { id: 'support',          label: 'Support',          to: '/support',        icon: <LifeBuoy size={18} /> },
   { id: 'settings',        label: 'Paramètres',      to: '/settings',       icon: <Settings size={18} /> },
 ]
 
 // Map for fast lookup by id
 const navCatalog = new Map(navItems.map(i => [i.id, i]))
+const navDefs = navItems.map(i => ({ id: i.id, label: i.label }))
+
+interface NavContext {
+  can: (permission: string) => boolean
+  hasLicense: (license: 'grande_surface' | 'restaurant') => boolean
+  businessType: BusinessType
+  multiStore: boolean
+}
+
+function navItemAllowed(item: NavItem, ctx: NavContext): boolean {
+  if (item.permission && !ctx.can(item.permission)) return false
+  if (item.license && !ctx.hasLicense(item.license)) return false
+  if (item.onlyFor && !item.onlyFor.includes(ctx.businessType)) return false
+  if (item.hideFor && item.hideFor.includes(ctx.businessType)) return false
+  if (item.multiStoreOnly && !ctx.multiStore) return false
+  return true
+}
 
 // Collect all builtinIds present anywhere in the tree
 function collectBuiltinIds(nodes: MenuNode[]): Set<string> {
@@ -89,19 +121,18 @@ interface GroupSectionProps {
 
 function GroupSection({ group, collapsed, storeBusinessType, depth = 0 }: GroupSectionProps) {
   const [open, setOpen] = useState(true)
-  const { can, hasLicense } = useAuthStore()
+  const { can, hasLicense, user } = useAuthStore()
   const { getLabel } = useMenuStore()
+  const ctx: NavContext = {
+    can, hasLicense, businessType: storeBusinessType,
+    multiStore: (user?.roles?.includes('super_admin') ?? false) || (user?.stores?.length ?? 0) > 1,
+  }
 
   const visibleChildren = (group.children ?? []).filter(child => {
     if (!child.visible) return false
     if (child.type === 'group') return true
     const navItem = navCatalog.get(child.builtinId ?? '')
-    if (!navItem) return false
-    if (navItem.permission && !can(navItem.permission)) return false
-    if (navItem.license && !hasLicense(navItem.license)) return false
-    if (navItem.onlyFor && !navItem.onlyFor.includes(storeBusinessType)) return false
-    if (navItem.hideFor && navItem.hideFor.includes(storeBusinessType)) return false
-    return true
+    return !!navItem && navItemAllowed(navItem, ctx)
   })
 
   if (visibleChildren.length === 0) return null
@@ -138,17 +169,16 @@ function GroupSection({ group, collapsed, storeBusinessType, depth = 0 }: GroupS
   const indent = depth * 12
 
   return (
-    <div className="space-y-0.5">
+    <div className={`space-y-0.5 ${depth === 0 ? 'pt-3 mt-1 border-t border-brand-700/60' : ''}`}>
       <button
         onClick={() => setOpen(o => !o)}
         style={{ paddingLeft: `${12 + indent}px` }}
-        className="w-full flex items-center gap-3 pr-3 py-2 rounded-lg text-sm font-medium text-brand-400 hover:bg-brand-700 hover:text-white transition-all duration-150"
+        className="w-full flex items-center gap-2 pr-3 py-1.5 rounded-lg text-white/90 hover:bg-brand-700 hover:text-white transition-all duration-150"
       >
-        <FolderOpen size={16} className="flex-shrink-0 opacity-70" />
-        <span className="flex-1 text-left truncate text-xs font-semibold uppercase tracking-wider opacity-80">
+        <span className="flex-1 text-left truncate text-[11px] font-bold uppercase tracking-widest">
           {group.label}
         </span>
-        <ChevronDown size={13} className={`transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`transition-transform flex-shrink-0 opacity-70 ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -260,7 +290,7 @@ export default function AppLayout() {
     }
   }
 
-  const { nodes, loaded: menuLoaded, fetchConfig, getLabel, isVisible } = useMenuStore()
+  const { nodes, loaded: menuLoaded, fetchConfig, getLabel } = useMenuStore()
 
   useEffect(() => {
     if (!menuLoaded) fetchConfig()
@@ -271,20 +301,21 @@ export default function AppLayout() {
 
   // ── Nav rendering helpers ─────────────────────────────────────────────────
 
-  const isItemAllowed = (item: NavItem) => {
-    if (item.permission && !can(item.permission)) return false
-    if (item.license && !hasLicense(item.license)) return false
-    if (item.onlyFor && !item.onlyFor.includes(storeBusinessType)) return false
-    if (item.hideFor && item.hideFor.includes(storeBusinessType)) return false
-    return true
+  const navCtx: NavContext = {
+    can, hasLicense, businessType: storeBusinessType,
+    multiStore: isSuperAdmin || (user?.stores?.length ?? 0) > 1,
   }
+  const isItemAllowed = (item: NavItem) => navItemAllowed(item, navCtx)
+
+  // Menu personnalisé du magasin, sinon menu par défaut adapté au type de commerce
+  const menuNodes = nodes.length > 0 ? nodes : buildDefaultMenu(storeBusinessType, navDefs)
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
       isActive ? 'bg-primary text-white' : 'text-brand-200 hover:bg-brand-700 hover:text-white'
     }`
 
-  const treeBuiltinIds = collectBuiltinIds(nodes)
+  const treeBuiltinIds = collectBuiltinIds(menuNodes)
 
   const renderTreeNode = (node: MenuNode): React.ReactNode => {
     if (!node.visible) return null
@@ -316,8 +347,6 @@ export default function AppLayout() {
       </NavLink>
     )
   }
-
-  const flatVisibleNav = navItems.filter(item => isItemAllowed(item) && isVisible(item.id))
 
   const handleLogout = async () => {
     clearAuth()
@@ -380,10 +409,12 @@ export default function AppLayout() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
-          {nodes.length === 0 ? (
-            flatVisibleNav.map(item => (
+          {menuNodes.map(renderTreeNode)}
+          {navItems
+            .filter(item => !treeBuiltinIds.has(item.id) && isItemAllowed(item))
+            .map(item => (
               <NavLink
-                key={item.to}
+                key={item.id}
                 to={item.to}
                 end={item.to === '/'}
                 className={navLinkClass}
@@ -392,26 +423,7 @@ export default function AppLayout() {
                 <span className="flex-shrink-0">{item.icon}</span>
                 {!collapsed && <span className="truncate">{item.label}</span>}
               </NavLink>
-            ))
-          ) : (
-            <>
-              {nodes.map(renderTreeNode)}
-              {navItems
-                .filter(item => !treeBuiltinIds.has(item.id) && isItemAllowed(item))
-                .map(item => (
-                  <NavLink
-                    key={item.id}
-                    to={item.to}
-                    end={item.to === '/'}
-                    className={navLinkClass}
-                    title={collapsed ? item.label : undefined}
-                  >
-                    <span className="flex-shrink-0">{item.icon}</span>
-                    {!collapsed && <span className="truncate">{item.label}</span>}
-                  </NavLink>
-                ))}
-            </>
-          )}
+            ))}
         </nav>
 
         {/* User info */}

@@ -7,9 +7,12 @@ import {
   Boxes, BookOpen, FileText, Store, Receipt, UtensilsCrossed, UserCircle,
   FilePlus2, Target, Eye, EyeOff, RotateCcw, Check, GripVertical, Menu,
   ChevronDown, ChevronRight, FolderOpen, Folder, Plus, X, Indent, Outdent,
-  ChevronUp,
+  ChevronUp, ChefHat, CakeSlice, Factory, NotebookPen, PackageX, Split, Bike, Contact, PackageCheck, Scale, Landmark, Banknote, PieChart, LifeBuoy,
 } from 'lucide-react'
 import { useMenuStore, type MenuNode } from '../../store/menu.store'
+import { useAuthStore } from '../../store/auth.store'
+import { useActiveStoreStore } from '../../store/active-store.store'
+import { buildDefaultMenu } from '../../lib/default-menus'
 
 // ─── Canonical nav item definitions ──────────────────────────────────────────
 
@@ -27,11 +30,21 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
   { id: 'sales',            defaultLabel: 'Vente Comptoir',  icon: <FileText size={16} />,        description: 'Ventes et historique' },
   { id: 'products',         defaultLabel: 'Catalogue',       icon: <Package size={16} />,         description: 'Produits et catégories' },
   { id: 'restaurant-menu',  defaultLabel: 'Menu Restaurant', icon: <UtensilsCrossed size={16} />, description: 'Carte et articles restaurant' },
+  { id: 'production',         defaultLabel: 'Planning du jour', icon: <ChefHat size={16} />,     description: 'Plan de production (boulangerie)' },
+  { id: 'production-orders',  defaultLabel: 'Productions',      icon: <Factory size={16} />,     description: 'Fournées réalisées' },
+  { id: 'production-recipes', defaultLabel: 'Recettes',         icon: <NotebookPen size={16} />, description: 'Recettes et coût de revient' },
+  { id: 'distribution',       defaultLabel: 'Répartition',      icon: <Split size={16} />,       description: 'Répartir les productions (point de vente / livreurs)' },
+  { id: 'courier-rounds',     defaultLabel: 'Tournées livreurs', icon: <Bike size={16} />,       description: 'Dotations et clôture des tournées' },
+  { id: 'couriers',           defaultLabel: 'Livreurs',         icon: <Contact size={16} />,     description: 'Livreurs et manquants' },
+  { id: 'production-unsold',  defaultLabel: 'Invendus',         icon: <PackageX size={16} />,    description: 'Clôture des invendus' },
+  { id: 'customer-orders',  defaultLabel: 'Commandes clients', icon: <CakeSlice size={16} />,     description: 'Commandes avec acompte (boulangerie)' },
   { id: 'stock',            defaultLabel: 'Stocks',          icon: <Boxes size={16} />,           description: 'Niveaux de stock' },
   { id: 'inventory',        defaultLabel: 'Inventaire',      icon: <ClipboardList size={16} />,   description: 'Sessions d\'inventaire' },
   { id: 'suppliers',        defaultLabel: 'Fournisseurs',    icon: <Truck size={16} />,           description: 'Gestion des fournisseurs' },
   { id: 'purchases',        defaultLabel: 'Achats',          icon: <ArrowLeftRight size={16} />,  description: 'Commandes d\'achat' },
   { id: 'clients',          defaultLabel: 'Clients',         icon: <Users size={16} />,           description: 'Base clients et fidélité' },
+  { id: 'encours',          defaultLabel: 'Encaissements',   icon: <Banknote size={16} />,        description: 'Créances et encaissements clients' },
+  { id: 'deliveries',       defaultLabel: 'Livraisons',      icon: <PackageCheck size={16} />,    description: 'Bons de livraison clients' },
   { id: 'invoices',         defaultLabel: 'Facturation',     icon: <FilePlus2 size={16} />,       description: 'Factures et devis' },
   { id: 'crm',              defaultLabel: 'CRM / Leads',     icon: <Target size={16} />,          description: 'Pipeline commercial' },
   { id: 'users',            defaultLabel: 'Utilisateurs',    icon: <UserCircle size={16} />,      description: 'Gestion des utilisateurs' },
@@ -43,6 +56,10 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
   { id: 'restaurant',       defaultLabel: 'Restaurant',      icon: <Utensils size={16} />,        description: 'Salle, tables et commandes' },
   { id: 'reports',          defaultLabel: 'Rapports',        icon: <BarChart3 size={16} />,       description: 'Statistiques et rapports' },
   { id: 'accounting',       defaultLabel: 'Comptabilité',    icon: <BookOpen size={16} />,        description: 'Journal et plan comptable' },
+  { id: 'budget',           defaultLabel: 'Budget',          icon: <PieChart size={16} />,        description: 'Budgets et suivi' },
+  { id: 'reconciliation',   defaultLabel: 'Lettrage',        icon: <Scale size={16} />,           description: 'Lettrage comptable' },
+  { id: 'fixed-assets',     defaultLabel: 'Immobilisations', icon: <Landmark size={16} />,        description: 'Actifs et amortissements' },
+  { id: 'support',          defaultLabel: 'Support',         icon: <LifeBuoy size={16} />,        description: 'Assistance' },
   { id: 'settings',         defaultLabel: 'Paramètres',      icon: <Settings size={16} />,        description: 'Configuration système',      locked: true },
 ]
 
@@ -180,16 +197,13 @@ function canIndentNode(nodes: MenuNode[], id: string): boolean {
 
 // ─── Default tree builder ─────────────────────────────────────────────────────
 
-function buildDefaultTree(): MenuNode[] {
-  return NAV_ITEM_DEFS.map(def => ({
-    id: def.id,
-    type: 'builtin' as const,
-    label: def.defaultLabel,
-    defaultLabel: def.defaultLabel,
-    visible: true,
-    locked: def.locked,
-    builtinId: def.id,
+function buildDefaultTree(businessType: string): MenuNode[] {
+  const lock = (list: MenuNode[]): MenuNode[] => list.map(n => ({
+    ...n,
+    locked: n.builtinId ? navDefMap.get(n.builtinId)?.locked : undefined,
+    children: n.children ? lock(n.children) : undefined,
   }))
+  return lock(buildDefaultMenu(businessType, NAV_ITEM_DEFS.map(d => ({ id: d.id, label: d.defaultLabel }))))
 }
 
 // ─── Add Item Dropdown ────────────────────────────────────────────────────────
@@ -250,6 +264,11 @@ function AddItemDropdown({
 
 export default function MenuSettingsPage() {
   const { nodes, fetchConfig, saveConfig, loaded } = useMenuStore()
+  const user = useAuthStore(st => st.user)
+  const { activeStore } = useActiveStoreStore()
+  const businessType = (user?.roles?.includes('super_admin')
+    ? (activeStore as { business_type?: string } | null)?.business_type
+    : user?.store?.business_type) ?? 'grande_surface'
   const [items, setItems] = useState<MenuNode[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -263,9 +282,9 @@ export default function MenuSettingsPage() {
 
   // Sync from store
   useEffect(() => {
-    setItems(nodes.length > 0 ? nodes : buildDefaultTree())
+    setItems(nodes.length > 0 ? nodes : buildDefaultTree(businessType))
     setDirty(false)
-  }, [nodes])
+  }, [nodes, businessType])
 
   const saveMut = useMutation({
     mutationFn: (list: MenuNode[]) => saveConfig(list),
@@ -359,8 +378,14 @@ export default function MenuSettingsPage() {
   }
 
   const resetAll = () => {
-    setItems(nodes.length > 0 ? nodes : buildDefaultTree())
+    setItems(nodes.length > 0 ? nodes : buildDefaultTree(businessType))
     setDirty(false)
+  }
+
+  // Remplace le menu par celui recommandé pour le type de commerce (à enregistrer ensuite)
+  const applyDefaultMenu = () => {
+    setItems(buildDefaultTree(businessType))
+    setDirty(true)
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -378,12 +403,21 @@ export default function MenuSettingsPage() {
             Les droits d'accès restent appliqués indépendamment.
           </p>
         </div>
-        <button
-          onClick={resetAll}
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
-        >
-          <RotateCcw size={13} /> Annuler
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={applyDefaultMenu}
+            title="Menu recommandé pour votre type de commerce"
+            className="flex items-center gap-1.5 text-xs text-primary hover:text-primary-600 px-3 py-1.5 rounded-lg hover:bg-primary-50 transition-colors"
+          >
+            <FolderOpen size={13} /> Menu par défaut
+          </button>
+          <button
+            onClick={resetAll}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <RotateCcw size={13} /> Annuler
+          </button>
+        </div>
       </div>
 
       {/* Tree */}

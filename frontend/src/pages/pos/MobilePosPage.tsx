@@ -387,6 +387,8 @@ function ReceiptScreen({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =
 
 export default function MobilePosPage() {
   const { user } = useAuthStore()
+  // Boulangerie : la caisse ne propose que les produits finis (pas la farine, le sel…)
+  const posKind = user?.store?.business_type === 'boulangerie' ? 'finished' : undefined
   const queryClient = useQueryClient()
 
   const {
@@ -430,8 +432,8 @@ export default function MobilePosPage() {
 
   // ── Categories ──────────────────────────────────────────────────────────────
   const { data: categoryTree = [] } = useQuery<CategoryNode[]>({
-    queryKey: ['categories-tree'],
-    queryFn:  () => api.get('/categories').then(r => r.data),
+    queryKey: ['categories-tree', posKind],
+    queryFn:  () => api.get('/categories', { params: { kind: posKind } }).then(r => r.data),
   })
 
   useEffect(() => { setPage(1) }, [selectedCategoryId])
@@ -443,9 +445,9 @@ export default function MobilePosPage() {
   const EMPTY_PAGE: ProductPage = { items: [], total: 0, totalPages: 1 }
 
   const { data: _productPage, isLoading: productsLoading } = useQuery<ProductPage>({
-    queryKey: ['mobile-pos-products', selectedCategoryId, page],
+    queryKey: ['mobile-pos-products', selectedCategoryId, page, posKind],
     queryFn:  () => api.get('/products', {
-      params: { category_id: selectedCategoryId ?? undefined, per_page: PER_PAGE, page, is_active: true, has_stock: 1 },
+      params: { category_id: selectedCategoryId ?? undefined, per_page: PER_PAGE, page, is_active: true, has_stock: 1, kind: posKind },
     }).then(r => ({
       items: r.data.data.map((p: any) => ({
         id: p.id, name: p.name, short_name: p.short_name,
@@ -501,7 +503,7 @@ export default function MobilePosPage() {
         setSearchResults(await searchProductsOffline(search) as any)
       } else {
         try {
-          const r = await api.get('/products', { params: { search, per_page: 12, is_active: true } })
+          const r = await api.get('/products', { params: { search, per_page: 12, is_active: true, kind: posKind } })
           setSearchResults(r.data.data.map((p: any) => ({
             id: p.id, name: p.name, short_name: p.short_name,
             sale_price_ttc: p.sale_price_ttc, vat_rate: p.vat_rate,
@@ -513,7 +515,7 @@ export default function MobilePosPage() {
       }
     }, 250)
     return () => clearTimeout(timer)
-  }, [search, is_offline])
+  }, [search, is_offline, posKind])
 
   // ── Add to cart ──────────────────────────────────────────────────────────────
   const addProductToCart = useCallback((item: PosItem) => {
@@ -544,7 +546,7 @@ export default function MobilePosPage() {
         product = await findProductByBarcode(value.trim())
       } else {
         try {
-          const r = await api.get('/products/barcode', { params: { barcode: value.trim() } })
+          const r = await api.get('/products/barcode', { params: { barcode: value.trim(), kind: posKind } })
           product = r.data
         } catch { product = await findProductByBarcode(value.trim()) }
       }

@@ -10,6 +10,8 @@ import {
   Upload, FileDown, Loader2, Check,
 } from 'lucide-react'
 import { useConfirm } from '../../hooks/useConfirm'
+import { ProductKindSwitch } from '../../components/ProductKindSwitch'
+import { useProductKindScope, type ProductKind } from '../../hooks/useProductKindScope'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,14 +135,14 @@ function KpiCard({ icon, label, value, sub, color = 'blue' }: {
 
 // ─── ProductSearch ────────────────────────────────────────────────────────────
 
-function ProductSearch({ onSelect }: { onSelect: (p: ProductResult) => void }) {
+function ProductSearch({ onSelect, kind }: { onSelect: (p: ProductResult) => void; kind?: ProductKind }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const { data } = useQuery({
-    queryKey: ['products-search-po', q],
-    queryFn: () => api.get('/products', { params: { search: q, per_page: 8 } }).then(r => r.data),
+    queryKey: ['products-search-po', q, kind],
+    queryFn: () => api.get('/products', { params: { search: q, per_page: 8, kind } }).then(r => r.data),
     enabled: q.length > 1,
   })
 
@@ -187,6 +189,8 @@ function ProductSearch({ onSelect }: { onSelect: (p: ProductResult) => void }) {
 
 function OrderFormModal({ order, onClose }: { order?: PurchaseOrder; onClose: () => void }) {
   const qc = useQueryClient()
+  // Boulangerie : on achète d'abord des matières premières (bascule possible pour la revente : boissons…)
+  const { enabled: kindScoped, kind, setKind } = useProductKindScope()
   const [supplierId, setSupplierId] = useState<number | ''>(order?.supplier?.id ?? '')
   const [expectedDate, setExpectedDate] = useState(order?.expected_date ?? '')
   const [notes, setNotes] = useState(order?.notes ?? '')
@@ -206,8 +210,8 @@ function OrderFormModal({ order, onClose }: { order?: PurchaseOrder; onClose: ()
   })
 
   const { data: supplierProducts } = useQuery<SupplierLinkedProduct[]>({
-    queryKey: ['supplier-products', supplierId],
-    queryFn: () => api.get(`/suppliers/${supplierId}/products`).then(r => r.data),
+    queryKey: ['supplier-products', supplierId, kind],
+    queryFn: () => api.get(`/suppliers/${supplierId}/products`, { params: { kind } }).then(r => r.data),
     enabled: !!supplierId,
   })
 
@@ -380,8 +384,9 @@ function OrderFormModal({ order, onClose }: { order?: PurchaseOrder; onClose: ()
                 <label className="text-sm font-semibold text-gray-700">
                   {supplierId && (supplierProducts ?? []).length > 0 ? 'Ou rechercher un autre produit' : 'Articles *'}
                 </label>
+                {kindScoped && kind && <ProductKindSwitch kind={kind} onChange={setKind} />}
               </div>
-              <ProductSearch onSelect={addItem} />
+              <ProductSearch onSelect={addItem} kind={kind} />
 
               {items.length > 0 && (
                 <div className="mt-3 border rounded-xl overflow-hidden">

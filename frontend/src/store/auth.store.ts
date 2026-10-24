@@ -11,7 +11,7 @@ export interface AuthUser {
     name: string
     logo: string | null
     currency: string
-    business_type: 'grande_surface' | 'restaurant' | 'depot' | 'mixte'
+    business_type: 'grande_surface' | 'restaurant' | 'depot' | 'mixte' | 'boulangerie'
     license_grande_surface: boolean
     license_restaurant: boolean
     address?: string | null

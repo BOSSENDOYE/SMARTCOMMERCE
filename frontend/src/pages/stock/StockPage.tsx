@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
 import { formatCurrency, formatNumber, formatDate } from '../../lib/format'
+import { ProductKindSwitch } from '../../components/ProductKindSwitch'
+import { useProductKindScope, type ProductKind } from '../../hooks/useProductKindScope'
 import {
   Boxes, AlertTriangle, TrendingDown, Calendar, Settings2,
   PackageMinus, ChevronLeft, ChevronRight, X, Search,
@@ -121,6 +123,8 @@ const MOV_META: Record<string, { label: string; color: string; isOut: boolean }>
   production_in:         { label: 'Produit fabriqué',     color: 'success', isOut: false },
   production_consumption:{ label: 'Conso. production',    color: 'gray',    isOut: true  },
   waste_out:             { label: 'Invendu / Déchet',      color: 'danger',  isOut: true  },
+  courier_out:           { label: 'Remis à un livreur',    color: 'warning', isOut: true  },
+  courier_return:        { label: 'Retour livreur',        color: 'info',    isOut: false },
   // ── Pharmacie ────────────────────────────────────────────────────
   prescription_out:      { label: 'Délivrance ordonnance',color: 'info',    isOut: true  },
   expired_out:           { label: 'Retrait expiré',       color: 'danger',  isOut: true  },
@@ -199,9 +203,10 @@ function KpiCard({ icon, label, value, sub, color = 'blue' }: {
   )
 }
 
-function AdjustModal({ onClose, initialProduct }: {
+function AdjustModal({ onClose, initialProduct, kind }: {
   onClose: () => void
   initialProduct?: ProductBase | null
+  kind?: ProductKind
 }) {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<ProductBase | null>(initialProduct ?? null)
@@ -212,8 +217,8 @@ function AdjustModal({ onClose, initialProduct }: {
   const ref = useRef<HTMLInputElement>(null)
 
   const { data: productList } = useQuery({
-    queryKey: ['products-search-adj', search],
-    queryFn: () => api.get('/products', { params: { search, per_page: 8 } }).then(r => r.data.data as ProductBase[]),
+    queryKey: ['products-search-adj', search, kind],
+    queryFn: () => api.get('/products', { params: { search, per_page: 8, kind } }).then(r => r.data.data as ProductBase[]),
     enabled: search.length >= 2 && !selected,
   })
 
@@ -365,6 +370,8 @@ function AdjustModal({ onClose, initialProduct }: {
 
 export default function StockPage() {
   const [tab, setTab] = useState<StockTab>('levels')
+  // Boulangerie : le stock porte d'abord sur les matières premières
+  const { enabled: kindScoped, kind, setKind } = useProductKindScope()
 
   // Onglet 1 — Niveaux
   const [search, setSearch] = useState('')
@@ -395,26 +402,27 @@ export default function StockPage() {
   // ── Queries ──────────────────────────────────────────────────────────────
 
   const { data: levels, isLoading: levelsLoading } = useQuery<Paginated<StockLevel>>({
-    queryKey: ['stock-levels', search, statusFilter, page],
-    queryFn: () => api.get('/stock', { params: { search: search || undefined, status: statusFilter || undefined, page, per_page: 25 } }).then(r => r.data),
+    queryKey: ['stock-levels', search, statusFilter, page, kind],
+    queryFn: () => api.get('/stock', { params: { search: search || undefined, status: statusFilter || undefined, page, per_page: 25, kind } }).then(r => r.data),
     placeholderData: prev => prev,
   })
 
   const { data: lowStock = [], isLoading: lowLoading } = useQuery<LowStockProduct[]>({
-    queryKey: ['stock-low'],
-    queryFn: () => api.get('/stock/low').then(r => r.data as LowStockProduct[]),
+    queryKey: ['stock-low', kind],
+    queryFn: () => api.get('/stock/low', { params: { kind } }).then(r => r.data as LowStockProduct[]),
   })
 
   const { data: expiring = [], isLoading: expiringLoading } = useQuery<ExpiringLot[]>({
-    queryKey: ['stock-expiring', expiryDays],
-    queryFn: () => api.get('/stock/expiring', { params: { days: expiryDays } }).then(r => r.data as ExpiringLot[]),
+    queryKey: ['stock-expiring', expiryDays, kind],
+    queryFn: () => api.get('/stock/expiring', { params: { days: expiryDays, kind } }).then(r => r.data as ExpiringLot[]),
     enabled: tab === 'expiring',
   })
 
   const { data: movements, isLoading: movLoading } = useQuery<Paginated<StockMovement>>({
-    queryKey: ['stock-movements', movType, movDateFrom, movDateTo, movPage],
+    queryKey: ['stock-movements', movType, movDateFrom, movDateTo, movPage, kind],
     queryFn: () => api.get('/stock/movements', {
       params: {
+        kind,
         type: movType || undefined,
         date_from: movDateFrom || undefined,
         date_to: movDateTo || undefined,
@@ -427,9 +435,10 @@ export default function StockPage() {
   })
 
   const { data: rotationResp, isLoading: rotLoading } = useQuery<RotationResponse>({
-    queryKey: ['stock-rotation', rotPeriodDays, rotMode, rotOrder, rotPerPage, rotPage, rotCategoryId],
+    queryKey: ['stock-rotation', rotPeriodDays, rotMode, rotOrder, rotPerPage, rotPage, rotCategoryId, kind],
     queryFn: () => api.get('/stock/rotation', {
       params: {
+        kind,
         date_from: daysAgo(rotPeriodDays),
         date_to: today(),
         mode: rotMode,
@@ -458,8 +467,8 @@ export default function StockPage() {
     total_purchase_value: number
     total_sale_value: number
   }>({
-    queryKey: ['stock-valuation-kpi'],
-    queryFn: () => api.get('/reports/stock-valuation').then(r => r.data),
+    queryKey: ['stock-valuation-kpi', kind],
+    queryFn: () => api.get('/reports/stock-valuation', { params: { kind } }).then(r => r.data),
   })
 
   // ── KPI values ───────────────────────────────────────────────────────────
@@ -499,6 +508,10 @@ export default function StockPage() {
           </button>
         </div>
       </div>
+
+      {kindScoped && kind && (
+        <ProductKindSwitch kind={kind} onChange={k => { setKind(k); setPage(1); setMovPage(1); setRotPage(1) }} />
+      )}
 
       {/* ── KPI cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1389,6 +1402,7 @@ export default function StockPage() {
       {adjustTarget !== undefined && (
         <AdjustModal
           initialProduct={adjustTarget}
+          kind={kind}
           onClose={() => setAdjustTarget(undefined)}
         />
       )}

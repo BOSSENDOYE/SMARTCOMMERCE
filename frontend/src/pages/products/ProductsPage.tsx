@@ -9,9 +9,12 @@ import {
   Eye, Filter, ChevronDown, Trash2, History, Barcode, FolderTree,
   ChevronRight as ChevronRightIcon, Pencil, FolderPlus, Camera, Printer,
   Box, ArrowRightLeft, Upload, FileDown, CheckCircle, AlertCircle, Loader2,
-  MapPin, LayoutGrid, Move, Palette,
+  MapPin, LayoutGrid, Move, Palette, Wheat,
 } from 'lucide-react'
 import { useConfirm } from '../../hooks/useConfirm'
+import { useAuthStore } from '../../store/auth.store'
+import { useActiveStoreStore } from '../../store/active-store.store'
+import { useProductKindScope } from '../../hooks/useProductKindScope'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -63,9 +66,15 @@ interface PriceHistoryItem {
   user?: { name: string }
 }
 
+type ProductKind = 'finished' | 'raw_material'
+
+/** Types de commerce qui fabriquent : catalogue séparé produits finis / matières premières */
+const PRODUCTION_BUSINESS_TYPES = ['boulangerie', 'mixte', 'restaurant']
+
 interface Product {
   id: number
   internal_code: string
+  product_kind?: ProductKind
   name: string
   short_name?: string
   description?: string
@@ -75,6 +84,7 @@ interface Product {
   unit?: { id: number; name: string; abbreviation: string }
   purchase_price_ht: number
   sale_price_ttc: number
+  courier_price?: number | null
   vat_rate: number
   price_tiers?: { id: number; client_category_id: number; price: number; clientCategory?: { id: number; name: string; color: string; is_pos_default: boolean } }[]
   is_active: boolean
@@ -354,7 +364,8 @@ function ContainersSection({
 
 interface BarcodeEntry { barcode: string; type: 'ean13' | 'ean8' | 'internal' | 'weight_variable' }
 
-function ProductFormModal({ product, onClose }: { product?: Product; onClose: () => void }) {
+function ProductFormModal({ product, defaultKind, onClose }: { product?: Product; defaultKind?: ProductKind; onClose: () => void }) {
+  const { enabled: hasCouriers } = useProductKindScope()
   const qc = useQueryClient()
 
   const { data: rawCategories = [] } = useQuery<Category[]>({
@@ -424,12 +435,14 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
 
   const [form, setForm] = useState({
     name: product?.name ?? '',
+    product_kind: (product?.product_kind ?? defaultKind ?? 'finished') as ProductKind,
     short_name: product?.short_name ?? '',
     category_id: product?.category?.id?.toString() ?? '',
     brand_id: product?.brand?.id?.toString() ?? '',
     unit_id: product?.unit?.id?.toString() ?? '',
     purchase_price_ht: product?.purchase_price_ht?.toString() ?? '0',
     sale_price_ttc: product?.sale_price_ttc?.toString() ?? '0',
+    courier_price: product?.courier_price?.toString() ?? '',
     vat_rate: product?.vat_rate?.toString() ?? '0',
     min_stock: product?.min_stock?.toString() ?? '',
     max_stock: product?.max_stock?.toString() ?? '',
@@ -538,12 +551,14 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
 
     mutation.mutate({
       name: form.name,
+      product_kind: form.product_kind,
       short_name: form.short_name || undefined,
       category_id: form.category_id ? Number(form.category_id) : undefined,
       brand_id: form.brand_id ? Number(form.brand_id) : undefined,
       unit_id: form.unit_id ? Number(form.unit_id) : undefined,
       purchase_price_ht: Number(form.purchase_price_ht),
       sale_price_ttc: Number(form.sale_price_ttc),
+      courier_price: form.courier_price !== '' ? Number(form.courier_price) : null,
       vat_rate: Number(form.vat_rate),
       price_tiers: Object.entries(priceTiers).map(([catId, price]) => ({
         client_category_id: Number(catId),
@@ -612,6 +627,28 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nom court (ticket)</label>
                 <input value={form.short_name} onChange={set('short_name')} className="input" placeholder="Ex: COCA 33CL" maxLength={60} />
               </div>
+            </div>
+          </div>
+
+          {/* Type d'article */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Type d'article</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                ['finished', 'Produit fini', 'Vendu au client (croissant, baguette…)', <Package key="f" size={16} />],
+                ['raw_material', 'Matière première', 'Utilisée en production (farine, sel…)', <Wheat key="r" size={16} />],
+              ] as const).map(([value, label, hint, icon]) => (
+                <button
+                  key={value} type="button"
+                  onClick={() => setForm(f => ({ ...f, product_kind: value }))}
+                  className={`text-left px-3 py-2 rounded-lg border transition-colors ${
+                    form.product_kind === value ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">{icon} {label}</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">{hint}</span>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -713,6 +750,16 @@ function ProductFormModal({ product, onClose }: { product?: Product; onClose: ()
                 </select>
               </div>
             </div>
+            {/* Boulangerie : prix auquel les livreurs rendent compte de leurs ventes */}
+            {hasCouriers && form.product_kind === 'finished' && (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Prix livreur</label>
+                  <input type="number" value={form.courier_price} onChange={set('courier_price')} className="input" min={0} step={1} placeholder={form.sale_price_ttc} />
+                </div>
+                <p className="col-span-2 self-end text-xs text-gray-400 pb-2">Prix dû par le livreur pour chaque unité vendue. Vide = prix de vente.</p>
+              </div>
+            )}
             {marginPct !== null && (
               <div className={`text-sm font-medium ${marginPct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 Marge : {marginPct >= 0 ? '+' : ''}{marginPct}%
@@ -2065,7 +2112,7 @@ function CategorySidebarItem({
 
 // ─── Articles Tab ─────────────────────────────────────────────────────────────
 
-function ArticlesTab() {
+function ArticlesTab({ kind }: { kind?: ProductKind }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | ''>('')
@@ -2087,8 +2134,8 @@ function ArticlesTab() {
   }, [])
 
   const { data: stats } = useQuery<ProductStats>({
-    queryKey: ['product-stats'],
-    queryFn: () => api.get('/products/stats').then(r => r.data),
+    queryKey: ['product-stats', kind],
+    queryFn: () => api.get('/products/stats', { params: { kind } }).then(r => r.data),
   })
 
   const { data: rawCategories = [] } = useQuery<Category[]>({
@@ -2105,6 +2152,7 @@ function ArticlesTab() {
     search: search || undefined,
     page,
     per_page: 25,
+    kind,
     category_id: selectedCategoryId || undefined,
     section_id: selectedSectionId || undefined,
     is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
@@ -2418,6 +2466,7 @@ function ArticlesTab() {
       {showForm && (
         <ProductFormModal
           product={editProduct}
+          defaultKind={kind}
           onClose={() => { setShowForm(false); setEditProduct(undefined) }}
         />
       )}
@@ -2434,7 +2483,7 @@ function ArticlesTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type Tab = 'articles' | 'categories' | 'rangement'
+type Tab = 'articles' | 'raw_materials' | 'categories' | 'rangement'
 
 // ─── ProductImportModal ───────────────────────────────────────────────────────
 
@@ -2715,9 +2764,16 @@ export default function ProductsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('articles')
   const [showForm, setShowForm]   = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const user = useAuthStore(s => s.user)
+  const { activeStore } = useActiveStoreStore()
+  const businessType = (user?.roles?.includes('super_admin') ? (activeStore as { business_type?: string } | null)?.business_type : user?.store?.business_type) ?? 'grande_surface'
+  const separateRawMaterials = PRODUCTION_BUSINESS_TYPES.includes(businessType)
+  const isArticlesTab = activeTab === 'articles' || activeTab === 'raw_materials'
+  const newArticleKind: ProductKind | undefined = activeTab === 'raw_materials' ? 'raw_material' : separateRawMaterials ? 'finished' : undefined
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'articles',    label: 'Articles',    icon: <Package size={16} /> },
+    { id: 'articles',    label: separateRawMaterials ? 'Produits finis' : 'Articles', icon: <Package size={16} /> },
+    ...(separateRawMaterials ? [{ id: 'raw_materials' as Tab, label: 'Matières premières', icon: <Wheat size={16} /> }] : []),
     { id: 'categories',  label: 'Catégories',  icon: <FolderTree size={16} /> },
     { id: 'rangement',   label: 'Rangement',   icon: <MapPin size={16} /> },
   ]
@@ -2731,13 +2787,13 @@ export default function ProductsPage() {
           </h1>
           <p className="text-gray-500 text-sm">Gestion des articles, contenances et catégories</p>
         </div>
-        {activeTab === 'articles' && (
+        {isArticlesTab && (
           <div className="flex items-center gap-2">
             <button onClick={() => setShowImport(true)} className="btn-outline flex items-center gap-2">
               <Upload size={16} /> Importer
             </button>
             <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2">
-              <Plus size={18} /> Nouvel article
+              <Plus size={18} /> {activeTab === 'raw_materials' ? 'Nouvelle matière première' : 'Nouvel article'}
             </button>
           </div>
         )}
@@ -2760,12 +2816,13 @@ export default function ProductsPage() {
         ))}
       </div>
 
-      {activeTab === 'articles'   && <ArticlesTab />}
+      {activeTab === 'articles'      && <ArticlesTab key="finished" kind={separateRawMaterials ? 'finished' : undefined} />}
+      {activeTab === 'raw_materials' && <ArticlesTab key="raw_material" kind="raw_material" />}
       {activeTab === 'categories' && <CategoriesTab />}
       {activeTab === 'rangement'  && <RangementTab />}
 
-      {showForm && activeTab === 'articles' && (
-        <ProductFormModal onClose={() => setShowForm(false)} />
+      {showForm && isArticlesTab && (
+        <ProductFormModal defaultKind={newArticleKind} onClose={() => setShowForm(false)} />
       )}
 
       {showImport && (
