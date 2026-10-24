@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../../lib/api'
-import { formatCurrency, formatDate, formatDateTime, formatNumber } from '../../lib/format'
+import { formatCurrency, formatDate, formatDateTime, formatNumber, openPdf } from '../../lib/format'
 import {
-  Truck, Store, Hourglass, Wallet, ArrowLeftRight, Plus, Pencil, Search, ChevronLeft, ChevronRight, ClipboardCheck,
+  Truck, Store, Hourglass, Wallet, ArrowLeftRight, Plus, Pencil, Search, ChevronLeft, ChevronRight, ClipboardCheck, Printer,
 } from 'lucide-react'
 import AllocationModal, { type PendingOrder } from '../../components/distribution/AllocationModal'
 
@@ -80,6 +80,8 @@ const apiError = (err: unknown): string => {
   if (data?.errors) return Object.values(data.errors).flat().join('\n')
   return data?.message ?? 'Une erreur est survenue'
 }
+
+const printTicket = (url: string) => openPdf(url).catch(() => toast.error("Impossible d'ouvrir le document"))
 
 const REFRESH_KEYS = ['distribution-pending', 'distribution-stats', 'couriers', 'courier-rounds', 'distribution-movements', 'production-orders']
 
@@ -233,7 +235,7 @@ function SettleModal({ round, onClose }: { round: CourierRound; onClose: () => v
       returns: Object.fromEntries(rows.map(r => [r.product_id, r.ret])),
       payment_method: method, amount_paid: paidNum, notes: notes || null,
     }),
-    onSuccess: () => { toast.success('Tournée clôturée — invendus remis en stock, vente enregistrée'); refresh(); onClose() },
+    onSuccess: () => { toast.success('Tournée clôturée — imprimez le reçu depuis la tournée (onglet Clôturées)'); refresh(); onClose() },
     onError: (err) => toast.error(apiError(err)),
   })
 
@@ -480,9 +482,14 @@ function RoundsTab() {
               {r.status === 'open' ? (
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-600">{formatNumber(out)} en circulation · valeur {formatCurrency(value)}</p>
-                  <button className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1" onClick={() => setSettling(r)}>
-                    <ClipboardCheck size={14} /> Clôturer
-                  </button>
+                  <div className="flex gap-2">
+                    <button className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1" title="Bon de dotation à faire signer au livreur" onClick={() => printTicket(`/pdf/courier-rounds/${r.id}/dotation`)}>
+                      <Printer size={14} /> Bon
+                    </button>
+                    <button className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1" onClick={() => setSettling(r)}>
+                      <ClipboardCheck size={14} /> Clôturer
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-wrap justify-between text-sm gap-2">
@@ -490,7 +497,12 @@ function RoundsTab() {
                   {r.amount_due - r.amount_paid > 0.01
                     ? <span className="text-red-600 font-semibold">Manquant {formatCurrency(r.amount_due - r.amount_paid)}</span>
                     : <span className="text-green-700">Soldée</span>}
-                  {r.sale && <span className="text-xs text-gray-400 w-full">Vente {r.sale.reference}</span>}
+                  <div className="w-full flex items-center justify-between">
+                    <span className="text-xs text-gray-400">{r.sale ? `Vente ${r.sale.reference}` : ''}</span>
+                    <button className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1" onClick={() => printTicket(`/pdf/courier-rounds/${r.id}/settlement`)}>
+                      <Printer size={14} /> Reçu
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

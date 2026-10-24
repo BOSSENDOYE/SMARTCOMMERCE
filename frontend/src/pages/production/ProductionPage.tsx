@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useConfirm } from '../../hooks/useConfirm'
 import AllocationModal, { type PendingOrder } from '../../components/distribution/AllocationModal'
+import BakeryDayTab from './BakeryDayTab'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1203,8 +1204,8 @@ function UnsoldTab() {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-type ProductionTab = 'plan' | 'orders' | 'recipes' | 'unsold'
-const PRODUCTION_TABS: ProductionTab[] = ['plan', 'orders', 'recipes', 'unsold']
+type ProductionTab = 'day' | 'plan' | 'orders' | 'recipes' | 'unsold'
+const PRODUCTION_TABS: ProductionTab[] = ['day', 'plan', 'orders', 'recipes', 'unsold']
 
 export default function ProductionPage() {
   // Onglet porté par l'URL (/production/:tab) : chaque onglet a son entrée dans le menu
@@ -1246,7 +1247,7 @@ export default function ProductionPage() {
       </div>
 
       <div className="flex gap-2 border-b">
-        {([['plan', 'Planning'], ['orders', 'Productions'], ['recipes', 'Recettes'], ['unsold', 'Invendus']] as const).map(([key, label]) => (
+        {([['day', 'Bilan du jour'], ['plan', 'Planning'], ['orders', 'Productions'], ['recipes', 'Recettes'], ['unsold', 'Invendus']] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -1259,6 +1260,7 @@ export default function ProductionPage() {
         ))}
       </div>
 
+      {tab === 'day' && <BakeryDayTab />}
       {tab === 'plan' && <PlanningTab />}
       {tab === 'orders' && <ProductionsTab recipes={recipes} />}
       {tab === 'recipes' && <RecipesTab recipes={recipes} isLoading={recipesLoading} />}

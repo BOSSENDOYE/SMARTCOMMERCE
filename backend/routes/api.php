@@ -485,6 +485,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/orders',                   [\App\Http\Controllers\Api\ProductionController::class, 'store']);
             Route::get('/orders/{productionOrder}',  [\App\Http\Controllers\Api\ProductionController::class, 'show']);
             Route::post('/orders/{productionOrder}/cancel', [\App\Http\Controllers\Api\ProductionController::class, 'cancel']);
+            Route::get('/day',                       [\App\Http\Controllers\Api\ProductionController::class, 'day']);
             Route::get('/plan',                      [\App\Http\Controllers\Api\ProductionController::class, 'plan']);
             Route::put('/plan',                      [\App\Http\Controllers\Api\ProductionController::class, 'savePlan']);
             Route::post('/plan/{productionPlan}/execute', [\App\Http\Controllers\Api\ProductionController::class, 'executePlan']);
@@ -657,6 +658,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/accounting/balance',         [\App\Http\Controllers\Api\PdfController::class, 'accountingBalance']);
             Route::get('/accounting/resultat',        [\App\Http\Controllers\Api\PdfController::class, 'accountingResultat']);
             Route::get('/accounting/bilan',           [\App\Http\Controllers\Api\PdfController::class, 'accountingBilan']);
+            // ── Tickets boulangerie (80 mm) ───────────────────────────────────
+            Route::get('/courier-rounds/{courierRound}/dotation',   [\App\Http\Controllers\Api\PdfController::class, 'courierDotation']);
+            Route::get('/courier-rounds/{courierRound}/settlement', [\App\Http\Controllers\Api\PdfController::class, 'courierSettlement']);
+            Route::get('/customer-orders/{customerOrder}',          [\App\Http\Controllers\Api\PdfController::class, 'customerOrder']);
         });
 
         // ── Facturation & Devis ────────────────────────────────────────────────

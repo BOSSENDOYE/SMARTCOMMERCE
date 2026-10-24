@@ -20,6 +20,7 @@ class CourierRound extends Model
         'amount_paid' => 'float',
     ];
 
+    public function store(): BelongsTo { return $this->belongsTo(Store::class); }
     public function courier(): BelongsTo { return $this->belongsTo(Courier::class); }
     public function items(): HasMany { return $this->hasMany(CourierRoundItem::class); }
     public function sale(): BelongsTo { return $this->belongsTo(Sale::class); }

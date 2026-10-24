@@ -140,6 +140,15 @@ class ProductionController extends Controller
         ]);
     }
 
+    // ── Bilan du jour ────────────────────────────────────────────────────────
+
+    public function day(Request $request, \App\Services\BakeryDashboardService $dashboard)
+    {
+        $date = $request->date ? Carbon::parse($request->date) : today();
+
+        return response()->json($dashboard->day($request->user()->store_id, $date));
+    }
+
     // ── Planning ─────────────────────────────────────────────────────────────
 
     public function plan(Request $request)

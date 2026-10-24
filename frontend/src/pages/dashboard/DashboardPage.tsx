@@ -2,6 +2,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import api from '../../lib/api'
 import { formatCurrency, formatNumber } from '../../lib/format'
+import { Link } from 'react-router-dom'
+import { useAuthStore } from '../../store/auth.store'
+import { BakeryDayKpis, type BakeryDay } from '../production/BakeryDayTab'
 import {
   TrendingUp, Package, AlertTriangle, DollarSign,
   RefreshCw, ShoppingCart, ArrowUp, ArrowDown,
@@ -172,6 +175,15 @@ function ChartTooltip({ active, payload, label, labelFormat }: {
 export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [tick, setTick] = useState(0)
+  const { user, can } = useAuthStore()
+  const showBakeryDay = user?.store?.business_type === 'boulangerie' && can('manage_production')
+
+  const { data: bakeryDay } = useQuery({
+    queryKey: ['bakery-day', 'today'],
+    queryFn: () => api.get('/production/day').then(r => r.data as BakeryDay),
+    enabled: showBakeryDay,
+    refetchInterval: 60_000,
+  })
 
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
@@ -255,6 +267,17 @@ export default function DashboardPage() {
               <span className="font-semibold">{data!.alerts.expiring_soon_count} lot(s) expirent dans 30 jours.</span>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Boulangerie : bilan du jour ─────────────────────────────────────── */}
+      {showBakeryDay && bakeryDay && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">Boulangerie — aujourd'hui</h2>
+            <Link to="/production/day" className="text-xs font-medium text-primary hover:underline">Bilan détaillé →</Link>
+          </div>
+          <BakeryDayKpis s={bakeryDay.summary} />
         </div>
       )}
 

@@ -693,4 +693,80 @@ class PdfController extends Controller
             'total_passif'   => $totalPassif,
         ], 'landscape')->download("Bilan-OHADA-{$to}.pdf");
     }
+
+    // ─── Tickets boulangerie (80 mm) ──────────────────────────────────────────
+
+    /** Ticket 80 mm (226,77 pt) ; la hauteur suit le nombre de lignes. */
+    private function ticket(string $view, array $data, int $lines)
+    {
+        return Pdf::loadView($view, $data)
+            ->setPaper([0, 0, 226.77, 300 + $lines * 16], 'portrait')
+            ->setOption('defaultFont', 'DejaVu Sans')
+            ->setOption('isFontSubsettingEnabled', true)
+            ->setOption('isRemoteEnabled', false);
+    }
+
+    /** Bon de dotation : marchandise confiée au livreur sur sa tournée. */
+    public function courierDotation(Request $request, \App\Models\CourierRound $courierRound)
+    {
+        abort_unless($courierRound->store_id == $request->user()->store_id, 404);
+        $courierRound->load(['courier', 'items.product', 'store']);
+
+        $items = $courierRound->items
+            ->map(fn ($i) => tap($i, fn ($i) => $i->qty_out = $i->qty_given - $i->qty_returned))
+            ->filter(fn ($i) => $i->qty_out > 0)
+            ->values();
+        $history = \App\Models\DistributionMovement::with('product:id,name')
+            ->where(fn ($q) => $q->where('destination_round_id', $courierRound->id)->orWhere('source_round_id', $courierRound->id))
+            ->orderBy('created_at')
+            ->get();
+
+        return $this->ticket('pdf.tickets.courier_dotation', [
+            'store'      => $courierRound->store,
+            'title'      => 'Bon de dotation',
+            'reference'  => $courierRound->reference,
+            'round'      => $courierRound,
+            'items'      => $items,
+            'history'    => $history,
+            'value'      => $items->sum(fn ($i) => $i->qty_out * $i->unit_price),
+            'printedBy'  => $request->user()->name,
+        ], $items->count() + $history->count())->stream("Dotation-{$courierRound->reference}.pdf");
+    }
+
+    /** Reçu de clôture de tournée. */
+    public function courierSettlement(Request $request, \App\Models\CourierRound $courierRound)
+    {
+        abort_unless($courierRound->store_id == $request->user()->store_id, 404);
+        abort_unless($courierRound->status === 'settled', 422, 'Tournée non clôturée.');
+        $courierRound->load(['courier', 'items.product', 'store', 'sale']);
+
+        $payments = \App\Models\CourierPayment::where('courier_round_id', $courierRound->id)->get();
+        $labels   = ['cash' => 'espèces', 'wave' => 'Wave', 'orange_money' => 'Orange Money', 'free_money' => 'Free Money', 'card' => 'carte', 'bank_transfer' => 'virement', 'check' => 'chèque'];
+
+        return $this->ticket('pdf.tickets.courier_settlement', [
+            'store'     => $courierRound->store,
+            'title'     => 'Clôture de tournée',
+            'reference' => $courierRound->reference,
+            'round'     => $courierRound,
+            'methods'   => $payments->pluck('payment_method')->unique()->map(fn ($m) => $labels[$m] ?? $m)->implode(', '),
+            'extra'     => (float) $payments->where('kind', 'debt')->sum('amount'),
+            'debt'      => $courierRound->courier->debt(),
+            'printedBy' => $request->user()->name,
+        ], $courierRound->items->count() * 2)->stream("Tournee-{$courierRound->reference}.pdf");
+    }
+
+    /** Bon de commande client (acomptes, reste à payer, date de retrait). */
+    public function customerOrder(Request $request, \App\Models\CustomerOrder $customerOrder)
+    {
+        abort_unless($customerOrder->store_id == $request->user()->store_id, 404);
+        $customerOrder->load(['items.product', 'payments']);
+
+        return $this->ticket('pdf.tickets.customer_order', [
+            'store'        => Store::findOrFail($customerOrder->store_id),
+            'title'        => 'Bon de commande',
+            'reference'    => $customerOrder->reference,
+            'order'        => $customerOrder,
+            'methodLabels' => ['cash' => 'espèces', 'wave' => 'Wave', 'orange_money' => 'Orange Money', 'free_money' => 'Free Money', 'card' => 'carte', 'bank_transfer' => 'virement', 'check' => 'chèque'],
+        ], $customerOrder->items->count() * 2 + $customerOrder->payments->count())->stream("Commande-{$customerOrder->reference}.pdf");
+    }
 }

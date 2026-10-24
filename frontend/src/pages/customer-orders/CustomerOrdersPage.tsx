@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import api from '../../lib/api'
-import { formatCurrency, formatDateTime, formatNumber } from '../../lib/format'
+import { formatCurrency, formatDateTime, formatNumber, openPdf } from '../../lib/format'
 import {
   CakeSlice, Plus, Search, CalendarClock, PackageCheck, Wallet, Clock,
-  Trash2, ChevronLeft, ChevronRight, Phone, XCircle, Truck,
+  Trash2, ChevronLeft, ChevronRight, Phone, XCircle, Truck, Printer,
 } from 'lucide-react'
 import { useConfirm } from '../../hooks/useConfirm'
 
@@ -349,7 +349,16 @@ function OrderDetailModal({ id, onClose, onEdit }: { id: number; onClose: () => 
               {order.customer_name}{order.customer_phone && <> · <Phone size={12} className="inline" /> {order.customer_phone}</>}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <div className="flex items-center gap-2">
+            <button
+              className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
+              title="Bon de commande à remettre au client"
+              onClick={() => openPdf(`/pdf/customer-orders/${order.id}`).catch(() => toast.error("Impossible d'ouvrir le bon"))}
+            >
+              <Printer size={14} /> Imprimer
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          </div>
         </div>
 
         <div className="p-5 space-y-4 overflow-auto text-sm">

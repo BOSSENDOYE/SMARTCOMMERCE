@@ -44,6 +44,7 @@ const navItems: NavItem[] = [
   { id: 'sales',           label: 'Vente Comptoir',  to: '/sales',          icon: <FileText size={18} />,          permission: 'create_sales',          hideFor: ['depot'] },
   { id: 'products',        label: 'Catalogue',       to: '/products',       icon: <Package size={18} />,           permission: 'manage_products',       hideFor: ['restaurant'] },
   { id: 'restaurant-menu', label: 'Menu Restaurant', to: '/restaurant-menu',icon: <UtensilsCrossed size={18} />,   permission: 'manage_products',       onlyFor: ['restaurant', 'mixte'] },
+  { id: 'production-day',     label: 'Bilan du jour',    to: '/production/day',     icon: <BarChart3 size={18} />,   permission: 'manage_production', onlyFor: ['boulangerie', 'mixte'] },
   { id: 'production',         label: 'Planning du jour', to: '/production/plan',    icon: <ChefHat size={18} />,     permission: 'manage_production', onlyFor: ['boulangerie', 'mixte'] },
   { id: 'production-orders',  label: 'Productions',      to: '/production/orders',  icon: <Factory size={18} />,     permission: 'manage_production', onlyFor: ['boulangerie', 'mixte'] },
   { id: 'production-recipes', label: 'Recettes',         to: '/production/recipes', icon: <NotebookPen size={18} />, permission: 'manage_production', onlyFor: ['boulangerie', 'mixte'] },

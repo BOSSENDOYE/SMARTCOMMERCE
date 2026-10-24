@@ -30,6 +30,7 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
   { id: 'sales',            defaultLabel: 'Vente Comptoir',  icon: <FileText size={16} />,        description: 'Ventes et historique' },
   { id: 'products',         defaultLabel: 'Catalogue',       icon: <Package size={16} />,         description: 'Produits et catégories' },
   { id: 'restaurant-menu',  defaultLabel: 'Menu Restaurant', icon: <UtensilsCrossed size={16} />, description: 'Carte et articles restaurant' },
+  { id: 'production-day',     defaultLabel: 'Bilan du jour',    icon: <BarChart3 size={16} />,   description: 'Produit, réparti, vendu, invendus (boulangerie)' },
   { id: 'production',         defaultLabel: 'Planning du jour', icon: <ChefHat size={16} />,     description: 'Plan de production (boulangerie)' },
   { id: 'production-orders',  defaultLabel: 'Productions',      icon: <Factory size={16} />,     description: 'Fournées réalisées' },
   { id: 'production-recipes', defaultLabel: 'Recettes',         icon: <NotebookPen size={16} />, description: 'Recettes et coût de revient' },
