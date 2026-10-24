@@ -34,7 +34,7 @@ class StockService
 
             $isIncoming = in_array($type, [
                 'purchase_in', 'return_in', 'transfer_in',
-                'adjustment_in', 'opening', 'inventory_adjustment'
+                'adjustment_in', 'opening', 'inventory_adjustment', 'production_in', 'courier_return'
             ]);
 
             $qtyDelta = $isIncoming ? abs($qty) : -abs($qty);
@@ -181,10 +181,11 @@ class StockService
         ];
     }
 
-    public function getLowStockProducts(int $storeId): \Illuminate\Support\Collection
+    public function getLowStockProducts(int $storeId, ?string $kind = null): \Illuminate\Support\Collection
     {
         return Product::active()
             ->forStore($storeId)
+            ->when($kind, fn($q) => $q->where('product_kind', $kind))
             ->whereHas('stockLevel', fn($q) => $q
                 ->where('store_id', $storeId)
                 ->whereRaw('qty_on_hand <= products.alert_stock')
@@ -193,9 +194,10 @@ class StockService
             ->get();
     }
 
-    public function getExpiringProducts(int $storeId, int $days = 30): \Illuminate\Support\Collection
+    public function getExpiringProducts(int $storeId, int $days = 30, ?string $kind = null): \Illuminate\Support\Collection
     {
         return ProductLot::where('store_id', $storeId)
+            ->when($kind, fn($q) => $q->whereHas('product', fn($p) => $p->where('product_kind', $kind)))
             ->where('current_qty', '>', 0)
             ->whereNotNull('expiry_date')
             ->where('expiry_date', '<=', now()->addDays($days))

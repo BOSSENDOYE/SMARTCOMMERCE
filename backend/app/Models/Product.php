@@ -17,7 +17,7 @@ class Product extends Model
         'is_weight_based', 'price_per_kg',
         'min_stock', 'max_stock', 'stock_appro', 'alert_stock',
         'packaging_qty', 'packaging_type', 'image',
-        'is_active', 'track_expiry', 'is_recipe',
+        'is_active', 'track_expiry', 'is_recipe', 'recipe_yield', 'product_kind', 'courier_price',
         'section_id', 'slot',
     ];
 
@@ -33,6 +33,7 @@ class Product extends Model
         'is_active' => 'boolean',
         'track_expiry' => 'boolean',
         'is_recipe' => 'boolean',
+        'recipe_yield' => 'float',
     ];
 
     public function store() { return $this->belongsTo(Store::class); }

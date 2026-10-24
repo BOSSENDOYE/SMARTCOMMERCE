@@ -49,6 +49,7 @@ class BusinessTypeConfig
         'prescription_out',
         'waste_out',
         'expired_out',
+        'courier_out',
     ];
 
     /**

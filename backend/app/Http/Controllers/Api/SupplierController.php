@@ -242,6 +242,7 @@ class SupplierController extends Controller
         }
         return response()->json(
             $supplier->products()
+                ->when($request->kind, fn($q) => $q->where('products.product_kind', $request->kind))
                 ->with('unit:id,abbreviation')
                 ->withPivot(['supplier_ref', 'negotiated_price_ht', 'is_preferred'])
                 ->get()

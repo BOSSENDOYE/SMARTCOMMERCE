@@ -183,13 +183,28 @@ Route::prefix('v1')->group(function () {
         };
 
         Route::get('/categories', function (\Illuminate\Http\Request $r) use ($resolveOrgId) {
-            return response()->json(
-                \App\Models\Category::with('children')
-                    ->forOrganization($resolveOrgId($r))
-                    ->whereNull('parent_id')
-                    ->orderBy('sort_order')
-                    ->get()
-            );
+            $categories = \App\Models\Category::with('children')
+                ->forOrganization($resolveOrgId($r))
+                ->whereNull('parent_id')
+                ->orderBy('sort_order')
+                ->get();
+
+            // ?kind=finished|raw_material : uniquement les catégories contenant ce type de produit (ex. caisse boulangerie)
+            if ($r->kind) {
+                $used = \App\Models\Product::forStore($r->user()->store_id)
+                    ->where('product_kind', $r->kind)
+                    ->whereNotNull('category_id')
+                    ->distinct()
+                    ->pluck('category_id')
+                    ->flip();
+
+                $categories = $categories
+                    ->map(fn ($c) => $c->setRelation('children', $c->children->filter(fn ($child) => $used->has($child->id))->values()))
+                    ->filter(fn ($c) => $used->has($c->id) || $c->children->isNotEmpty())
+                    ->values();
+            }
+
+            return response()->json($categories);
         });
         Route::post('/categories', function (\Illuminate\Http\Request $r) use ($resolveOrgId) {
             $data = $r->validate(['name' => 'required', 'parent_id' => 'nullable|exists:categories,id', 'type' => 'nullable|in:common,grande_surface,restaurant']);
@@ -296,6 +311,7 @@ Route::prefix('v1')->group(function () {
                 ->join('products', 'products.id', '=', 'stock_levels.product_id')
                 ->whereNull('products.deleted_at')
                 ->with(['product.category', 'product.unit'])
+                ->when($r->kind, fn($q) => $q->where('products.product_kind', $r->kind))
                 ->when($r->search, fn($q) => $q->where(fn($p) => $p
                     ->where('products.name', 'ilike', "%{$r->search}%")
                     ->orWhere('products.internal_code', 'ilike', "%{$r->search}%")
@@ -307,10 +323,10 @@ Route::prefix('v1')->group(function () {
                 ->paginate((int)($r->per_page ?? 25))
         ));
         Route::get('/stock/low', fn(\Illuminate\Http\Request $r) => response()->json(
-            app(\App\Services\StockService::class)->getLowStockProducts($r->user()->store_id)
+            app(\App\Services\StockService::class)->getLowStockProducts($r->user()->store_id, $r->kind)
         ));
         Route::get('/stock/expiring', fn(\Illuminate\Http\Request $r) => response()->json(
-            app(\App\Services\StockService::class)->getExpiringProducts($r->user()->store_id, (int)($r->days ?? 30))
+            app(\App\Services\StockService::class)->getExpiringProducts($r->user()->store_id, (int)($r->days ?? 30), $r->kind)
         ));
         Route::post('/stock/adjust', fn(\Illuminate\Http\Request $r) => response()->json(
             app(\App\Services\StockService::class)->move(
@@ -324,6 +340,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/stock/movements', fn(\Illuminate\Http\Request $r) => response()->json(
             \App\Models\StockMovement::where('store_id', $r->user()->store_id)
                 ->with(['product', 'user'])
+                ->when($r->kind, fn($q) => $q->whereHas('product', fn($p) => $p->where('product_kind', $r->kind)))
                 ->when($r->product_id, fn($q) => $q->where('product_id', $r->product_id))
                 ->when($r->type, fn($q) => $q->where('type', $r->type))
                 ->when($r->date_from, fn($q) => $q->whereDate('created_at', '>=', $r->date_from))
@@ -362,6 +379,7 @@ Route::prefix('v1')->group(function () {
                 ->when($r->date_from,       fn($q) => $q->whereDate('created_at', '>=', $r->date_from))
                 ->when($r->date_to,         fn($q) => $q->whereDate('created_at', '<=', $r->date_to))
                 ->when($categoryProductIds, fn($q) => $q->whereIn('product_id', $categoryProductIds))
+                ->when($r->kind, fn($q) => $q->whereIn('product_id', \App\Models\Product::where('store_id', $storeId)->where('product_kind', $r->kind)->select('id')))
                 ->groupBy('product_id')
                 ->selectRaw('product_id,
                     SUM(qty)             AS total_qty_out,
@@ -456,6 +474,54 @@ Route::prefix('v1')->group(function () {
         Route::post('/losses/{loss}/validate', [\App\Http\Controllers\Api\LossController::class, 'validate']);
         Route::post('/losses/{loss}/reject', [\App\Http\Controllers\Api\LossController::class, 'reject']);
         Route::apiResource('/losses', \App\Http\Controllers\Api\LossController::class);
+
+        // Production (boulangerie) — recettes + ordres de production
+        Route::prefix('/production')->group(function () {
+            Route::get('/stats',                     [\App\Http\Controllers\Api\ProductionController::class, 'stats']);
+            Route::get('/recipes',                   [\App\Http\Controllers\Api\ProductionController::class, 'recipes']);
+            Route::get('/recipes/{product}',         [\App\Http\Controllers\Api\ProductionController::class, 'showRecipe']);
+            Route::put('/recipes/{product}',         [\App\Http\Controllers\Api\ProductionController::class, 'syncRecipe']);
+            Route::get('/orders',                    [\App\Http\Controllers\Api\ProductionController::class, 'index']);
+            Route::post('/orders',                   [\App\Http\Controllers\Api\ProductionController::class, 'store']);
+            Route::get('/orders/{productionOrder}',  [\App\Http\Controllers\Api\ProductionController::class, 'show']);
+            Route::post('/orders/{productionOrder}/cancel', [\App\Http\Controllers\Api\ProductionController::class, 'cancel']);
+            Route::get('/plan',                      [\App\Http\Controllers\Api\ProductionController::class, 'plan']);
+            Route::put('/plan',                      [\App\Http\Controllers\Api\ProductionController::class, 'savePlan']);
+            Route::post('/plan/{productionPlan}/execute', [\App\Http\Controllers\Api\ProductionController::class, 'executePlan']);
+            Route::get('/unsold',                    [\App\Http\Controllers\Api\ProductionController::class, 'unsoldIndex']);
+            Route::get('/unsold/prefill',            [\App\Http\Controllers\Api\ProductionController::class, 'unsoldPrefill']);
+            Route::post('/unsold',                   [\App\Http\Controllers\Api\ProductionController::class, 'storeUnsold']);
+        });
+
+        // Répartition des productions (boulangerie) — point de vente / livreurs, tournées
+        Route::prefix('/distribution')->group(function () {
+            Route::get('/stats',                                  [\App\Http\Controllers\Api\DistributionController::class, 'stats']);
+            Route::get('/pending',                                [\App\Http\Controllers\Api\DistributionController::class, 'pending']);
+            Route::post('/orders/{productionOrder}/allocate',    [\App\Http\Controllers\Api\DistributionController::class, 'allocate']);
+            Route::post('/transfer',                              [\App\Http\Controllers\Api\DistributionController::class, 'transfer']);
+            Route::get('/movements',                              [\App\Http\Controllers\Api\DistributionController::class, 'movements']);
+            Route::get('/rounds',                                 [\App\Http\Controllers\Api\DistributionController::class, 'rounds']);
+            Route::get('/rounds/{courierRound}',                 [\App\Http\Controllers\Api\DistributionController::class, 'showRound']);
+            Route::post('/rounds/{courierRound}/settle',         [\App\Http\Controllers\Api\DistributionController::class, 'settle']);
+            Route::get('/couriers',                               [\App\Http\Controllers\Api\DistributionController::class, 'couriers']);
+            Route::post('/couriers',                              [\App\Http\Controllers\Api\DistributionController::class, 'storeCourier']);
+            Route::put('/couriers/{courier}',                    [\App\Http\Controllers\Api\DistributionController::class, 'updateCourier']);
+            Route::get('/couriers/{courier}/payments',           [\App\Http\Controllers\Api\DistributionController::class, 'courierPayments']);
+            Route::post('/couriers/{courier}/payments',          [\App\Http\Controllers\Api\DistributionController::class, 'payDebt']);
+        });
+
+        // Commandes clients (boulangerie) — acompte, retrait, livraison → vente
+        Route::prefix('/customer-orders')->group(function () {
+            Route::get('/stats',                        [\App\Http\Controllers\Api\CustomerOrderController::class, 'stats']);
+            Route::get('/',                             [\App\Http\Controllers\Api\CustomerOrderController::class, 'index']);
+            Route::post('/',                            [\App\Http\Controllers\Api\CustomerOrderController::class, 'store']);
+            Route::get('/{customerOrder}',              [\App\Http\Controllers\Api\CustomerOrderController::class, 'show']);
+            Route::put('/{customerOrder}',              [\App\Http\Controllers\Api\CustomerOrderController::class, 'update']);
+            Route::post('/{customerOrder}/payments',    [\App\Http\Controllers\Api\CustomerOrderController::class, 'addPayment']);
+            Route::post('/{customerOrder}/status',      [\App\Http\Controllers\Api\CustomerOrderController::class, 'updateStatus']);
+            Route::post('/{customerOrder}/deliver',     [\App\Http\Controllers\Api\CustomerOrderController::class, 'deliver']);
+            Route::post('/{customerOrder}/cancel',      [\App\Http\Controllers\Api\CustomerOrderController::class, 'cancel']);
+        });
 
         // Reports
         Route::prefix('/reports')->group(function () {

@@ -21,7 +21,9 @@ class SaleService
         return DB::transaction(function () use ($data, $items, $payments) {
             // Extract non-column fields before Sale::create()
             $globalDiscount = (float) ($data['global_discount_amount'] ?? 0);
-            unset($data['global_discount_amount']);
+            // skip_stock : marchandise déjà sortie du stock (ex. vente déclarée par un livreur)
+            $skipStock = ! empty($data['skip_stock']);
+            unset($data['global_discount_amount'], $data['skip_stock']);
 
             // Serialize reference generation to prevent duplicate key on concurrent sales
             DB::statement('SELECT pg_advisory_xact_lock(42)');
@@ -131,7 +133,7 @@ class SaleService
             SaleItem::insert($saleItemsInsert);
 
             // Batch destock only for product items
-            if (!empty($stockMoveItems)) {
+            if (!empty($stockMoveItems) && ! $skipStock) {
                 $this->stockService->batchSaleOut($sale->store_id, $stockMoveItems, $sale->user_id, $sale->id);
             }
 

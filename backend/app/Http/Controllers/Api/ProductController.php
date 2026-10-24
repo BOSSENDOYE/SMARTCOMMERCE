@@ -29,6 +29,7 @@ class ProductController extends Controller
                     ->orWhereHas('barcodes', fn($q3) => $q3->where('barcode', 'ilike', "%{$request->search}%"))
                 )
             )
+            ->when($request->kind, fn($q) => $q->where('product_kind', $request->kind))
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
             ->when($request->section_id,  fn($q) => $q->where('section_id', $request->section_id))
             ->when($request->price_exact !== null && $request->price_exact !== '', fn($q) => $q->where('sale_price_ttc', (float)$request->price_exact))
@@ -59,6 +60,8 @@ class ProductController extends Controller
             'purchase_price_ht' => 'required|numeric|min:0',
             'sale_price_ttc'    => 'required|numeric|min:0',
             'vat_rate'           => 'required|in:0,18',
+            'product_kind'       => 'nullable|in:finished,raw_material',
+            'courier_price'      => 'nullable|numeric|min:0',
             'min_stock'          => 'nullable|numeric|min:0',
             'max_stock'          => 'nullable|numeric|min:0',
             'stock_appro'        => 'nullable|numeric|min:0',
@@ -94,6 +97,7 @@ class ProductController extends Controller
         $barcodes   = $validated['barcodes'] ?? null;
         $priceTiers = $validated['price_tiers'] ?? null;
         unset($validated['containers'], $validated['barcodes'], $validated['price_tiers']);
+        if (empty($validated['product_kind'])) unset($validated['product_kind']);
 
         $product = Product::create(array_merge($validated, [
             'store_id'      => $storeId,
@@ -162,7 +166,7 @@ class ProductController extends Controller
     public function stats(Request $request)
     {
         $storeId = $request->user()->store_id;
-        $base    = Product::forStore($storeId);
+        $base    = Product::forStore($storeId)->when($request->kind, fn($q) => $q->where('product_kind', $request->kind));
 
         return response()->json([
             'total'        => (clone $base)->count(),
@@ -191,6 +195,8 @@ class ProductController extends Controller
             'sale_price_ttc'    => 'sometimes|numeric|min:0',
             'purchase_price_ht' => 'sometimes|numeric|min:0',
             'vat_rate'           => 'sometimes|in:0,18',
+            'product_kind'       => 'sometimes|in:finished,raw_material',
+            'courier_price'      => 'nullable|numeric|min:0',
             'is_active'          => 'sometimes|boolean',
             'is_weight_based'    => 'sometimes|boolean',
             'track_expiry'       => 'sometimes|boolean',
@@ -316,6 +322,7 @@ class ProductController extends Controller
         $product = Product::forStore($storeId)
             ->active()
             ->byBarcode($barcode)
+            ->when($request->kind, fn($q) => $q->where('product_kind', $request->kind))
             ->with(['barcodes', 'stockLevel', 'category', 'containers.unit'])
             ->first();
 

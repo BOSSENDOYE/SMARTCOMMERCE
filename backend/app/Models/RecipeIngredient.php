@@ -17,6 +17,9 @@ class RecipeIngredient extends Model
         'is_optional' => 'boolean',
     ];
 
+    /** Le produit fini (boulangerie) qui contient cette recette */
+    public function product(): BelongsTo { return $this->belongsTo(Product::class); }
+
     /** Le plat (restaurant_item) qui contient cette recette */
     public function restaurantItem(): BelongsTo { return $this->belongsTo(RestaurantItem::class); }
 

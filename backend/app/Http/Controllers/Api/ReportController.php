@@ -118,6 +118,7 @@ class ReportController extends Controller
             ->where('stock_levels.store_id', $this->storeId($request))
             ->whereNull('products.deleted_at')
             ->where('stock_levels.qty_on_hand', '>', 0)
+            ->when($request->kind, fn($q) => $q->where('products.product_kind', $request->kind))
             ->select(
                 'products.id',
                 'products.internal_code',
