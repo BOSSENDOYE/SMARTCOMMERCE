@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\Hash;
 /**
  * Tenant de démonstration : Boulangerie / Pâtisserie.
  * Idempotent (firstOrCreate partout) — peut être relancé sans doublons.
+ * Non inclus dans DatabaseSeeder (données fictives) : à lancer explicitement
+ *   php artisan db:seed --class=BoulangerieSeeder
  */
 class BoulangerieSeeder extends Seeder
 {

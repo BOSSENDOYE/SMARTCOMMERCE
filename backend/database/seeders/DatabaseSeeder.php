@@ -30,7 +30,6 @@ class DatabaseSeeder extends Seeder
             PromotionSeeder::class,
             LossSeeder::class,
             SaasSeeder::class,
-            BoulangerieSeeder::class,
         ]);
 
         $this->command->newLine();
