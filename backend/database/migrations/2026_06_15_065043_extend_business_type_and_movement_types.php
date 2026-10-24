@@ -12,15 +12,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // SQLite stocke déjà tout en varchar — MODIFY COLUMN n'existe pas.
-        if (DB::getDriverName() !== 'sqlite') {
+        // MySQL uniquement — PostgreSQL est géré par 2026_06_28_000002, SQLite stocke déjà en varchar.
+        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'])) {
             DB::statement("ALTER TABLE stores MODIFY COLUMN business_type VARCHAR(50) NOT NULL DEFAULT 'grande_surface'");
         }
     }
 
     public function down(): void
     {
-        if (DB::getDriverName() !== 'sqlite') {
+        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'])) {
             DB::statement("ALTER TABLE stores MODIFY COLUMN business_type ENUM('grande_surface','restaurant','depot','mixte') NOT NULL DEFAULT 'grande_surface'");
         }
     }
