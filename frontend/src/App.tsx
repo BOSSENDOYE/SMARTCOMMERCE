@@ -48,6 +48,7 @@ const LossesPage                  = lazy(() => import('./pages/losses/LossesPage
 const ProductionPage              = lazy(() => import('./pages/production/ProductionPage'))
 const CustomerOrdersPage          = lazy(() => import('./pages/customer-orders/CustomerOrdersPage'))
 const DistributionPage            = lazy(() => import('./pages/distribution/DistributionPage'))
+const DailySheetPage              = lazy(() => import('./pages/daily-sheet/DailySheetPage'))
 const ReportsPage                 = lazy(() => import('./pages/reports/ReportsPage'))
 const RestaurantPage              = lazy(() => import('./pages/restaurant/RestaurantPage'))
 const SettingsPage                = lazy(() => import('./pages/settings/SettingsPage'))
@@ -218,6 +219,7 @@ export default function App() {
               <Route path="production" element={<Navigate to="/production/plan" replace />} />
               <Route path="production/:tab" element={<Suspense fallback={<PageLoader />}><ProductionPage /></Suspense>} />
               <Route path="customer-orders" element={<Suspense fallback={<PageLoader />}><CustomerOrdersPage /></Suspense>} />
+              <Route path="daily-sheet" element={<Suspense fallback={<PageLoader />}><DailySheetPage /></Suspense>} />
               <Route path="distribution" element={<Navigate to="/distribution/pending" replace />} />
               <Route path="distribution/:tab" element={<Suspense fallback={<PageLoader />}><DistributionPage /></Suspense>} />
               <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />

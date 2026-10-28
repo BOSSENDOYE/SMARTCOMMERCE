@@ -51,11 +51,23 @@ interface CourierRow {
   debt: number
 }
 
+interface ShiftRow {
+  shift: string
+  label: string
+  status: 'open' | 'closed'
+  responsible?: string
+  sold: number
+  gap_qty: number
+  gap_value: number
+  over_tolerance: number
+}
+
 export interface BakeryDay {
   date: string
   summary: BakeryDaySummary
   products: ProductRow[]
   couriers: CourierRow[]
+  shifts: ShiftRow[]
 }
 
 const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -181,6 +193,43 @@ export default function BakeryDayTab() {
               </tbody>
             </table>
           </div>
+
+          {data.shifts.length > 0 && (
+            <div className="card overflow-x-auto">
+              <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Équipes (fiche journalière)</h3>
+                  <p className="text-xs text-gray-500">Manquants signalés au responsable de chaque équipe</p>
+                </div>
+                <Link to="/daily-sheet" className="text-xs font-medium text-primary hover:underline">Ouvrir la fiche →</Link>
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-2">Équipe</th>
+                    <th className="text-left px-4 py-2">Responsable</th>
+                    <th className="text-right px-4 py-2">Vendu caisse</th>
+                    <th className="text-right px-4 py-2">Écart (pièces)</th>
+                    <th className="text-right px-4 py-2">Manquant</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {data.shifts.map(s => (
+                    <tr key={s.shift}>
+                      <td className="px-4 py-2 font-medium">{s.label}{s.status === 'open' && <span className="ml-2 badge bg-amber-100 text-amber-800">en cours</span>}</td>
+                      <td className="px-4 py-2 text-gray-600">{s.responsible ?? '—'}</td>
+                      <td className="px-4 py-2 text-right">{formatNumber(s.sold)}</td>
+                      <td className="px-4 py-2 text-right">{s.status === 'closed' ? formatNumber(s.gap_qty) : '—'}</td>
+                      <td className={`px-4 py-2 text-right font-semibold ${s.over_tolerance > 0 ? 'text-red-600' : s.gap_value > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                        {s.status === 'closed' ? formatCurrency(s.gap_value) : '—'}
+                        {s.over_tolerance > 0 && <span className="block text-[11px] font-normal">{s.over_tolerance} produit(s) hors tolérance</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="card overflow-x-auto">
             <div className="px-4 pt-4 pb-2">

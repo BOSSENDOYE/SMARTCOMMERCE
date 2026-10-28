@@ -46,7 +46,7 @@ const MENUS: Record<string, MenuSpec> = {
   boulangerie: [
     'dashboard',
     { group: 'Vente', items: ['pos', 'customer-orders', 'sales', 'clients', 'encours', 'invoices', 'promotions'], hidden: ['crm', 'deliveries'] },
-    { group: 'Production', items: ['production-day', 'production', 'production-orders', 'production-recipes', 'production-unsold'] },
+    { group: 'Production', items: ['production-day', 'daily-sheet', 'production', 'production-orders', 'production-recipes', 'production-unsold'] },
     { group: 'Distribution', items: ['distribution', 'courier-rounds', 'couriers'] },
     { group: 'Stock & achats', items: ['products', 'stock', 'inventory', 'losses', 'purchases', 'suppliers', 'transfers'] },
     GESTION,
@@ -60,7 +60,7 @@ const MENUS: Record<string, MenuSpec> = {
     'dashboard',
     { group: 'Vente', items: ['pos', 'customer-orders', 'sales', 'clients', 'encours', 'invoices', 'deliveries', 'promotions', 'crm'] },
     { group: 'Salle & cuisine', items: ['restaurant', 'restaurant-menu'] },
-    { group: 'Production', items: ['production-day', 'production', 'production-orders', 'production-recipes', 'production-unsold'] },
+    { group: 'Production', items: ['production-day', 'daily-sheet', 'production', 'production-orders', 'production-recipes', 'production-unsold'] },
     { group: 'Distribution', items: ['distribution', 'courier-rounds', 'couriers'] },
     { group: 'Catalogue & stock', items: ['products', 'stock', 'inventory', 'losses', 'transfers'] },
     { group: 'Achats', items: ['purchases', 'suppliers'] },

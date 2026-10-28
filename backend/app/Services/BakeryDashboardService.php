@@ -134,6 +134,32 @@ class BakeryDashboardService
             ],
             'products' => $byProduct,
             'couriers' => $couriers,
+            'shifts'   => $this->shifts($storeId, $day),
         ];
+    }
+
+    /** Équipes de la fiche journalière : manquants signalés à chaque responsable. */
+    private function shifts(int $storeId, string $day): array
+    {
+        $sheet = \App\Models\DailySheet::where('store_id', $storeId)->whereDate('sheet_date', $day)->first();
+        if (! $sheet) return [];
+
+        $sheets = app(DailySheetService::class);
+        $store  = \App\Models\Store::find($storeId);
+
+        return $sheet->shifts()->with('responsible:id,name')->get()->map(function ($shift) use ($sheets, $store) {
+            $lines = $sheets->lines($shift);
+            $gaps  = $lines->filter(fn ($l) => ($l['gap'] ?? 0) > 0);
+            return [
+                'shift'          => $shift->shift,
+                'label'          => \App\Models\SheetShift::LABELS[$shift->shift],
+                'status'         => $shift->status,
+                'responsible'    => $shift->responsible?->name,
+                'sold'           => round($lines->sum('sold'), 3),
+                'gap_qty'        => round($gaps->sum('gap'), 3),
+                'gap_value'      => round($gaps->sum(fn ($l) => $l['gap'] * $l['unit_price']), 2),
+                'over_tolerance' => $lines->filter(fn ($l) => $sheets->overTolerance($store, $l))->count(),
+            ];
+        })->all();
     }
 }

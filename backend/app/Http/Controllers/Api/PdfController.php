@@ -769,4 +769,52 @@ class PdfController extends Controller
             'methodLabels' => ['cash' => 'espèces', 'wave' => 'Wave', 'orange_money' => 'Orange Money', 'free_money' => 'Free Money', 'card' => 'carte', 'bank_transfer' => 'virement', 'check' => 'chèque'],
         ], $customerOrder->items->count() * 2 + $customerOrder->payments->count())->stream("Commande-{$customerOrder->reference}.pdf");
     }
+
+    /** Fiche journalière A4 paysage : vierge (?blank=1, à remplir à la main) ou remplie. */
+    public function dailySheet(Request $request, \App\Services\DailySheetService $sheets)
+    {
+        $store = Store::findOrFail($request->user()->store_id);
+        $date  = $request->date ? \Carbon\Carbon::parse($request->date) : today();
+        $blank = $request->boolean('blank');
+        $sheet = $blank ? null : $sheets->sheet($store->id, $date);
+
+        $products = \App\Models\Product::with('category:id,name,sort_order')
+            ->where('store_id', $store->id)->where('product_kind', 'finished')->where('is_active', true)
+            ->get()
+            ->sortBy([fn ($a, $b) => ($a->category?->sort_order ?? 999) <=> ($b->category?->sort_order ?? 999), fn ($a, $b) => strcmp(\Illuminate\Support\Str::ascii(mb_strtolower($a->name)), \Illuminate\Support\Str::ascii(mb_strtolower($b->name)))])
+            ->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'price' => (float) $p->sale_price_ttc, 'category' => $p->category?->name])
+            ->values();
+
+        $shifts = collect(\App\Models\SheetShift::SHIFTS)->keys()->map(function ($key) use ($sheet, $sheets, $store) {
+            $shift = $sheet?->shifts->firstWhere('shift', $key);
+            $lines = $shift ? $sheets->lines($shift)->map(fn ($l) => $l + ['over_tolerance' => $sheets->overTolerance($store, $l)])->keyBy('product_id') : collect();
+            $gaps  = $lines->filter(fn ($l) => ($l['gap'] ?? 0) > 0);
+
+            return [
+                'label'       => \App\Models\SheetShift::LABELS[$key],
+                'responsible' => $shift?->responsible?->name,
+                'hours'       => $shift ? $shift->opened_at->format('H:i') . ($shift->closed_at ? ' → ' . $shift->closed_at->format('H:i') : ' → en cours') : null,
+                'lines'       => $lines->all(),
+                'totals'      => [
+                    'added'     => $lines->sum('added'),
+                    'sold'      => $lines->sum('sold'),
+                    'gap_value' => $gaps->sum(fn ($l) => $l['gap'] * $l['unit_price']),
+                ],
+            ];
+        })->values();
+
+        return Pdf::loadView('pdf.daily_sheet', [
+            'store'     => $store,
+            'date'      => $date->locale('fr'),
+            'blank'     => $blank,
+            'products'  => $products,
+            'shifts'    => $shifts,
+            'tolerance' => ['pct' => (float) $store->sheet_gap_tolerance_pct, 'qty' => (float) $store->sheet_gap_tolerance_qty],
+        ])
+            ->setPaper('a4', 'landscape')
+            ->setOption('defaultFont', 'DejaVu Sans')
+            ->setOption('isFontSubsettingEnabled', true)
+            ->setOption('isRemoteEnabled', false)
+            ->stream('Fiche-journaliere-' . $date->toDateString() . ($blank ? '-vierge' : '') . '.pdf');
+    }
 }

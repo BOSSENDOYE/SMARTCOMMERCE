@@ -8,9 +8,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Category extends Model
 {
-    protected $fillable = ['organization_id', 'name', 'parent_id', 'slug', 'type', 'color', 'icon', 'sort_order', 'is_active'];
+    protected $fillable = ['organization_id', 'name', 'parent_id', 'slug', 'type', 'color', 'icon', 'sort_order', 'is_active', 'unsold_end_of_day'];
 
-    protected $casts = ['is_active' => 'boolean'];
+    protected $casts = ['is_active' => 'boolean', 'unsold_end_of_day' => 'boolean'];
 
     protected static function boot(): void
     {

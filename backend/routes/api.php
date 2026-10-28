@@ -494,6 +494,18 @@ Route::prefix('v1')->group(function () {
             Route::post('/unsold',                   [\App\Http\Controllers\Api\ProductionController::class, 'storeUnsold']);
         });
 
+        // Fiche journalière (boulangerie) — équipes matin / soir / nuit contrôlées par la caisse
+        Route::prefix('/daily-sheets')->group(function () {
+            Route::get('/',                                  [\App\Http\Controllers\Api\DailySheetController::class, 'show']);
+            Route::get('/responsibles',                      [\App\Http\Controllers\Api\DailySheetController::class, 'responsibles']);
+            Route::put('/settings',                          [\App\Http\Controllers\Api\DailySheetController::class, 'settings']);
+            Route::post('/shifts',                           [\App\Http\Controllers\Api\DailySheetController::class, 'open']);
+            Route::post('/shifts/{sheetShift}/add',         [\App\Http\Controllers\Api\DailySheetController::class, 'add']);
+            Route::post('/shifts/{sheetShift}/remove',      [\App\Http\Controllers\Api\DailySheetController::class, 'remove']);
+            Route::post('/shifts/{sheetShift}/close',       [\App\Http\Controllers\Api\DailySheetController::class, 'close']);
+            Route::post('/shifts/{sheetShift}/reopen',      [\App\Http\Controllers\Api\DailySheetController::class, 'reopen']);
+        });
+
         // Répartition des productions (boulangerie) — point de vente / livreurs, tournées
         Route::prefix('/distribution')->group(function () {
             Route::get('/stats',                                  [\App\Http\Controllers\Api\DistributionController::class, 'stats']);
@@ -662,6 +674,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/courier-rounds/{courierRound}/dotation',   [\App\Http\Controllers\Api\PdfController::class, 'courierDotation']);
             Route::get('/courier-rounds/{courierRound}/settlement', [\App\Http\Controllers\Api\PdfController::class, 'courierSettlement']);
             Route::get('/customer-orders/{customerOrder}',          [\App\Http\Controllers\Api\PdfController::class, 'customerOrder']);
+            Route::get('/daily-sheets',                             [\App\Http\Controllers\Api\PdfController::class, 'dailySheet']);
         });
 
         // ── Facturation & Devis ────────────────────────────────────────────────

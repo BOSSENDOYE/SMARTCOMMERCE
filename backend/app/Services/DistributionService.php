@@ -72,6 +72,83 @@ class DistributionService
         });
     }
 
+    /** Quantité produite encore en attente de répartition pour un produit. */
+    public function pendingFor(int $storeId, int $productId): float
+    {
+        return (float) ProductionOrder::where('store_id', $storeId)->where('product_id', $productId)
+            ->where('status', 'completed')
+            ->selectRaw('COALESCE(SUM(qty_produced - qty_allocated), 0) AS q')->value('q');
+    }
+
+    /**
+     * Met un produit en vente au point de vente en piochant dans les productions
+     * en attente, des plus anciennes aux plus récentes (ex. colonne « Ajouté » de la fiche).
+     */
+    public function allocateProductToPos(int $storeId, int $productId, float $qty, int $userId): void
+    {
+        DB::transaction(function () use ($storeId, $productId, $qty, $userId) {
+            $orders = ProductionOrder::where('store_id', $storeId)->where('product_id', $productId)
+                ->where('status', 'completed')->whereColumn('qty_allocated', '<', 'qty_produced')
+                ->orderBy('produced_at')->orderBy('id')->lockForUpdate()->get();
+
+            $available = round($orders->sum(fn ($o) => $o->qty_produced - $o->qty_allocated), 3);
+            if ($qty > $available + 0.0005) {
+                $name = Product::find($productId)?->name;
+                throw ValidationException::withMessages([
+                    'qty' => "{$name} : {$qty} demandés, seulement {$available} disponibles en production.",
+                ]);
+            }
+
+            $remaining = $qty;
+            foreach ($orders as $order) {
+                if ($remaining <= 0) break;
+                $take = round(min($order->qty_produced - $order->qty_allocated, $remaining), 3);
+                $this->allocate($order, $userId, [['destination' => 'pos', 'qty' => $take]]);
+                $remaining = round($remaining - $take, 3);
+            }
+        });
+    }
+
+    /**
+     * Annule une mise en vente : retire la quantité du stock POS et la remet
+     * « en attente de répartition » (productions les plus récentes d'abord).
+     */
+    public function returnPosToPending(int $storeId, int $productId, float $qty, int $userId): void
+    {
+        DB::transaction(function () use ($storeId, $productId, $qty, $userId) {
+            $level = StockLevel::where('store_id', $storeId)->where('product_id', $productId)->lockForUpdate()->first();
+            if (! $level || $level->qty_on_hand + 0.0005 < $qty) {
+                throw ValidationException::withMessages(['qty' => 'Stock du point de vente insuffisant pour annuler cette mise en vente.']);
+            }
+
+            // Part nette mise au point de vente par chaque production
+            $orders = ProductionOrder::where('store_id', $storeId)->where('product_id', $productId)
+                ->where('status', 'completed')->where('qty_allocated', '>', 0)
+                ->orderByDesc('produced_at')->orderByDesc('id')->lockForUpdate()->get();
+
+            $remaining = $qty;
+            foreach ($orders as $order) {
+                if ($remaining <= 0) break;
+                $toPos = (float) DistributionMovement::where('production_order_id', $order->id)->where('source', 'production')->where('destination', 'pos')->sum('qty')
+                       - (float) DistributionMovement::where('production_order_id', $order->id)->where('source', 'pos')->where('destination', 'production')->sum('qty');
+                $take = round(min($toPos, $remaining), 3);
+                if ($take <= 0) continue;
+
+                $this->stock->move(
+                    $storeId, $productId, 'adjustment_out', $take, $order->unit_cost,
+                    null, $userId, 'production_orders', $order->id, 'allocation_cancel', $order->reference
+                );
+                $order->decrement('qty_allocated', $take);
+                $this->log($storeId, $productId, $userId, $take, 'pos', 'production', $order->id);
+                $remaining = round($remaining - $take, 3);
+            }
+
+            if ($remaining > 0.0005) {
+                throw ValidationException::withMessages(['qty' => 'Cette quantité ne provient pas de productions réparties au point de vente.']);
+            }
+        });
+    }
+
     /**
      * Réaffectation en cours de journée.
      * @param array $from ['type' => 'pos'|'courier', 'courier_id' => ?]

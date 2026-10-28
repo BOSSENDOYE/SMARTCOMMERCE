@@ -31,7 +31,7 @@ class SetupSeeder extends Seeder
             'manage_transfers',
             'view_accounting', 'manage_accounting',
             'manage_crm', 'manage_invoices', 'manage_expenses',
-            'manage_production', 'manage_distribution',
+            'manage_production', 'manage_distribution', 'manage_daily_sheets', 'fill_daily_sheets',
         ];
 
         foreach ($permissions as $perm) {
@@ -54,12 +54,12 @@ class SetupSeeder extends Seeder
                 'manage_losses', 'validate_losses', 'manage_transfers',
                 'view_accounting', 'manage_accounting',
                 'manage_crm', 'manage_invoices', 'manage_expenses',
-                'manage_production', 'manage_distribution',
+                'manage_production', 'manage_distribution', 'manage_daily_sheets', 'fill_daily_sheets',
             ],
-            'caissier'    => ['create_sales', 'apply_discounts', 'manage_clients', 'manage_invoices', 'open_cash_drawer', 'manage_cash_sessions', 'manage_distribution'],
+            'caissier'    => ['create_sales', 'apply_discounts', 'manage_clients', 'manage_invoices', 'open_cash_drawer', 'manage_cash_sessions', 'manage_distribution', 'fill_daily_sheets'],
             'serveur'     => ['restaurant_orders'],
             'cuisinier'   => ['restaurant_kds'],
-            'magasinier'  => ['view_stock', 'manage_inventory', 'manage_losses', 'create_purchase_orders', 'manage_production', 'manage_distribution'],
+            'magasinier'  => ['view_stock', 'manage_inventory', 'manage_losses', 'create_purchase_orders', 'manage_production', 'manage_distribution', 'fill_daily_sheets'],
             'comptable'   => ['view_dashboard', 'view_reports', 'view_margins', 'view_cash_reports', 'view_audit_logs', 'view_accounting', 'manage_accounting', 'manage_expenses'],
             'proprietaire' => ['view_dashboard', 'view_reports', 'view_margins', 'view_cash_reports', 'view_accounting', 'manage_expenses'],
         ];

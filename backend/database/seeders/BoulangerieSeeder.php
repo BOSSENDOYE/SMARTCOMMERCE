@@ -102,6 +102,7 @@ class BoulangerieSeeder extends Seeder
             ['slug' => 'boul-patisseries',    'name' => 'Pâtisseries',        'color' => '#F4A261', 'sort_order' => 3],
             ['slug' => 'boul-boissons',       'name' => 'Boissons',           'color' => '#4ECDC4', 'sort_order' => 4],
             ['slug' => 'boul-matieres',       'name' => 'Matières premières', 'color' => '#8D99AE', 'sort_order' => 5],
+            ['slug' => 'boul-autres',         'name' => 'Autres',             'color' => '#B8B8B8', 'sort_order' => 6],
         ];
 
         foreach ($catDefs as $cat) {
@@ -154,7 +155,7 @@ class BoulangerieSeeder extends Seeder
             ['code' => 'BOUL00025', 'name' => 'Sel fin',                  'cat' => 'boul-matieres',      'buy' => 300,  'sell' => 400,  'unit' => $unitKg, 'stock' => 25,  'min' => 5,   'alert' => 3,   'weight' => true],
             ['code' => 'BOUL00026', 'name' => 'Chocolat noir pâtissier',  'cat' => 'boul-matieres',      'buy' => 7000, 'sell' => 8500, 'unit' => $unitKg, 'stock' => 15,  'min' => 5,   'alert' => 2,   'weight' => true],
             // Produit issu du recyclage des invendus (pain rassis → chapelure)
-            ['code' => 'BOUL00027', 'name' => 'Chapelure maison',         'cat' => 'boul-pains',         'buy' => 0,    'sell' => 1500, 'unit' => $unitKg, 'stock' => 0,   'min' => 0,   'alert' => 0,   'weight' => true],
+            ['code' => 'BOUL00027', 'name' => 'Chapelure maison',         'cat' => 'boul-autres',         'buy' => 0,    'sell' => 1500, 'unit' => $unitKg, 'stock' => 0,   'min' => 0,   'alert' => 0,   'weight' => true],
         ];
 
         foreach ($products as $i => $p) {
@@ -184,6 +185,11 @@ class BoulangerieSeeder extends Seeder
                 'last_updated' => $now,
             ]);
         }
+
+        // Pains : le reste de fin de journée (fiche journalière, équipe de nuit) part en invendus
+        DB::table('categories')->where('id', $cats['boul-pains'])->update(['unsold_end_of_day' => true]);
+        // La chapelure (issue du recyclage) se conserve : hors de la catégorie Pains
+        Product::where('store_id', $store->id)->where('internal_code', 'BOUL00027')->update(['category_id' => $cats['boul-autres']]);
 
         // Matières premières : séparées des produits finis dans le catalogue
         Product::where('store_id', $store->id)

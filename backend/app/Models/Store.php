@@ -15,6 +15,7 @@ class Store extends Model
         'ninea', 'rc', 'logo', 'currency', 'timezone',
         'license_grande_surface', 'license_restaurant',
         'receipt_footer', 'is_active', 'is_central', 'menu_config',
+        'sheet_gap_tolerance_pct', 'sheet_gap_tolerance_qty',
     ];
 
     protected $casts = [
