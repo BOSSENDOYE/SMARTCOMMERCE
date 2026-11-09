@@ -4,16 +4,16 @@
 
   <!-- Page d'accueil / Login -->
   <url>
-    <loc>https://senbaobab.com/</loc>
+    <loc>https://senbaobab.dstcomputing.com/</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://senbaobab.com/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://senbaobab.dstcomputing.com/" />
   </url>
 
   <!-- Page de connexion -->
   <url>
-    <loc>https://senbaobab.com/login</loc>
+    <loc>https://senbaobab.dstcomputing.com/login</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.8</priority>
@@ -21,7 +21,7 @@
 
   <!-- Landing / Présentation publique (si existante) -->
   <url>
-    <loc>https://senbaobab.com/about</loc>
+    <loc>https://senbaobab.dstcomputing.com/about</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

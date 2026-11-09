@@ -2,8 +2,8 @@
 
 | Composant | Domaine | Répertoire cPanel |
 |-----------|---------|-------------------|
-| API Laravel | `apibaobab.lamadoneadn.com` | `/public_html/apibaobab/` |
-| Frontend React | `baobab.lamadoneadn.com` | `/public_html/baobab/` |
+| API Laravel | `apisenbaboba.dstcomputing.com` | `/public_html/apisenbaboba/` |
+| Frontend React | `senbaobab.dstcomputing.com` | `/public_html/senbaobab/` |
 
 ---
 
@@ -20,12 +20,12 @@
 
 ### 2.1 Fichiers à uploader (FTP/FileManager)
 
-Uploader le dossier **`backend/`** COMPLET dans `/public_html/apibaobab/`  
+Uploader le dossier **`backend/`** COMPLET dans `/public_html/apisenbaboba/`
 *(sauf `.git/`, `node_modules/`, `tests/`, `*.test.*`)*
 
 Structure finale sur le serveur :
 ```
-/public_html/apibaobab/
+/public_html/apisenbaboba/
   ├── .htaccess          ← redirige vers public/ ✓
   ├── .env               ← à créer (voir 2.2)
   ├── app/
@@ -41,16 +41,18 @@ Structure finale sur le serveur :
   └── vendor/
 ```
 
-### 2.2 Créer le fichier `.env` sur le serveur
+### 2.2 Configuration backend
 
-Copier `.env.production` → `.env` et remplir les valeurs :
+Créer et configurer le fichier `backend/.env` directement sur le serveur. Il n'est
+pas inclus dans le build frontend ; renseigner les paramètres de production selon
+la base de données et les services du serveur. Ne pas publier ce fichier.
 
 ```env
 APP_NAME="Baobab SmartCommerce"
 APP_ENV=production
 APP_KEY=                    # ← générer ci-dessous
 APP_DEBUG=false
-APP_URL=https://apibaobab.lamadoneadn.com
+APP_URL=https://apisenbaboba.dstcomputing.com
 
 DB_CONNECTION=mysql
 DB_HOST=localhost
@@ -66,13 +68,13 @@ SESSION_SAME_SITE=none
 CACHE_STORE=file
 QUEUE_CONNECTION=sync
 
-SANCTUM_STATEFUL_DOMAINS=baobab.lamadoneadn.com
+SANCTUM_STATEFUL_DOMAINS=senbaobab.dstcomputing.com
 ```
 
 ### 2.3 Commandes via Terminal cPanel (ou SSH)
 
 ```bash
-cd /public_html/apibaobab
+cd /public_html/apisenbaboba
 
 # 1. Générer la clé applicative
 php artisan key:generate
@@ -97,7 +99,7 @@ chmod -R 644 storage/logs
 
 Ouvrir dans le navigateur :
 ```
-https://apibaobab.lamadoneadn.com/api/v1/auth/login
+https://apisenbaboba.dstcomputing.com/api/v1/auth/login
 ```
 → Doit retourner une erreur JSON (405 Method Not Allowed ou 422), pas une page 500.
 
@@ -109,16 +111,17 @@ https://apibaobab.lamadoneadn.com/api/v1/auth/login
 
 ```bash
 cd frontend
-npx vite build
+npm run build
 ```
-Le dossier `frontend/dist/` est généré.
+`frontend/.env.production` configure l'API sur
+`https://apisenbaboba.dstcomputing.com`. Le dossier `frontend/dist/` est généré.
 
 ### 3.2 Fichiers à uploader
 
-Uploader le contenu de **`frontend/dist/`** dans `/public_html/baobab/`
+Uploader le contenu de **`frontend/dist/`** dans `/public_html/senbaobab/`
 
 ```
-/public_html/baobab/
+/public_html/senbaobab/
   ├── .htaccess              ← SPA routing ✓
   ├── index.html
   ├── manifest.webmanifest   ← PWA
@@ -132,15 +135,15 @@ Uploader le contenu de **`frontend/dist/`** dans `/public_html/baobab/`
 
 ### 3.3 Vérifier
 
-Ouvrir `https://baobab.lamadoneadn.com` → page de login Baobab.
+Ouvrir `https://senbaobab.dstcomputing.com` → page de login Baobab.
 
 ---
 
 ## 4. HTTPS (SSL)
 
 Dans cPanel → **SSL/TLS** → **AutoSSL** (Let's Encrypt gratuit) :
-- Activer pour `apibaobab.lamadoneadn.com`
-- Activer pour `baobab.lamadoneadn.com`
+- Activer pour `apisenbaboba.dstcomputing.com`
+- Activer pour `senbaobab.dstcomputing.com`
 
 > L'SSL est **obligatoire** pour la PWA (install Chrome) et pour les cookies sécurisés.
 
@@ -153,8 +156,8 @@ Dans cPanel → **SSL/TLS** → **AutoSSL** (Let's Encrypt gratuit) :
 - [ ] `php artisan migrate --force` sans erreur
 - [ ] `php artisan storage:link` exécuté
 - [ ] SSL actif sur les 2 sous-domaines
-- [ ] `https://apibaobab.lamadoneadn.com/api/v1/auth/login` répond en JSON
-- [ ] `https://baobab.lamadoneadn.com` charge la page de login
+- [ ] `https://apisenbaboba.dstcomputing.com/api/v1/auth/login` répond en JSON
+- [ ] `https://senbaobab.dstcomputing.com` charge la page de login
 - [ ] Connexion avec un compte test fonctionnelle
 - [ ] Chrome affiche la bannière d'installation PWA
 
@@ -165,7 +168,7 @@ Dans cPanel → **SSL/TLS** → **AutoSSL** (Let's Encrypt gratuit) :
 ### Backend
 ```bash
 # FTP : uploader les fichiers modifiés
-cd /public_html/apibaobab
+cd /public_html/apisenbaboba
 php artisan migrate --force
 php artisan config:cache
 php artisan route:cache
@@ -174,6 +177,6 @@ php artisan route:cache
 ### Frontend
 ```bash
 # Local
-cd frontend && npx vite build
+cd frontend && npm run build
 # FTP : uploader le contenu de dist/ (écraser l'existant)
 ```

@@ -20,6 +20,7 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
+        'https://senbaobab.dstcomputing.com',
         'https://senbaobab.com',
         'https://www.senbaobab.com',
         'http://185.124.202.73',

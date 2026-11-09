@@ -294,14 +294,17 @@ class OnboardingController extends Controller
 
     private function inferBusinessType(string $activityType): string
     {
-        $type = strtolower($activityType);
-        if (str_contains($type, 'restaurant') || str_contains($type, 'fast') || str_contains($type, 'snack') || str_contains($type, 'café') || str_contains($type, 'cafe')) {
+        $type = Str::ascii(Str::lower($activityType));
+        if (str_contains($type, 'boulangerie') || str_contains($type, 'patisserie')) {
+            return 'boulangerie';
+        }
+        if (str_contains($type, 'restaurant') || str_contains($type, 'fast') || str_contains($type, 'snack') || str_contains($type, 'cafe')) {
             return 'restaurant';
         }
-        if (str_contains($type, 'supermarché') || str_contains($type, 'superette') || str_contains($type, 'grande surface') || str_contains($type, 'supermarche')) {
+        if (str_contains($type, 'supermarche') || str_contains($type, 'superette') || str_contains($type, 'grande surface')) {
             return 'grande_surface';
         }
-        if (str_contains($type, 'dépôt') || str_contains($type, 'depot') || str_contains($type, 'entrepôt') || str_contains($type, 'entrepot') || str_contains($type, 'grossiste')) {
+        if (str_contains($type, 'depot') || str_contains($type, 'entrepot') || str_contains($type, 'grossiste')) {
             return 'depot';
         }
         // 'mixte' est le fallback sûr — couvre pharmacie, boutique, etc.

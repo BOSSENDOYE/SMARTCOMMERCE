@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../../lib/api'
 import { formatCurrency, formatDate, formatDateTime, formatNumber } from '../../lib/format'
+import { useAuthStore } from '../../store/auth.store'
+import { useActiveStoreStore } from '../../store/active-store.store'
 import {
   ChefHat, Plus, Search, Factory, Coins, BookOpen, Eye, XCircle,
   Trash2, AlertTriangle, Pencil, ChevronLeft, ChevronRight,
@@ -133,10 +135,13 @@ function ProductSearch({ placeholder, onSelect, exclude = [], kind }: {
 }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
+  const user = useAuthStore(state => state.user)
+  const activeStoreId = useActiveStoreStore(state => state.activeStore?.id)
+  const storeContext = user?.store_id ?? activeStoreId ?? null
 
   const { data: suggestions } = useQuery({
-    queryKey: ['product-search', search, kind],
-    queryFn: () => api.get('/products', { params: { search, per_page: 8, kind } }).then(r => (r.data.data ?? []) as SearchProduct[]),
+    queryKey: ['product-search', user?.id, storeContext, search, kind],
+    queryFn: () => api.get('/products', { params: { search, per_page: 8, kind, is_active: true } }).then(r => (r.data.data ?? []) as SearchProduct[]),
     enabled: search.length >= 2,
   })
 
