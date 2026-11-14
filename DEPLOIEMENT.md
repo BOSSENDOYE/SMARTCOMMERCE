@@ -2,8 +2,8 @@
 
 | Composant | Domaine | Répertoire cPanel |
 |-----------|---------|-------------------|
-| API Laravel | `apisenbaboba.dstcomputing.com` | `/public_html/apisenbaboba/` |
-| Frontend React | `senbaobab.dstcomputing.com` | `/public_html/senbaobab/` |
+| API Laravel | `api.senbaobab.com` | `/public_html/apisenbaboba/` |
+| Frontend React | `senbaobab.com` | `/public_html/senbaobab/` |
 
 ---
 
@@ -52,7 +52,7 @@ APP_NAME="Baobab SmartCommerce"
 APP_ENV=production
 APP_KEY=                    # ← générer ci-dessous
 APP_DEBUG=false
-APP_URL=https://apisenbaboba.dstcomputing.com
+APP_URL=https://api.senbaobab.com
 
 DB_CONNECTION=mysql
 DB_HOST=localhost
@@ -68,7 +68,7 @@ SESSION_SAME_SITE=none
 CACHE_STORE=file
 QUEUE_CONNECTION=sync
 
-SANCTUM_STATEFUL_DOMAINS=senbaobab.dstcomputing.com
+SANCTUM_STATEFUL_DOMAINS=senbaobab.com
 ```
 
 ### 2.3 Commandes via Terminal cPanel (ou SSH)
@@ -99,7 +99,7 @@ chmod -R 644 storage/logs
 
 Ouvrir dans le navigateur :
 ```
-https://apisenbaboba.dstcomputing.com/api/v1/auth/login
+https://api.senbaobab.com/api/v1/auth/login
 ```
 → Doit retourner une erreur JSON (405 Method Not Allowed ou 422), pas une page 500.
 
@@ -114,7 +114,7 @@ cd frontend
 npm run build
 ```
 `frontend/.env.production` configure l'API sur
-`https://apisenbaboba.dstcomputing.com`. Le dossier `frontend/dist/` est généré.
+`https://api.senbaobab.com`. Le dossier `frontend/dist/` est généré.
 
 ### 3.2 Fichiers à uploader
 
@@ -135,15 +135,15 @@ Uploader le contenu de **`frontend/dist/`** dans `/public_html/senbaobab/`
 
 ### 3.3 Vérifier
 
-Ouvrir `https://senbaobab.dstcomputing.com` → page de login Baobab.
+Ouvrir `https://senbaobab.com` → page de login Baobab.
 
 ---
 
 ## 4. HTTPS (SSL)
 
 Dans cPanel → **SSL/TLS** → **AutoSSL** (Let's Encrypt gratuit) :
-- Activer pour `apisenbaboba.dstcomputing.com`
-- Activer pour `senbaobab.dstcomputing.com`
+- Activer pour `api.senbaobab.com`
+- Activer pour `senbaobab.com`
 
 > L'SSL est **obligatoire** pour la PWA (install Chrome) et pour les cookies sécurisés.
 
@@ -156,8 +156,8 @@ Dans cPanel → **SSL/TLS** → **AutoSSL** (Let's Encrypt gratuit) :
 - [ ] `php artisan migrate --force` sans erreur
 - [ ] `php artisan storage:link` exécuté
 - [ ] SSL actif sur les 2 sous-domaines
-- [ ] `https://apisenbaboba.dstcomputing.com/api/v1/auth/login` répond en JSON
-- [ ] `https://senbaobab.dstcomputing.com` charge la page de login
+- [ ] `https://api.senbaobab.com/api/v1/auth/login` répond en JSON
+- [ ] `https://senbaobab.com` charge la page de login
 - [ ] Connexion avec un compte test fonctionnelle
 - [ ] Chrome affiche la bannière d'installation PWA
 

@@ -20,9 +20,10 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        'https://senbaobab.dstcomputing.com',
+        // Production : frontend https://senbaobab.com — API https://api.senbaobab.com
         'https://senbaobab.com',
         'https://www.senbaobab.com',
+        'https://senbaobab.dstcomputing.com', // ancien domaine (transition)
         'http://185.124.202.73',
         'https://baobab.lamadoneadn.com',
         'https://gestion.gymaluxe.com',
