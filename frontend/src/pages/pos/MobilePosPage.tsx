@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
 import QRCode from 'react-qr-code'
@@ -16,7 +17,8 @@ import {
   Lock, Unlock, Percent, Printer, ArrowLeft, Receipt as ReceiptIcon,
   ChevronUp, Trash2, Tag,
 } from 'lucide-react'
-import PaymentPanel, { type PaymentEntry } from '../../components/PaymentPanel'
+import { type PaymentEntry } from '../../components/PaymentPanel'
+import MobileCheckout from '../../components/pos/MobileCheckout'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,7 +78,7 @@ const PAY_LABELS: Record<string, string> = {
 
 // ─── Open Session ─────────────────────────────────────────────────────────────
 
-function OpenSessionScreen({ onOpened }: { onOpened: (s: CashSession) => void }) {
+function OpenSessionScreen({ onOpened, onExit }: { onOpened: (s: CashSession) => void; onExit: () => void }) {
   const [amount, setAmount] = useState('0')
   const mut = useMutation({
     mutationFn: () => api.post('/cash-sessions/open', { opening_balance: Number(amount) }),
@@ -86,6 +88,13 @@ function OpenSessionScreen({ onOpened }: { onOpened: (s: CashSession) => void })
 
   return (
     <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center p-6">
+      <button
+        onClick={onExit}
+        className="absolute left-4 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 text-white text-sm font-medium hover:bg-white/20 transition-colors"
+        style={{ top: 'max(16px, env(safe-area-inset-top))' }}
+      >
+        <ArrowLeft size={16} /> Retour
+      </button>
       <div className="bg-white rounded-3xl w-full max-w-sm p-8 space-y-6">
         <div className="text-center space-y-2">
           <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
@@ -383,10 +392,37 @@ function ReceiptScreen({ sale, onNewSale }: { sale: SaleReceipt; onNewSale: () =
   )
 }
 
+// ─── Retour à l'interface normale ─────────────────────────────────────────────
+
+function useExitMobilePos() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as { from?: string } | null)?.from
+  return () => navigate(from && !from.startsWith('/m/') ? from : '/dashboard')
+}
+
+// ─── Initiales colorées (produit sans image) ─────────────────────────────────
+
+const TILE_COLORS = [
+  'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700', 'bg-sky-100 text-sky-700',
+  'bg-rose-100 text-rose-700',   'bg-violet-100 text-violet-700',   'bg-orange-100 text-orange-700',
+  'bg-teal-100 text-teal-700',   'bg-indigo-100 text-indigo-700',
+]
+function tileColor(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return TILE_COLORS[h % TILE_COLORS.length]
+}
+function initials(name: string) {
+  const w = name.trim().split(/\s+/)
+  return ((w[0]?.[0] ?? '') + (w[1]?.[0] ?? '')).toUpperCase() || '?'
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MobilePosPage() {
   const { user } = useAuthStore()
+  const exitMobilePos = useExitMobilePos()
   // Boulangerie : la caisse ne propose que les produits finis (pas la farine, le sel…)
   const posKind = user?.store?.business_type === 'boulangerie' ? 'finished' : undefined
   const queryClient = useQueryClient()
@@ -610,69 +646,68 @@ export default function MobilePosPage() {
   // ── Product card ─────────────────────────────────────────────────────────────
   const ProductCard = useCallback(({ p }: { p: PosItem }) => {
     const thumb      = imageUrl(p.image)
+    const label      = p.short_name ?? p.name
     const outOfStock = p.stock_qty <= 0
     const lowStock   = p.stock_qty > 0 && p.stock_qty <= 5
     const cartItem   = items.find(i => i.product_id === p.id)
-    const inCart     = Boolean(cartItem)
 
     return (
       <button
         onClick={() => addProductToCart(p)}
         disabled={outOfStock}
-        className={`relative bg-white rounded-2xl text-left overflow-hidden flex flex-col transition-all duration-150 active:scale-95 ${
+        className={`group relative flex flex-col bg-white rounded-xl p-1.5 text-left border transition-all duration-150 active:scale-[0.97] ${
           outOfStock
-            ? 'opacity-50 cursor-not-allowed shadow-sm border border-gray-100'
-            : inCart
-              ? 'ring-2 ring-primary shadow-md shadow-primary/20'
-              : 'shadow-sm border border-gray-100 active:border-primary/50'
+            ? 'opacity-50 cursor-not-allowed border-gray-100'
+            : cartItem
+              ? 'border-primary ring-1 ring-primary shadow-sm'
+              : 'border-gray-200/80 hover:border-gray-300 hover:shadow-sm'
         }`}
       >
-        {/* Image */}
-        <div className="relative w-full aspect-square bg-gray-100 overflow-hidden">
-          {thumb ? (
+        {/* Visuel */}
+        <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-gray-50">
+          {thumb && (
             <img
               src={thumb}
-              alt={p.short_name ?? p.name}
-              className="w-full h-full object-cover"
+              alt={label}
               loading="lazy"
-              onError={e => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-                (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove('hidden')
-              }}
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
             />
-          ) : null}
-          <div className={`absolute inset-0 flex items-center justify-center bg-gray-50 ${thumb ? 'hidden' : ''}`}>
-            <ShoppingBag size={32} className="text-gray-200" />
-          </div>
+          )}
+          {!thumb && (
+            <div className={`absolute inset-0 flex items-center justify-center text-base font-bold tracking-wide ${tileColor(label)}`}>
+              {initials(label)}
+            </div>
+          )}
 
-          {/* Rupture overlay */}
           {outOfStock && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-              <span className="text-white text-xs font-bold bg-red-500 px-2 py-0.5 rounded-full">Rupture</span>
+            <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-red-600 bg-white px-1.5 py-0.5 rounded shadow-sm">Rupture</span>
             </div>
           )}
-
-          {/* Stock faible */}
-          {lowStock && !outOfStock && (
-            <div className="absolute top-1.5 right-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight">
-              {p.stock_qty}
-            </div>
+          {lowStock && (
+            <span className="absolute bottom-1 right-1 text-[10px] font-semibold text-amber-700 bg-amber-50/95 px-1.5 py-px rounded">
+              {p.stock_qty} rest.
+            </span>
           )}
-
-          {/* Qty in cart badge */}
-          {inCart && cartItem && (
-            <div className="absolute top-1.5 left-1.5 min-w-[22px] h-[22px] bg-primary text-white text-xs font-bold rounded-full flex items-center justify-center px-1">
+          {cartItem && (
+            <span className="absolute top-1 right-1 min-w-[20px] h-5 px-1 rounded-full bg-primary text-white text-[11px] font-bold flex items-center justify-center shadow">
               {formatNumber(cartItem.qty, cartItem.is_weight_based ? 1 : 0)}
-            </div>
+            </span>
           )}
         </div>
 
-        {/* Info */}
-        <div className="p-2 flex flex-col flex-1">
-          <p className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight mb-1 flex-1">
-            {p.short_name ?? p.name}
-          </p>
-          <p className="text-sm font-bold text-primary">{formatCurrency(p.sale_price_ttc)}</p>
+        {/* Infos */}
+        <div className="px-0.5 pt-1.5 pb-0.5 flex flex-col flex-1 gap-1">
+          <p className="text-[12px] leading-snug font-medium text-gray-800 line-clamp-2 min-h-[2.1rem]">{label}</p>
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[13px] font-bold text-gray-900 tabular-nums truncate">{formatCurrency(p.sale_price_ttc)}</span>
+            {!outOfStock && (
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors">
+                <Plus size={12} strokeWidth={2.5} />
+              </span>
+            )}
+          </div>
         </div>
       </button>
     )
@@ -687,7 +722,7 @@ export default function MobilePosPage() {
     )
   }
   if (!session) {
-    return <OpenSessionScreen onOpened={s => { setSession(s); setCashSession(s.id) }} />
+    return <OpenSessionScreen onExit={exitMobilePos} onOpened={s => { setSession(s); setCashSession(s.id) }} />
   }
   if (view === 'receipt' && saleReceipt) {
     return (
@@ -697,9 +732,6 @@ export default function MobilePosPage() {
       />
     )
   }
-
-  const paymentReady = payments.reduce((s, p) => s + p.amount, 0) >= totalTtc
-    || payments.some(p => p.method === 'credit')
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -712,11 +744,23 @@ export default function MobilePosPage() {
         className="bg-white border-b px-3 flex items-center gap-2 flex-shrink-0 shadow-sm"
         style={{ paddingTop: 'max(10px, env(safe-area-inset-top))', paddingBottom: 10 }}
       >
+        {/* Retour à l'interface normale */}
+        <button
+          onClick={exitMobilePos}
+          title="Retour à l'interface normale"
+          className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-200 transition-colors"
+        >
+          <ArrowLeft size={18} />
+        </button>
+
         {/* Wifi badge */}
-        <div className={`flex items-center justify-center w-8 h-8 rounded-xl flex-shrink-0 ${
-          is_offline ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
-        }`}>
-          {is_offline ? <WifiOff size={14} /> : <Wifi size={14} />}
+        <div
+          title={is_offline ? 'Hors ligne' : 'En ligne'}
+          className={`flex items-center justify-center w-9 h-9 rounded-xl flex-shrink-0 ${
+            is_offline ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
+          }`}
+        >
+          {is_offline ? <WifiOff size={15} /> : <Wifi size={15} />}
         </div>
 
         {/* Search */}
@@ -799,7 +843,7 @@ export default function MobilePosPage() {
       <div className="flex overflow-x-auto gap-2 px-3 py-2 bg-white border-b flex-shrink-0 scrollbar-hide">
         <button
           onClick={() => { setSelectedCategoryId(null); setPage(1) }}
-          className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+          className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
             selectedCategoryId === null ? 'bg-primary text-white shadow-sm' : 'bg-gray-100 text-gray-600'
           }`}
         >
@@ -809,7 +853,7 @@ export default function MobilePosPage() {
           <button
             key={cat.id}
             onClick={() => { setSelectedCategoryId(cat.id); setPage(1) }}
-            className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
+            className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${
               selectedCategoryId === cat.id ? 'bg-primary text-white shadow-sm' : 'bg-gray-100 text-gray-600'
             }`}
           >
@@ -819,7 +863,7 @@ export default function MobilePosPage() {
       </div>
 
       {/* ═══ PRODUCT GRID ═══════════════════════════════════════════════════ */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-2.5 sm:p-4">
         {productsLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -830,7 +874,7 @@ export default function MobilePosPage() {
             <p className="text-sm">Aucun produit disponible</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2 mx-auto max-w-6xl" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(108px, 1fr))' }}>
             {displayProducts.map(p => <ProductCard key={p.id} p={p} />)}
           </div>
         )}
@@ -972,55 +1016,15 @@ export default function MobilePosPage() {
 
       {/* ═══ CHECKOUT VIEW ══════════════════════════════════════════════════ */}
       {view === 'checkout' && (
-        <div
-          className="fixed inset-0 bg-white z-50 flex flex-col"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        >
-          {/* Header */}
-          <div
-            className="bg-gray-900 px-5 flex items-center gap-3 flex-shrink-0"
-            style={{ paddingTop: 'max(14px, env(safe-area-inset-top))', paddingBottom: 14 }}
-          >
-            <button
-              onClick={() => setView('cart')}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 text-white flex-shrink-0"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div>
-              <p className="text-gray-400 text-xs uppercase tracking-widest font-medium">Encaissement</p>
-              <p className="text-white text-2xl font-bold font-mono">{formatCurrency(totalTtc)}</p>
-            </div>
-          </div>
-
-          {/* Payment panel */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <PaymentPanel
-              total={totalTtc}
-              value={payments}
-              onChange={setPayments}
-              compact={false}
-            />
-          </div>
-
-          {/* Footer actions */}
-          <div className="border-t px-4 py-3 bg-white flex gap-3 flex-shrink-0">
-            <button
-              onClick={() => setView('cart')}
-              className="flex-1 py-4 border-2 border-gray-200 text-gray-600 font-semibold rounded-2xl text-sm active:bg-gray-50"
-            >
-              Retour
-            </button>
-            <button
-              onClick={() => handleSaleConfirm(payments)}
-              disabled={!paymentReady || processing}
-              className="flex-[2] py-4 bg-primary text-white font-bold rounded-2xl text-sm shadow-lg shadow-primary/25 disabled:opacity-40 flex items-center justify-center gap-2 active:opacity-90"
-            >
-              <Check size={18} />
-              {processing ? 'Traitement...' : 'Valider la vente'}
-            </button>
-          </div>
-        </div>
+        <MobileCheckout
+          total={totalTtc}
+          itemCount={Math.round(totalQty)}
+          value={payments}
+          onChange={setPayments}
+          onBack={() => setView('cart')}
+          onConfirm={() => handleSaleConfirm(payments)}
+          processing={processing}
+        />
       )}
     </div>
   )

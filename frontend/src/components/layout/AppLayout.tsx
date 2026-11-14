@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
 import { useActiveStoreStore } from '../../store/active-store.store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -399,14 +399,15 @@ export default function AppLayout() {
 
         {/* Caisse Mobile — accès direct terminal Android */}
         <div className="px-2 pt-2 pb-1 border-b border-brand-700">
-          <a
-            href="/m/pos"
+          <Link
+            to="/m/pos"
+            state={{ from: location.pathname + location.search }}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 bg-green-600/20 text-green-300 hover:bg-green-600/40 hover:text-white border border-green-600/30"
             title={collapsed ? 'Caisse Mobile' : undefined}
           >
             <Smartphone size={18} className="flex-shrink-0" />
             {!collapsed && <span className="truncate">Caisse Mobile</span>}
-          </a>
+          </Link>
         </div>
 
         {/* Navigation */}

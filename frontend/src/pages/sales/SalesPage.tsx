@@ -1392,6 +1392,7 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
   // Applied filters (used in the query)
   const [applied, setApplied] = useState({ dateFrom: today, dateTo: today, status: '', channel: '' })
   const [page,         setPage]         = useState(1)
+  const [perPage,      setPerPage]      = useState(25)
   const [detailSaleId, setDetailSaleId] = useState<number | null>(null)
 
   const search = () => {
@@ -1406,10 +1407,10 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales', page, applied],
+    queryKey: ['sales', page, perPage, applied],
     queryFn: () => api.get('/sales', {
       params: {
-        page, per_page: 25,
+        page, per_page: perPage,
         date_from: applied.dateFrom, date_to: applied.dateTo,
         status: applied.status || undefined, channel: applied.channel || undefined,
       }
@@ -1418,7 +1419,10 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
   })
 
   const sales: Record<string, any>[]  = data?.data    ?? []
-  const meta                           = data?.meta    ?? {}
+  // L'API renvoie la pagination Laravel à plat (total, last_page, from, to à la racine)
+  const meta: Record<string, any>      = data?.meta    ?? {
+    total: data?.total, last_page: data?.last_page, from: data?.from, to: data?.to,
+  }
   const totals: Record<string, number> = data?.totals  ?? {}
 
   return (
@@ -1666,41 +1670,50 @@ function SalesList({ onNew, onModify }: { onNew: () => void; onModify: (lines: S
         </table>
 
         {/* Pagination */}
-        {(meta.total ?? 0) > 0 && (
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
-            <span className="text-xs text-gray-400">
-              {meta.from ?? 1}–{meta.to ?? sales.length} sur <span className="font-semibold text-gray-600">{meta.total ?? sales.length}</span> ventes
-            </span>
-            {(meta.last_page ?? 1) > 1 && (
-              <div className="flex items-center gap-1">
-                <button disabled={page === 1} onClick={() => setPage(1)}
-                  className="px-2 py-1 text-xs border rounded disabled:opacity-30 hover:bg-white transition-colors">«</button>
-                <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
-                  className="px-2.5 py-1 text-xs border rounded disabled:opacity-30 hover:bg-white transition-colors">‹</button>
-                {Array.from({ length: meta.last_page ?? 1 }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === (meta.last_page ?? 1) || Math.abs(p - page) <= 2)
-                  .reduce<(number | '...')[]>((acc, p, i, arr) => {
-                    if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('...')
-                    acc.push(p)
-                    return acc
-                  }, [])
-                  .map((p, i) =>
-                    p === '...'
-                      ? <span key={`e${i}`} className="px-1.5 text-xs text-gray-400">…</span>
-                      : <button key={p} onClick={() => setPage(p as number)}
-                          className={`px-2.5 py-1 text-xs border rounded transition-colors ${
-                            page === p ? 'bg-primary text-white border-primary font-semibold' : 'hover:bg-white'
-                          }`}>{p}</button>
-                  )
-                }
-                <button disabled={page === (meta.last_page ?? 1)} onClick={() => setPage(p => p + 1)}
-                  className="px-2.5 py-1 text-xs border rounded disabled:opacity-30 hover:bg-white transition-colors">›</button>
-                <button disabled={page === (meta.last_page ?? 1)} onClick={() => setPage(meta.last_page ?? 1)}
-                  className="px-2 py-1 text-xs border rounded disabled:opacity-30 hover:bg-white transition-colors">»</button>
+        {(meta.total ?? 0) > 0 && (() => {
+          const lastPage = meta.last_page ?? 1
+          const btn = 'min-w-[36px] h-9 px-3 text-sm border border-gray-300 rounded-lg bg-white transition-colors hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-white'
+          return (
+            <div className="flex flex-col items-center gap-3 px-4 py-4 border-t border-gray-200 bg-gray-50">
+              {lastPage > 1 && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <button disabled={page === 1} onClick={() => setPage(1)} title="Première page" className={btn}>«</button>
+                  <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className={btn}>‹ Précédent</button>
+                  {Array.from({ length: lastPage }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === lastPage || Math.abs(p - page) <= 2)
+                    .reduce<(number | '...')[]>((acc, p, i, arr) => {
+                      if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('...')
+                      acc.push(p)
+                      return acc
+                    }, [])
+                    .map((p, i) =>
+                      p === '...'
+                        ? <span key={`e${i}`} className="px-1.5 text-sm text-gray-400">…</span>
+                        : <button key={p} onClick={() => setPage(p as number)}
+                            className={`${btn} ${page === p ? '!bg-primary !text-white !border-primary font-semibold' : ''}`}>{p}</button>
+                    )
+                  }
+                  <button disabled={page === lastPage} onClick={() => setPage(p => p + 1)} className={btn}>Suivant ›</button>
+                  <button disabled={page === lastPage} onClick={() => setPage(lastPage)} title="Dernière page" className={btn}>»</button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-gray-500">
+                <span>
+                  {meta.from ?? 1}–{meta.to ?? sales.length} sur <span className="font-semibold text-gray-700">{meta.total}</span> ventes
+                  {lastPage > 1 && <> · page <span className="font-semibold text-gray-700">{page}</span> / {lastPage}</>}
+                </span>
+                <label className="flex items-center gap-1.5">
+                  Afficher
+                  <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1) }}
+                    className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  par page
+                </label>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Detail modal */}
